@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
 import { Button } from '@/components/ui/button';
 import type { ThemeConfig } from '@/lib/theme/types';
 import { VENZO_DEFAULTS } from '@/lib/theme/types';
+import { POPULAR_GOOGLE_FONTS } from '@/lib/theme/google-fonts-popular';
 
 type Tab = 'paleta' | 'tipografia' | 'logo' | 'historico';
 
@@ -55,19 +56,7 @@ export default function BrandingPage() {
   const isEnterprise = plan === 'ENTERPRISE';
 
   if (isStarter) {
-    return (
-      <main className="mx-auto max-w-2xl p-6">
-        <h1 className="mb-3 text-2xl font-bold">Identidade visual</h1>
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          <p className="mb-2 font-medium">Personalização indisponível no plano Starter.</p>
-          <p>
-            Faça upgrade para <strong>Growth</strong> (paleta + fonte da lista curada)
-            ou <strong>Enterprise</strong> (hex livre, Google Fonts custom, override
-            WCAG) para personalizar a aparência da plataforma.
-          </p>
-        </div>
-      </main>
-    );
+    return <PlanComparisonUpsell />;
   }
 
   const failures = (validateQ.data?.failures ?? []) as ValidationFailure[];
@@ -184,12 +173,9 @@ export default function BrandingPage() {
                   ))}
                 </div>
               ) : (
-                <input
-                  type="text"
+                <FontCombobox
                   value={draft.fontFamily}
-                  onChange={(e) => setDraft({ ...draft, fontFamily: e.target.value })}
-                  placeholder="Qualquer Google Font (ex: Roboto, Inter, Source Sans Pro)"
-                  className="w-full rounded border px-3 py-2 text-sm"
+                  onChange={(family) => setDraft({ ...draft, fontFamily: family })}
                 />
               )}
             </section>
@@ -418,5 +404,260 @@ function AuditHistory() {
         })}
       </ul>
     </section>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// Upsell mostrado quando tenant é Starter — 3 cards comparativos + preview do
+// rodapé por plano. Substitui o banner amarelo simples.
+// ----------------------------------------------------------------------------
+function PlanComparisonUpsell() {
+  return (
+    <main className="mx-auto max-w-6xl p-4 md:p-8">
+      <header className="mb-6">
+        <h1 className="text-3xl font-bold">Identidade visual</h1>
+        <p className="mt-1 text-sm text-neutral-600">
+          Seu plano atual é <strong>Starter</strong>. Faça upgrade para
+          personalizar a aparência da plataforma com a marca da sua empresa.
+        </p>
+      </header>
+
+      <section className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3">
+        <PlanCard
+          name="Starter"
+          tone="muted"
+          tagline="Até 5 usuários"
+          features={[
+            { ok: true, label: 'Badge visível, tamanho normal no rodapé' },
+            { ok: false, label: 'Sem personalização de cor/fonte' },
+            { ok: false, label: 'Sem logo próprio' },
+          ]}
+          current
+        />
+        <PlanCard
+          name="Growth"
+          badge="recomendado"
+          tone="brand"
+          tagline="Até 25 usuários"
+          features={[
+            { ok: true, label: 'Badge menor, discreto (8px, muted)' },
+            { ok: true, label: 'Paleta + fonte customizáveis' },
+            { ok: true, label: 'Logo próprio no header' },
+          ]}
+        />
+        <PlanCard
+          name="Enterprise"
+          tone="muted"
+          tagline="Ilimitado · contrato anual"
+          features={[
+            { ok: true, label: 'Badge removível (campo poweredBy: false)' },
+            { ok: true, label: 'White-label completo' },
+            { ok: true, label: 'Domínio próprio (CNAME)' },
+          ]}
+        />
+      </section>
+    </main>
+  );
+}
+
+function PlanCard({
+  name,
+  badge,
+  tagline,
+  features,
+  tone,
+  current,
+}: {
+  name: string;
+  badge?: string;
+  tagline: string;
+  features: Array<{ ok: boolean; label: string }>;
+  tone: 'brand' | 'muted';
+  current?: boolean;
+}) {
+  const ring = tone === 'brand' ? 'ring-2 ring-[color:var(--brand-primary)]' : 'border';
+  return (
+    <article
+      className={`flex flex-col rounded-xl border-neutral-200 bg-white p-5 ${ring}`}
+    >
+      <div className="mb-3">
+        <span
+          className={`inline-block rounded-md px-2 py-0.5 text-xs font-semibold ${
+            tone === 'brand'
+              ? 'bg-[color:var(--brand-primary)]/10 text-[color:var(--brand-primary)]'
+              : 'bg-neutral-100 text-neutral-700'
+          }`}
+        >
+          {name}
+          {badge ? <span className="ml-1 font-medium opacity-80">· {badge}</span> : null}
+        </span>
+      </div>
+      <h3 className="mb-1 text-xl font-bold">{name}</h3>
+      <p className="mb-4 text-sm text-neutral-600">{tagline}</p>
+      <ul className="mb-4 space-y-2 text-sm">
+        {features.map((f, i) => (
+          <li key={i} className="flex items-start gap-2">
+            <span
+              aria-hidden
+              className={`mt-0.5 inline-flex h-4 w-4 flex-shrink-0 items-center justify-center text-base leading-none ${
+                f.ok ? 'text-emerald-600' : 'text-red-500'
+              }`}
+            >
+              {f.ok ? '✓' : '✗'}
+            </span>
+            <span className="text-neutral-800">{f.label}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-auto pt-2">
+        {current ? (
+          <span className="inline-block rounded-md bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-600">
+            Plano atual
+          </span>
+        ) : (
+          <button
+            type="button"
+            className="w-full rounded-md bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-dark"
+            onClick={() => alert('Upgrade flow será integrado no Sprint 12 (Billing).')}
+          >
+            Fazer upgrade
+          </button>
+        )}
+      </div>
+    </article>
+  );
+}
+
+
+// ----------------------------------------------------------------------------
+// Combobox de Google Fonts populares — digite pra filtrar, click pra escolher.
+// Plano Enterprise pode escolher fora da lista digitando livremente e
+// confirmando com Enter (a fonte é renderizada via Google Fonts dinâmico).
+// ----------------------------------------------------------------------------
+function FontCombobox({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (family: string) => void;
+}) {
+  const [query, setQuery] = useState(value);
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setQuery(value);
+  }, [value]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return POPULAR_GOOGLE_FONTS;
+    return POPULAR_GOOGLE_FONTS.filter((f) => f.family.toLowerCase().includes(q));
+  }, [query]);
+
+  function select(family: string) {
+    onChange(family);
+    setQuery(family);
+    setOpen(false);
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setOpen(true);
+      setActiveIndex((i) => Math.min(i + 1, filtered.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIndex((i) => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (open && filtered[activeIndex]) {
+        select(filtered[activeIndex].family);
+      } else if (query.trim()) {
+        // Permite fonte fora da lista (Enterprise)
+        select(query.trim());
+      }
+    } else if (e.key === 'Escape') {
+      setOpen(false);
+    }
+  }
+
+  const categoryLabel: Record<string, string> = {
+    sans: 'Sans',
+    serif: 'Serif',
+    display: 'Display',
+    mono: 'Mono',
+  };
+
+  return (
+    <div ref={containerRef} className="relative">
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setOpen(true);
+          setActiveIndex(0);
+        }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={handleKeyDown}
+        placeholder="Digite pra buscar (ex: Inter, Roboto, Playfair...)"
+        className="w-full rounded border px-3 py-2 text-sm focus:border-brand focus:outline-none"
+        style={{ fontFamily: `'${value}', sans-serif` }}
+        autoComplete="off"
+        aria-expanded={open}
+        aria-controls="font-combobox-list"
+        role="combobox"
+      />
+      {open && (
+        <ul
+          id="font-combobox-list"
+          role="listbox"
+          className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-md border border-neutral-200 bg-white shadow-lg"
+        >
+          {filtered.length === 0 ? (
+            <li className="px-3 py-2 text-sm text-neutral-500">
+              Nenhuma fonte popular bate com &ldquo;{query}&rdquo;. Pressione Enter
+              para usar mesmo assim (Google Fonts carregará dinamicamente).
+            </li>
+          ) : (
+            filtered.map((f, i) => (
+              <li
+                key={f.family}
+                role="option"
+                aria-selected={i === activeIndex}
+                onMouseEnter={() => setActiveIndex(i)}
+                onClick={() => select(f.family)}
+                className={`flex cursor-pointer items-center justify-between px-3 py-2 text-sm ${
+                  i === activeIndex ? 'bg-neutral-100' : ''
+                } ${value === f.family ? 'font-semibold' : ''}`}
+              >
+                <span style={{ fontFamily: `'${f.family}', sans-serif` }}>
+                  {f.family}
+                </span>
+                <span className="ml-2 text-xs uppercase tracking-wide text-neutral-400">
+                  {categoryLabel[f.category]}
+                </span>
+              </li>
+            ))
+          )}
+        </ul>
+      )}
+      <p className="mt-2 text-xs text-neutral-500">
+        Lista mostra {POPULAR_GOOGLE_FONTS.length} Google Fonts populares.
+        Pode digitar qualquer outra e confirmar com Enter (plano Enterprise).
+      </p>
+    </div>
   );
 }

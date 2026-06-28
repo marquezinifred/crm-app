@@ -11,12 +11,11 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 ## Sprint atual
 
-> **Sprint 7 — Parceiros e Documentos: ✅ CONCLUÍDO em 2026-06-27**
+> **Sprint 8 — Propostas, Aprovações e Contratos: ✅ CONCLUÍDO em 2026-06-27**
 >
-> Próximo: **Sprint 8 — Propostas, Aprovações e Contratos** (fluxo de
-> aprovação configurável por margem/valor/universal, versionamento de
-> propostas com comparador IA, gestão de contratos ativos com alertas
-> de renovação, handoff automático para operações/financeiro).
+> Próximo: **Sprint 9 — Importação de Dados** (upload CSV/XLSX, mapeamento
+> visual de colunas, validação + dedup, processamento BullMQ background
+> com e-mail de conclusão).
 
 ---
 
@@ -24,7 +23,6 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 | Origem | Pendência | Resolve em |
 |--------|-----------|-----------|
-| Sprint 2 | Validação `NEGOCIACAO → ACEITE` deveria exigir ≥ 1 `ProposalVersion` registrada na etapa de negociação | Sprint 8 (módulo Propostas/Aprovações) |
 | Sprint 2 | E2E `pipeline-7-stages.spec.ts` está `test.skip` — depende de fixture Clerk + reset de banco entre testes em CI | Sprint 11 (Segurança + hardening de CI) |
 | Sprint 1 | Webhook Clerk `session.created` registra IP/UA do edge Clerk, não do dispositivo final — middleware Next deve gravar em paralelo via `x-forwarded-for` | Sprint 11 |
 
@@ -38,6 +36,42 @@ Cada item acima é referenciado nos prompts do sprint que vai resolvê-lo. Verif
 - [x] Prisma extension de tenant + AsyncLocalStorage
 - [x] Middleware Clerk + tRPC base + DataMaskingService + RBAC + AuditLog
 - [x] Docker, GitHub Actions CI, seed (3 tenants), .env.example
+
+### Sprint 8 — Propostas, Aprovações e Contratos (concluído)
+- [x] Migration `0009_contract_handoff_renewal`: `Tenant.handoffEmails`
+      String[] + `Tenant.contractRenewalLeadDays` Int[] (default 90/60/30)
+- [x] **Débito Sprint 2 fechado**: `PROPOSTA → NEGOCIACAO` exige ≥ 1
+      `ProposalVersion`; `NEGOCIACAO → ACEITE` exige zero approvals em
+      PENDING/REJECTED/CHANGES_REQUESTED da última versão
+- [x] `approval-engine.service.ts` — função pura `selectApplicableRules`
+      (UNIVERSAL / MIN_MARGIN_BELOW / TOTAL_VALUE_ABOVE) +
+      `createApprovalsForProposalVersion` (idempotente, busca aprovador
+      por role) + `getApprovalState`
+- [x] Router `proposals` (listByOpportunity, create, addVersion com
+      trigger automático do engine, compareVersions com diff metadata
+      + IA Haiku, approvalState) + `approvals` (myPending, decide)
+- [x] `contract-handoff.service.ts` — ao Contract.status virar ACTIVE,
+      envia e-mail a `handoffEmails` + `centralCrmEmail` com CNPJ +
+      parcelas + valores; idempotente via Activity SYSTEM_EVENT
+- [x] `contract-renewal-alerts.service.ts` — integrado ao worker
+      `alerts-scan`; gera AlertLog PIPELINE_DATE para contratos com
+      endDate em `tenant.contractRenewalLeadDays`
+- [x] `contract-renewal.service.ts` — `renewContract` cria nova
+      Opportunity em PROSPECT pré-preenchida + marca contrato como RENEWED
+- [x] Router `approvalRules` (CRUD admin) + `contractsConfig`
+      (getConfig/updateConfig/renew/dispatchHandoff/activeContracts)
+- [x] Handoff disparado automaticamente em `contracts.update` quando
+      status muda para ACTIVE
+- [x] UI `ProposalsSection` na `/pipeline/[id]` — criar proposta + adicionar
+      versão com totalValue/marginPct + badges de status de aprovação
+- [x] UI `/approvals` — fila do aprovador logado com botões Aprovar /
+      Solicitar mudanças / Reprovar + comentário
+- [x] UI `/contracts` — contratos ativos com Renovar + Reenviar handoff
+- [x] UI `/admin/approval-rules` — CRUD de regras com critério + threshold
+      + checkboxes de aprovadores
+- [x] UI `/admin/contracts` — handoffEmails (chips) + renewalLeadDays
+- [x] Testes: 134/134 unit (approval-engine +8: universal, margin-below,
+      value-above, disabled, múltiplas regras simultâneas)
 
 ### Sprint 7 — Parceiros e Documentos (concluído)
 - [x] Migration `0008_partners_documents`: `User.partnerCompanyId` (FK SET

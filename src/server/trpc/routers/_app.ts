@@ -16,6 +16,8 @@ import { reportsRouter } from './reports';
 import { inboxRouter, searchRouter, adminEmailRouter } from './inbox';
 import { partnersRouter } from './partners';
 import { documentsRouter, templatesRouter } from './documents';
+import { proposalsRouter, approvalsRouter } from './proposals';
+import { approvalRulesRouter, contractsConfigRouter } from './approval-rules';
 
 export const appRouter = router({
   health: publicProcedure.query(() => ({
@@ -58,6 +60,10 @@ export const appRouter = router({
   partners: partnersRouter,
   documents: documentsRouter,
   templates: templatesRouter,
+  proposals: proposalsRouter,
+  approvals: approvalsRouter,
+  approvalRules: approvalRulesRouter,
+  contractsConfig: contractsConfigRouter,
 });
 
 export type AppRouter = typeof appRouter;

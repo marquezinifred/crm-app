@@ -233,6 +233,28 @@ enum IncomingEmailStatus {
   REJECTED
 }
 
+enum ImportEntity {
+  COMPANY
+  CONTACT
+  OPPORTUNITY
+  USER
+}
+
+enum ImportStatus {
+  PENDING
+  PARSING
+  MAPPED
+  RUNNING
+  DONE
+  FAILED
+}
+
+enum ImportDedupStrategy {
+  IGNORE_DUPLICATES
+  UPDATE_EXISTING
+  CREATE_NEW
+}
+
 enum DocumentCategory {
   INSTITUCIONAL
   PROPOSTA_TECNICA
@@ -264,25 +286,29 @@ enum PartnerEngagementStatus {
 // ---------------------------------------------------------------------
 
 model Tenant {
-  id                String     @id @default(uuid()) @db.Uuid
-  slug              String     @unique @db.Citext
-  name              String
-  plan              TenantPlan @default(TRIAL)
-  centralCrmEmail   String?    @map("central_crm_email")
-  alertLeadDays     Int[]      @default([7, 1]) @map("alert_lead_days")
-  taskOverdueDays   Int        @default(2) @map("task_overdue_days")
-  aiProvider        AIProvider @default(ANTHROPIC) @map("ai_provider")
-  aiModel           String?    @map("ai_model")
-  aiApiKeyEncrypted String?    @map("ai_api_key_encrypted")
+  id                      String     @id @default(uuid()) @db.Uuid
+  slug                    String     @unique @db.Citext
+  name                    String
+  plan                    TenantPlan @default(TRIAL)
+  centralCrmEmail         String?    @map("central_crm_email")
+  alertLeadDays           Int[]      @default([7, 1]) @map("alert_lead_days")
+  taskOverdueDays         Int        @default(2) @map("task_overdue_days")
+  aiProvider              AIProvider @default(ANTHROPIC) @map("ai_provider")
+  aiModel                 String?    @map("ai_model")
+  aiApiKeyEncrypted       String?    @map("ai_api_key_encrypted")
   // Taxas de conversão por estágio (JSON { stage: pct }) — usadas pela
   // projeção de receita. Default: 5/15/30/50/70/85/100 (do funil).
-  conversionRates   Json?      @map("conversion_rates")
+  conversionRates         Json?      @map("conversion_rates")
   // Slug único do tenant para o endereço de e-mail inbound:
   //   crm-<slug>@inbound.<domínio>. Configurável pelo Admin.
-  inboundEmailSlug  String?    @unique @map("inbound_email_slug") @db.Citext
-  createdAt         DateTime   @default(now()) @map("created_at")
-  updatedAt         DateTime   @updatedAt @map("updated_at")
-  deletedAt         DateTime?  @map("deleted_at")
+  inboundEmailSlug        String?    @unique @map("inbound_email_slug") @db.Citext
+  // Destinatários do handoff (e-mail) quando contrato vira ACTIVE
+  handoffEmails           String[]   @default([]) @map("handoff_emails")
+  // Antecedências (em dias) para alertas de renovação contratual
+  contractRenewalLeadDays Int[]      @default([90, 60, 30]) @map("contract_renewal_lead_days")
+  createdAt               DateTime   @default(now()) @map("created_at")
+  updatedAt               DateTime   @updatedAt @map("updated_at")
+  deletedAt               DateTime?  @map("deleted_at")
 
   users                   User[]
   companies               Company[]
@@ -315,6 +341,7 @@ model Tenant {
   consentLogs             ConsentLog[]
   incomingEmails          IncomingEmail[]
   documentTemplates       DocumentTemplate[]
+  importJobs              ImportJob[]
 
   @@map("tenants")
 }
@@ -1159,6 +1186,40 @@ model ConsentLog {
   @@index([tenantId, userId, createdAt])
   @@index([subjectEmail, createdAt])
   @@map("consent_logs")
+}
+
+// ---------------------------------------------------------------------
+// ImportJob — Sprint 9: upload e processamento de CSV/XLSX
+//   fileBytes guarda o conteúdo bruto (bytea) — limite ~10 MB.
+//   mappingJson: { columnIndex: fieldName }
+//   resultJson: { created, updated, skipped, errorRows[] }
+// ---------------------------------------------------------------------
+
+model ImportJob {
+  id            String              @id @default(uuid()) @db.Uuid
+  tenantId      String              @map("tenant_id") @db.Uuid
+  entity        ImportEntity
+  status        ImportStatus        @default(PENDING)
+  dedupStrategy ImportDedupStrategy @default(IGNORE_DUPLICATES) @map("dedup_strategy")
+  fileName      String              @map("file_name")
+  fileBytes     Bytes               @map("file_bytes")
+  mappingJson   Json?               @map("mapping_json")
+  headersJson   Json?               @map("headers_json")
+  previewJson   Json?               @map("preview_json")
+  resultJson    Json?               @map("result_json")
+  totalRows     Int                 @default(0) @map("total_rows")
+  processedRows Int                 @default(0) @map("processed_rows")
+  createdAt     DateTime            @default(now()) @map("created_at")
+  updatedAt     DateTime            @updatedAt @map("updated_at")
+  createdBy     String              @map("created_by") @db.Uuid
+  finishedAt    DateTime?           @map("finished_at")
+  errorMessage  String?             @map("error_message") @db.Text
+  deletedAt     DateTime?           @map("deleted_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status, createdAt])
+  @@map("import_jobs")
 }
 
 // ---------------------------------------------------------------------

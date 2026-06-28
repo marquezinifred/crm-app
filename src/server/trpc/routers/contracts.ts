@@ -4,6 +4,7 @@ import { router } from '@/server/trpc/trpc';
 import { withCapability } from '@/server/trpc/middlewares';
 import { prisma } from '@/server/db/client';
 import { audit } from '@/server/services/audit.service';
+import { dispatchHandoff } from '@/server/services/contract-handoff.service';
 import { zUuid } from '@/lib/validators';
 import {
   contractCreateInput,
@@ -87,6 +88,14 @@ export const contractsRouter = router({
       ip: ctx.ip,
       userAgent: ctx.userAgent,
     });
+    // Handoff automático ao virar ACTIVE
+    if (before.status !== 'ACTIVE' && updated.status === 'ACTIVE') {
+      try {
+        await dispatchHandoff(updated.id);
+      } catch (err) {
+        console.error('[contract.update] handoff falhou', err);
+      }
+    }
     return updated;
   }),
 

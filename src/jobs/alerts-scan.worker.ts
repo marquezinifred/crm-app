@@ -1,5 +1,6 @@
 import { generateDailyAlerts } from '@/server/services/alert-generator.service';
 import { scanTaskEscalations } from '@/server/services/task-escalation.service';
+import { scanContractRenewals } from '@/server/services/contract-renewal-alerts.service';
 import { prisma } from '@/server/db/client';
 import { runAsSystem } from '@/server/db/tenant-context';
 import { AlertStatus } from '@prisma/client';
@@ -22,17 +23,20 @@ export function startAlertsScanWorker() {
   return makeWorker<AlertsScanJobData>(QUEUE_NAMES.alertsScan, async ({ data }) => {
     const today = data.today ? new Date(data.today) : new Date();
 
-    const [alertStats, taskStats] = await Promise.all([
+    const [alertStats, taskStats, renewalStats] = await Promise.all([
       generateDailyAlerts({ today }),
       scanTaskEscalations(today),
+      scanContractRenewals(today),
     ]);
     const alertsEnqueued = alertStats.reduce((s, x) => s + x.enqueued, 0);
     const tasksDue = taskStats.reduce((s, x) => s + x.dueToday, 0);
     const tasksEscalated = taskStats.reduce((s, x) => s + x.escalated, 0);
+    const renewalsEnqueued = renewalStats.reduce((s, x) => s + x.enqueued, 0);
     console.info(
       `[alerts-scan] today=${today.toISOString().slice(0, 10)} ` +
         `tenants=${alertStats.length} new_alerts=${alertsEnqueued} ` +
-        `tasks_due=${tasksDue} tasks_escalated=${tasksEscalated}`,
+        `tasks_due=${tasksDue} tasks_escalated=${tasksEscalated} ` +
+        `renewals_enqueued=${renewalsEnqueued}`,
     );
 
     // Pega todos os alerts em PENDING e despacha

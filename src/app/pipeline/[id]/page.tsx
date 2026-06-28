@@ -7,6 +7,7 @@ import { brl, initials } from '@/lib/utils/hooks';
 import { STAGES, STAGE_LABELS } from '@/components/pipeline/types';
 import { CommunicationIntake } from '@/components/pipeline/CommunicationIntake';
 import { DocumentsSection } from '@/components/pipeline/DocumentsSection';
+import { ProposalsSection } from '@/components/pipeline/ProposalsSection';
 import { OpportunityLossReason } from '@prisma/client';
 
 export default function OpportunityDetailPage() {
@@ -155,6 +156,8 @@ export default function OpportunityDetailPage() {
       </section>
 
       <ActivitiesAndTasks opportunityId={opp.id} />
+
+      <ProposalsSection opportunityId={opp.id} />
 
       <DocumentsSection opportunityId={opp.id} />
 

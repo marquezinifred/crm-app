@@ -135,6 +135,47 @@ export async function advanceStage(input: AdvanceStageInput): Promise<{
         );
       }
 
+      // PROPOSTA → NEGOCIACAO exige ≥ 1 ProposalVersion registrada
+      if (input.fromStage === 'PROPOSTA') {
+        const propWithVersion = await tx.proposal.findFirst({
+          where: { tenantId: opp.tenantId, opportunityId: opp.id, deletedAt: null },
+          select: { versions: { select: { id: true }, take: 1 } },
+        });
+        if (!propWithVersion || propWithVersion.versions.length === 0) {
+          throw new StageTransitionError(
+            'É necessário criar pelo menos 1 versão de proposta antes de avançar para Negociação.',
+            'MISSING_FIELDS',
+            { missingFields: ['proposalVersion'] },
+          );
+        }
+      }
+
+      // NEGOCIACAO → ACEITE exige que as Approvals da proposta atual
+      // tenham todos APPROVED OU que não haja regras aplicáveis (closes debt Sprint 2)
+      if (input.fromStage === 'NEGOCIACAO') {
+        const lastVersion = await tx.proposalVersion.findFirst({
+          where: { tenantId: opp.tenantId, proposal: { opportunityId: opp.id } },
+          orderBy: { version: 'desc' },
+          select: { id: true },
+        });
+        if (lastVersion) {
+          const blockers = await tx.approval.count({
+            where: {
+              proposalVersionId: lastVersion.id,
+              deletedAt: null,
+              status: { in: ['PENDING', 'REJECTED', 'CHANGES_REQUESTED'] },
+            },
+          });
+          if (blockers > 0) {
+            throw new StageTransitionError(
+              'Há aprovações pendentes ou bloqueios nesta proposta. Resolva antes de avançar.',
+              'MISSING_FIELDS',
+              { missingFields: ['approvals'] },
+            );
+          }
+        }
+      }
+
       // ACEITE → CONTRATO exige documento da categoria ACEITE_CLIENTE anexado
       // (fecha débito técnico do Sprint 2)
       if (input.fromStage === 'ACEITE' && input.toStage === 'CONTRATO') {

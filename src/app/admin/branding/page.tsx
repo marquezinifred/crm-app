@@ -182,21 +182,10 @@ export default function BrandingPage() {
           )}
 
           {tab === 'logo' && (
-            <section className="rounded-lg border border-neutral-200 bg-white p-4">
-              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-700">
-                Logo (URL)
-              </h2>
-              <input
-                type="url"
-                value={draft.logoUrl ?? ''}
-                onChange={(e) => setDraft({ ...draft, logoUrl: e.target.value || null })}
-                placeholder="https://cdn.suaempresa.com/logo.svg"
-                className="w-full rounded border px-3 py-2 text-sm"
-              />
-              <p className="mt-2 text-xs text-neutral-500">
-                Sprint posterior: upload nativo para R2/S3 com presigned URL.
-              </p>
-            </section>
+            <LogoPicker
+              value={draft.logoUrl ?? null}
+              onChange={(v) => setDraft({ ...draft, logoUrl: v })}
+            />
           )}
 
           {tab === 'historico' && <AuditHistory />}
@@ -659,5 +648,152 @@ function FontCombobox({
         Pode digitar qualquer outra e confirmar com Enter (plano Enterprise).
       </p>
     </div>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// Picker de logo — suporta upload de arquivo local OU URL externa.
+// Upload local converte pra data: URL (base64) e salva no theme_config.
+// Limite 100KB pra manter o JSONB leve. Sprint futuro: substituir por
+// upload real pra R2/S3 com presigned URL.
+// ----------------------------------------------------------------------------
+const LOGO_MAX_BYTES = 100 * 1024;
+const LOGO_ACCEPT = 'image/svg+xml,image/png,image/jpeg,image/webp';
+
+function LogoPicker({
+  value,
+  onChange,
+}: {
+  value: string | null;
+  onChange: (v: string | null) => void;
+}) {
+  const [mode, setMode] = useState<'upload' | 'url'>(
+    value && value.startsWith('http') ? 'url' : 'upload',
+  );
+  const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function handleFile(file: File) {
+    setError(null);
+    if (!LOGO_ACCEPT.split(',').includes(file.type)) {
+      setError(`Formato não suportado: ${file.type || 'desconhecido'}. Use SVG, PNG, JPG ou WebP.`);
+      return;
+    }
+    if (file.size > LOGO_MAX_BYTES) {
+      setError(
+        `Arquivo muito grande (${Math.round(file.size / 1024)} KB). Limite: ${LOGO_MAX_BYTES / 1024} KB.`,
+      );
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') onChange(reader.result);
+    };
+    reader.onerror = () => setError('Falha ao ler o arquivo.');
+    reader.readAsDataURL(file);
+  }
+
+  function clear() {
+    setError(null);
+    onChange(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
+  return (
+    <section className="rounded-lg border border-neutral-200 bg-white p-4">
+      <header className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-700">
+          Logo
+        </h2>
+        <div className="flex gap-1 text-xs">
+          <button
+            type="button"
+            onClick={() => setMode('upload')}
+            className={`rounded px-2 py-1 ${mode === 'upload' ? 'bg-brand text-white' : 'bg-neutral-100 text-neutral-700'}`}
+          >
+            Upload
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('url')}
+            className={`rounded px-2 py-1 ${mode === 'url' ? 'bg-brand text-white' : 'bg-neutral-100 text-neutral-700'}`}
+          >
+            URL externa
+          </button>
+        </div>
+      </header>
+
+      {mode === 'upload' ? (
+        <div>
+          <label
+            className="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-600 hover:border-brand hover:bg-neutral-50"
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              const f = e.dataTransfer.files[0];
+              if (f) handleFile(f);
+            }}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={LOGO_ACCEPT}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleFile(f);
+              }}
+              className="hidden"
+            />
+            <span className="mb-1 font-medium text-neutral-700">
+              Clique ou arraste um arquivo
+            </span>
+            <span className="text-xs">
+              SVG, PNG, JPG ou WebP — até {LOGO_MAX_BYTES / 1024} KB
+            </span>
+          </label>
+        </div>
+      ) : (
+        <input
+          type="url"
+          value={value && value.startsWith('http') ? value : ''}
+          onChange={(e) => onChange(e.target.value || null)}
+          placeholder="https://cdn.suaempresa.com/logo.svg"
+          className="w-full rounded border px-3 py-2 text-sm"
+        />
+      )}
+
+      {error && (
+        <p className="mt-2 rounded bg-red-50 p-2 text-xs text-red-700">{error}</p>
+      )}
+
+      {value && (
+        <div className="mt-4 rounded border border-neutral-200 bg-neutral-50 p-3">
+          <div className="mb-2 flex items-center justify-between text-xs text-neutral-600">
+            <span>Preview</span>
+            <button
+              type="button"
+              onClick={clear}
+              className="text-red-600 hover:underline"
+            >
+              Remover
+            </button>
+          </div>
+          <div className="flex h-20 items-center justify-center rounded bg-white">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={value}
+              alt="Logo preview"
+              className="max-h-16 max-w-full object-contain"
+              onError={() => setError('Imagem não pôde ser carregada.')}
+            />
+          </div>
+        </div>
+      )}
+
+      <p className="mt-3 text-xs text-neutral-500">
+        Upload local funciona em desenvolvimento (salva como data: URL no banco).
+        Sprint futuro: integração real com R2/S3 + presigned URL.
+      </p>
+    </section>
   );
 }

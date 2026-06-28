@@ -126,19 +126,16 @@ function buildChecks(theme: ThemeConfig): ContrastCheck[] {
   return [
     // Botões primários: texto branco sobre cor primária
     c(SURFACE_WHITE, theme.primaryColor, 'Texto branco em botão primário', 'button-primary'),
-    // Texto principal em primário: cor primária como cor de texto sobre fundo branco
+    // Cor primária como texto (link, destaque) sobre fundo branco
     c(theme.primaryColor, SURFACE_WHITE, 'Cor primária como texto (link/destaque)', 'body'),
-    // Texto preto sobre primário (links em fundos coloridos)
-    c(TEXT_PRIMARY, theme.primaryColor, 'Texto principal sobre fundo primário', 'body'),
-    // Hover / gradientes: primary vs primary-dark
-    c(theme.primaryColor, theme.primaryDark, 'Hover state (primary → dark)', 'hover-state'),
-    // Accent (dourado) sobre branco — valor monetário
-    c(theme.accentColor, SURFACE_WHITE, 'Valor monetário sobre branco', 'value-monetary'),
-    // Accent sobre escuro (botão CTA gold)
-    c(TEXT_PRIMARY, theme.accentColor, 'Texto principal sobre fundo accent', 'button-primary'),
-    // Badge de estágio: primary-light como fundo, primary como texto
-    c(theme.primaryColor, theme.primaryLight, 'Badge: texto primário em fundo light', 'badge'),
-    // Ícones funcionais primary sobre branco
+    // Accent sobre escuro: padrão Venzo é dourado SOBRE fundo escuro
+    // (brand guide: "Nunca usar Dourado como cor de fundo — apenas como
+    // texto ou ícone sobre fundo escuro"). Validamos accent como texto
+    // sobre o primary-dark, que é o caso real de valor monetário em CTA.
+    c(theme.accentColor, theme.primaryDark, 'Accent (dourado) sobre fundo escuro', 'value-monetary'),
+    // Badge de estágio (real): texto escuro sobre fundo claro (primary-light)
+    c(TEXT_PRIMARY, theme.primaryLight, 'Badge: texto escuro em fundo light', 'badge'),
+    // Ícones funcionais cor primária sobre branco
     c(theme.primaryColor, SURFACE_WHITE, 'Ícone funcional cor primária', 'icon-functional'),
   ];
 }

@@ -11,11 +11,27 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 ## Sprint atual
 
-> **Sprint 8 — Propostas, Aprovações e Contratos: ✅ CONCLUÍDO em 2026-06-27**
+> **Sprint 10 — PWA, Mobile e Performance: ✅ CONCLUÍDO em 2026-06-27**
 >
-> Próximo: **Sprint 9 — Importação de Dados** (upload CSV/XLSX, mapeamento
-> visual de colunas, validação + dedup, processamento BullMQ background
-> com e-mail de conclusão).
+> Próximo: **Sprint 10.5 — White-Label Theming e Identidade da
+> Plataforma Venzo** (tabela `tenant_settings.theme_config` JSONB,
+> CSS custom props `--brand-*` injetadas no RootLayout, cache Redis
+> TTL 1h com invalidação imediata, UI self-service de paleta + fontes
+> Google + logo, validação WCAG AA (contraste ≥ 4.5:1) com sugestão
+> automática se reprovar, badge "Powered by Venzo" three-state
+> (`visible` Starter / `subtle` Growth / `hidden` Enterprise) com
+> enforcement server-side, matriz de permissões por plano, feature
+> flag Unleash `tenant_theming_enabled`, audit log com before/after).
+>
+> Specs:
+> - `docs/Arquitetura_e_Plano_Implantacao_CRM.docx` (Sprint 10.5)
+> - `docs/CRM_Especificacao_e_Implementacao.docx` (Sprint 10.5)
+> - `docs/venzo_brand_guide.docx` (paleta, tipografia Plus Jakarta
+>   Sans, componentes, voz/tom — fonte da verdade do design system)
+>
+> Depois: **Sprint 11 — Segurança, LGPD e Conformidade** (Cloudflare
+> WAF, rate limiting, security headers, cookie banner LGPD, workflows
+> de exportação/anonimização, logs imutáveis, OWASP ZAP).
 
 ---
 
@@ -36,6 +52,67 @@ Cada item acima é referenciado nos prompts do sprint que vai resolvê-lo. Verif
 - [x] Prisma extension de tenant + AsyncLocalStorage
 - [x] Middleware Clerk + tRPC base + DataMaskingService + RBAC + AuditLog
 - [x] Docker, GitHub Actions CI, seed (3 tenants), .env.example
+
+### Sprint 10 — PWA, Mobile e Performance (concluído)
+- [x] Migration `0011_push_subscriptions` — tabela com endpoint UNIQUE,
+      p256dh + auth keys, userAgent + lastSeenAt; RLS
+- [x] `@serwist/next` + `serwist` configurados em `next.config.mjs` com
+      `swSrc=src/app/sw.ts` → `swDest=public/sw.js`
+- [x] Service worker (`src/app/sw.ts`) com precaching + defaultCache
+      (runtime stale-while-revalidate) + handlers `push` e
+      `notificationclick` (foca tab existente ou abre)
+- [x] `public/manifest.json` — standalone, theme-color #0a0a0a, ícones
+      192/512/SVG, shortcuts Pipeline e Dashboard
+- [x] `src/app/icon.tsx` + `apple-icon.tsx` — geração via ImageResponse
+      (Next 14 metadata route, gera PNG no edge)
+- [x] `layout.tsx` — metadata completo (applicationName, manifest,
+      appleWebApp, formatDetection.telephone=false) + viewport
+      (themeColor, maximumScale, viewportFit=cover)
+- [x] `BottomNav` componente fixed bottom, 5 ítens (Pipeline, Inbox,
+      Search, Dashboard, Mais), visível só em < 768px, touch ≥ 48px,
+      respeita safe-area-inset, esconde nas rotas /sign-in /onboarding /p/
+- [x] Página `/more` com índice de todas as outras rotas (substitui
+      menu lateral em mobile)
+- [x] `push-sender.service.ts` — wrapper web-push com VAPID, marca
+      subscription como deleted em 404/410, helpers `sendPushToUser` e
+      `sendPushForAlertRecipient`
+- [x] Router `push` (config + subscribe + unsubscribe + mySubscriptions)
+- [x] `EnablePushButton` no `/dashboard` — pede permissão, subscribe
+      no PushManager, salva no servidor; esconde se não suportado ou
+      VAPID não configurado
+- [x] Worker `email-send` envia push em paralelo ao e-mail (best-effort,
+      não falha o e-mail se push falhar)
+- [x] env: `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
+      `VAPID_SUBJECT` (todos opcionais — sem VAPID, push fica desabilitado)
+- [x] Testes: 148/148 unit (manifest +4, push-subscription +5)
+- [ ] Lighthouse audit — pendente porque requer app rodando contra
+      Postgres/Clerk reais; rodar `npx lighthouse http://localhost:3000`
+      depois do setup paralelo concluir
+
+### Sprint 9 — Importação de Dados (concluído)
+- [x] Migration `0010_import_jobs` — tabela `import_jobs` (bytea de até
+      10MB, mapping/preview/result JSON, status PENDING/PARSING/MAPPED/
+      RUNNING/DONE/FAILED, strategy IGNORE/UPDATE/CREATE) + 3 enums + RLS
+- [x] `parser.ts` — unifica CSV (papaparse) e XLSX (exceljs), com modo
+      previewOnly (10 linhas) ou completo; detecta extensão `.csv/.tsv/.xlsx/.xls`
+- [x] `import-engine.service.ts` — engines `importCompanies` e
+      `importContacts` com validação por linha (CNPJ/email Zod), dedup
+      por CNPJ ou email, política IGNORE/UPDATE/CREATE; estrutura
+      preparada pra `OPPORTUNITY` e `USER` (TODO sprint posterior)
+- [x] Resolução automática de empresa em contatos via `companyCnpj` ou
+      `companyRazaoSocial` (case-insensitive)
+- [x] Endpoint `POST /api/v1/imports/upload` (multipart, máx 10MB) gera
+      preview inline e persiste bytes
+- [x] Router tRPC `imports` (fields/list/byId/confirm/cancel) — `confirm`
+      enfileira no worker BullMQ
+- [x] Worker `import-run` integrado ao `npm run worker` — re-parseia
+      arquivo, executa engine, atualiza `processedRows` a cada 50 linhas,
+      grava `resultJson`, envia e-mail de conclusão ao criador
+- [x] UI `/imports` — wizard 3 passos (upload → mapping com dropdowns +
+      preview 10 linhas → confirmar com estratégia de dedup) + histórico
+      com auto-refresh 3s e badges de status
+- [x] `IMPORT_FIELDS` mapping para COMPANY (10 campos) e CONTACT (6 campos)
+- [x] Testes: 139/139 unit (import-parser +5: CSV/TSV/preview/extensão inválida)
 
 ### Sprint 8 — Propostas, Aprovações e Contratos (concluído)
 - [x] Migration `0009_contract_handoff_renewal`: `Tenant.handoffEmails`

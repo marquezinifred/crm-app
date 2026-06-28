@@ -3,11 +3,15 @@
 # dependencies
 /node_modules
 /.pnp
-.pnp.js
+.pnp.*
 .yarn/install-state.gz
 
 # testing
 /coverage
+/playwright-report
+/test-results
+/blob-report
+/playwright/.cache
 
 # next.js
 /.next/
@@ -24,8 +28,10 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+.pnpm-debug.log*
 
-# local env files
+# env files (CRITICAL — nunca commitar segredos)
+.env
 .env*.local
 
 # vercel
@@ -34,3 +40,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# editor
+.vscode/
+.idea/
+
+# Prisma — generated client (regenerado via postinstall)
+node_modules/.prisma

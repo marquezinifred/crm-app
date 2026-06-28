@@ -1,0 +1,1100 @@
+// =====================================================================
+// CRM B2B Multi-tenant — Schema Prisma
+// Sprint 0 — Foundation
+//
+// Regras:
+// - TODAS as entidades exceto Tenant têm tenant_id (multi-tenancy obrigatório)
+// - Soft delete via deleted_at (nunca DELETE físico em operações normais)
+// - Audit fields: created_at, updated_at, created_by, updated_by
+// - Row Level Security (RLS) é aplicada via migração SQL (ver 0002_rls)
+// - DB convention: snake_case nas tabelas/colunas; Prisma client em camelCase
+// =====================================================================
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector, pgcrypto, citext]
+}
+
+// ---------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  DIRETOR_COMERCIAL
+  DIRETOR_FINANCEIRO
+  GESTOR
+  ANALISTA
+  PARCEIRO
+}
+
+enum TenantPlan {
+  TRIAL
+  STARTER
+  PRO
+  ENTERPRISE
+}
+
+enum CompanyType {
+  CLIENT
+  PARTNER
+  SUPPLIER
+  OWN
+}
+
+enum ContactSeniority {
+  PROPRIETARIO
+  DIRETOR
+  GERENTE
+  COORDENADOR
+  ANALISTA
+  OUTRO
+}
+
+enum ContactRelationshipType {
+  COLABORADOR
+  CLIENTE
+  PARCEIRO
+  FORNECEDOR
+  OUTRO
+}
+
+enum WorkArea {
+  COMERCIAL
+  MARKETING
+  COMPRAS
+  USUARIO_SERVICOS_PRODUTOS
+  OUTRO
+}
+
+enum ContactFunction {
+  DIRETOR_ADMINISTRATIVO
+  DIRETOR_OPERACOES
+  GERENTE_RH
+  GERENTE_PROJETOS
+  GERENTE_SERVICOS
+  GERENTE_GERAL
+  CONSULTOR
+  ANALISTA_ADMINISTRATIVO
+  ESPECIALISTA
+  EMPRESA_PARCEIRA
+  OUTRO
+}
+
+enum ContactApprovalStatus {
+  APPROVED
+  PENDING_APPROVAL
+  REJECTED
+}
+
+enum ProductType {
+  ALOCACAO
+  PROJETO_ESCOPO_FECHADO
+  PROJETO_SQUAD
+  PRODUTO
+  OUTRO
+}
+
+enum OpportunityStage {
+  PROSPECT
+  LEAD
+  OPORTUNIDADE
+  PROPOSTA
+  NEGOCIACAO
+  ACEITE
+  CONTRATO
+}
+
+enum OpportunityStatus {
+  ACTIVE
+  WON
+  LOST
+  CANCELLED
+}
+
+enum ActivityType {
+  MANUAL_NOTE
+  SYSTEM_EVENT
+  AI_SUMMARY
+  EMAIL
+  WHATSAPP
+  CALL
+  MEETING
+  STAGE_CHANGE
+}
+
+enum TaskStatus {
+  TODO
+  DOING
+  DONE
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CHANGES_REQUESTED
+}
+
+enum ContractStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  RENEWED
+  CANCELLED
+}
+
+enum OpportunitySource {
+  INDICACAO
+  COLD_CALL
+  CONTATO_DO_CLIENTE
+  PARCEIRO
+  FUNCIONARIO_NAO_COMERCIAL
+  EVENTO
+  INBOUND
+  OUTBOUND
+  OUTRO
+}
+
+enum OpportunityLossReason {
+  CLIENTE_DESISTIU
+  INADEQUACAO_TECNICA
+  INADEQUACAO_COMERCIAL
+  PRECO
+  PRAZO
+  CONCORRENCIA
+  SEM_BUDGET
+  OUTRO
+}
+
+enum ApprovalRuleCriteria {
+  UNIVERSAL
+  MIN_MARGIN_BELOW
+  TOTAL_VALUE_ABOVE
+}
+
+enum ConsentCategory {
+  STRICTLY_NECESSARY
+  FUNCTIONAL
+  ANALYTICS
+  MARKETING
+}
+
+enum InstallmentStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum ImportantDateEntityType {
+  COMPANY
+  CONTACT
+}
+
+enum DateType {
+  ANIVERSARIO
+  FUNDACAO
+  RENOVACAO
+  CUSTOM
+}
+
+enum AlertType {
+  RELATIONSHIP_DATE
+  PIPELINE_DATE
+  TASK_DUE
+  TASK_OVERDUE
+}
+
+enum AlertStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum AIProvider {
+  ANTHROPIC
+  OPENAI
+  GOOGLE
+  PERPLEXITY
+}
+
+enum PartnerEngagementStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  REVOKED
+}
+
+// ---------------------------------------------------------------------
+// Tenant (raiz da árvore — único modelo SEM tenant_id)
+// ---------------------------------------------------------------------
+
+model Tenant {
+  id                String     @id @default(uuid()) @db.Uuid
+  slug              String     @unique @db.Citext
+  name              String
+  plan              TenantPlan @default(TRIAL)
+  centralCrmEmail   String?    @map("central_crm_email")
+  alertLeadDays     Int[]      @default([7, 1]) @map("alert_lead_days")
+  taskOverdueDays   Int        @default(2) @map("task_overdue_days")
+  aiProvider        AIProvider @default(ANTHROPIC) @map("ai_provider")
+  aiModel           String?    @map("ai_model")
+  aiApiKeyEncrypted String?    @map("ai_api_key_encrypted")
+  createdAt         DateTime   @default(now()) @map("created_at")
+  updatedAt         DateTime   @updatedAt @map("updated_at")
+  deletedAt         DateTime?  @map("deleted_at")
+
+  users                   User[]
+  companies               Company[]
+  contacts                Contact[]
+  products                Product[]
+  opportunities           Opportunity[]
+  opportunityTeam         OpportunityTeam[]
+  activities              Activity[]
+  tasks                   Task[]
+  proposals               Proposal[]
+  proposalVersions        ProposalVersion[]
+  approvals               Approval[]
+  contracts               Contract[]
+  contractInstallments    ContractInstallment[]
+  partnerLinks            PartnerLink[]
+  partnerTcAcceptances    PartnerTcAcceptance[]
+  partnerEngagements      PartnerEngagement[]
+  importantDates          ImportantDate[]
+  documents               Document[]
+  documentVersions        DocumentVersion[]
+  aiUsageLogs             AIUsageLog[]
+  auditLogs               AuditLog[]
+  alertLogs               AlertLog[]
+  embeddings              Embedding[]
+  territories             Territory[]
+  segments                Segment[]
+  userAccessLogs          UserAccessLog[]
+  opportunityStageHistory OpportunityStageHistory[]
+  approvalRules           ApprovalRule[]
+  consentLogs             ConsentLog[]
+
+  @@map("tenants")
+}
+
+// ---------------------------------------------------------------------
+// User (sincronizado com Clerk via webhook)
+// ---------------------------------------------------------------------
+
+model User {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  clerkId     String?   @unique @map("clerk_id")
+  email       String    @db.Citext
+  fullName    String    @map("full_name")
+  role        UserRole  @default(ANALISTA)
+  active      Boolean   @default(true)
+  lastLoginAt DateTime? @map("last_login_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  ownedOpportunities         Opportunity[]             @relation("OpportunityOwner")
+  teamMemberships            OpportunityTeam[]
+  assignedTasks              Task[]                    @relation("TaskAssignee")
+  createdActivities          Activity[]                @relation("ActivityAuthor")
+  approvals                  Approval[]                @relation("ApprovalApprover")
+  accessLogs                 UserAccessLog[]
+  partnerEngagementsCreated  PartnerEngagement[]       @relation("PartnerEngagementCreatedBy")
+  partnerEngagementsApproved PartnerEngagement[]       @relation("PartnerEngagementApprovedBy")
+  proposalVersionsCreated    ProposalVersion[]         @relation("ProposalVersionAuthor")
+  documentVersionsUploaded   DocumentVersion[]         @relation("DocumentVersionUploader")
+  stageMovements             OpportunityStageHistory[] @relation("StageMover")
+  aiUsageLogs                AIUsageLog[]
+  auditLogs                  AuditLog[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([tenantId, role])
+  @@map("users")
+}
+
+// ---------------------------------------------------------------------
+// User Access Log (audit de login)
+// ---------------------------------------------------------------------
+
+model UserAccessLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  ip         String?
+  userAgent  String?  @map("user_agent")
+  authMethod String?  @map("auth_method")
+  at         DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId, at])
+  @@map("user_access_logs")
+}
+
+// ---------------------------------------------------------------------
+// Catálogos configuráveis pelo Admin (Território e Segmento)
+// ---------------------------------------------------------------------
+
+model Territory {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  name      String
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("territories")
+}
+
+model Segment {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  name      String
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("segments")
+}
+
+// ---------------------------------------------------------------------
+// Company
+// ---------------------------------------------------------------------
+
+model Company {
+  id            String      @id @default(uuid()) @db.Uuid
+  tenantId      String      @map("tenant_id") @db.Uuid
+  type          CompanyType
+  razaoSocial   String      @map("razao_social")
+  nomeFantasia  String?     @map("nome_fantasia")
+  cnpj          String?
+  cnaeCode      String?     @map("cnae_code")
+  cnaeName      String?     @map("cnae_name")
+  country       String      @default("BR")
+  state         String?
+  city          String?
+  territoryId   String?     @map("territory_id") @db.Uuid
+  segmentId     String?     @map("segment_id") @db.Uuid
+  email         String?     @db.Citext
+  phone         String?
+  website       String?
+  notes         String?     @db.Text
+  // Partner-specific: aplicado quando type=PARTNER
+  commissionPct Decimal?    @map("commission_pct") @db.Decimal(6, 2)
+  tcVersion     String?     @map("tc_version")
+  tcText        String?     @map("tc_text") @db.Text
+  partnerActive Boolean     @default(true) @map("partner_active")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+  createdBy     String?     @map("created_by") @db.Uuid
+  updatedBy     String?     @map("updated_by") @db.Uuid
+  deletedAt     DateTime?   @map("deleted_at")
+
+  tenant        Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contacts      Contact[]
+  opportunities Opportunity[]         @relation("OpportunityClient")
+  asPartnerIn   Opportunity[]         @relation("OpportunityPartner")
+  partnerLinks  PartnerLink[]
+  tcAcceptances PartnerTcAcceptance[]
+  engagements   PartnerEngagement[]
+
+  @@unique([tenantId, cnpj])
+  @@index([tenantId, type])
+  @@index([tenantId, territoryId])
+  @@index([tenantId, segmentId])
+  @@map("companies")
+}
+
+// ---------------------------------------------------------------------
+// Contact
+// ---------------------------------------------------------------------
+
+model Contact {
+  id               String                  @id @default(uuid()) @db.Uuid
+  tenantId         String                  @map("tenant_id") @db.Uuid
+  companyId        String?                 @map("company_id") @db.Uuid
+  fullName         String                  @map("full_name")
+  email            String                  @db.Citext
+  phone            String?
+  position         String?
+  function         ContactFunction?
+  seniority        ContactSeniority?
+  workArea         WorkArea?               @map("work_area")
+  specialty        String?
+  relationshipType ContactRelationshipType @default(CLIENTE) @map("relationship_type")
+  notes            String?                 @db.Text
+  active           Boolean                 @default(true)
+  selfRegistered   Boolean                 @default(false) @map("self_registered")
+  approvalStatus   ContactApprovalStatus   @default(APPROVED) @map("approval_status")
+  approvedById     String?                 @map("approved_by_id") @db.Uuid
+  approvedAt       DateTime?               @map("approved_at")
+  createdAt        DateTime                @default(now()) @map("created_at")
+  updatedAt        DateTime                @updatedAt @map("updated_at")
+  createdBy        String?                 @map("created_by") @db.Uuid
+  updatedBy        String?                 @map("updated_by") @db.Uuid
+  deletedAt        DateTime?               @map("deleted_at")
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company Company? @relation(fields: [companyId], references: [id])
+
+  opportunitiesAsClientContact Opportunity[] @relation("OpportunityClientContact")
+
+  @@unique([tenantId, email])
+  @@index([tenantId, companyId])
+  @@index([tenantId, approvalStatus])
+  @@map("contacts")
+}
+
+// ---------------------------------------------------------------------
+// ImportantDate (polimórfico: Company OU Contact)
+// ---------------------------------------------------------------------
+
+model ImportantDate {
+  id          String                  @id @default(uuid()) @db.Uuid
+  tenantId    String                  @map("tenant_id") @db.Uuid
+  entityType  ImportantDateEntityType @map("entity_type")
+  entityId    String                  @map("entity_id") @db.Uuid
+  dateType    DateType                @map("date_type")
+  label       String?
+  dateValue   DateTime                @map("date_value") @db.Date
+  alertActive Boolean                 @default(true) @map("alert_active")
+  createdAt   DateTime                @default(now()) @map("created_at")
+  updatedAt   DateTime                @updatedAt @map("updated_at")
+  createdBy   String?                 @map("created_by") @db.Uuid
+  updatedBy   String?                 @map("updated_by") @db.Uuid
+  deletedAt   DateTime?               @map("deleted_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, entityType, entityId])
+  @@index([tenantId, alertActive, dateValue])
+  @@map("important_dates")
+}
+
+// ---------------------------------------------------------------------
+// Product (catálogo do tenant)
+// ---------------------------------------------------------------------
+
+model Product {
+  id           String      @id @default(uuid()) @db.Uuid
+  tenantId     String      @map("tenant_id") @db.Uuid
+  name         String
+  type         ProductType
+  sku          String?
+  description  String?     @db.Text
+  minMarginPct Decimal     @default(0) @map("min_margin_pct") @db.Decimal(6, 2)
+  active       Boolean     @default(true)
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+  createdBy    String?     @map("created_by") @db.Uuid
+  updatedBy    String?     @map("updated_by") @db.Uuid
+  deletedAt    DateTime?   @map("deleted_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, sku])
+  @@index([tenantId, active])
+  @@map("products")
+}
+
+// ---------------------------------------------------------------------
+// Opportunity (núcleo do pipeline)
+// ---------------------------------------------------------------------
+
+model Opportunity {
+  id                    String                 @id @default(uuid()) @db.Uuid
+  tenantId              String                 @map("tenant_id") @db.Uuid
+  title                 String
+  clientCompanyId       String                 @map("client_company_id") @db.Uuid
+  clientContactId       String?                @map("client_contact_id") @db.Uuid
+  partnerCompanyId      String?                @map("partner_company_id") @db.Uuid
+  partnerContactId      String?                @map("partner_contact_id") @db.Uuid
+  ownerId               String                 @map("owner_id") @db.Uuid
+  stage                 OpportunityStage       @default(PROSPECT)
+  status                OpportunityStatus      @default(ACTIVE)
+  estimatedValue        Decimal?               @map("estimated_value") @db.Decimal(15, 2)
+  closedValue           Decimal?               @map("closed_value") @db.Decimal(15, 2)
+  expectedCloseDate     DateTime?              @map("expected_close_date") @db.Date
+  actualCloseDate       DateTime?              @map("actual_close_date") @db.Date
+  source                OpportunitySource?
+  sourceDetail          String?                @map("source_detail")
+  cancellationReason    String?                @map("cancellation_reason") @db.Text
+  lossReason            OpportunityLossReason? @map("loss_reason")
+  description           String?                @db.Text
+  commissionPctOverride Decimal?               @map("commission_pct_override") @db.Decimal(6, 2)
+
+  // Campos por estágio (§3 do spec)
+  // Lead
+  meetingScheduledAt           DateTime? @map("meeting_scheduled_at")
+  meetingHappened              Boolean?  @map("meeting_happened")
+  // Oportunidade
+  briefing                     String?   @db.Text
+  // Proposta
+  proposalPresentedAt          DateTime? @map("proposal_presented_at") @db.Date
+  decisionExpectedAt           DateTime? @map("decision_expected_at") @db.Date
+  estimatedTeamNotes           String?   @map("estimated_team_notes") @db.Text
+  // Aceite
+  acceptedAt                   DateTime? @map("accepted_at")
+  acceptanceNotificationSentAt DateTime? @map("acceptance_notification_sent_at")
+  // Contrato
+  handoffReportGeneratedAt     DateTime? @map("handoff_report_generated_at")
+
+  // Marco do estágio atual: quando entrou no estágio atual (usado para
+  // calcular "dias nesta etapa" no Kanban sem JOIN no histórico)
+  currentStageEnteredAt DateTime @default(now()) @map("current_stage_entered_at")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at")
+
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clientCompany  Company  @relation("OpportunityClient", fields: [clientCompanyId], references: [id])
+  clientContact  Contact? @relation("OpportunityClientContact", fields: [clientContactId], references: [id])
+  partnerCompany Company? @relation("OpportunityPartner", fields: [partnerCompanyId], references: [id])
+  owner          User     @relation("OpportunityOwner", fields: [ownerId], references: [id])
+
+  team               OpportunityTeam[]
+  activities         Activity[]
+  tasks              Task[]
+  proposals          Proposal[]
+  contracts          Contract[]
+  stageHistory       OpportunityStageHistory[]
+  partnerEngagements PartnerEngagement[]
+
+  @@index([tenantId, stage, status])
+  @@index([tenantId, ownerId])
+  @@index([tenantId, clientCompanyId])
+  @@index([tenantId, partnerCompanyId])
+  @@map("opportunities")
+}
+
+model OpportunityTeam {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  opportunityId String   @map("opportunity_id") @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  roleInTeam    String?  @map("role_in_team")
+  createdAt     DateTime @default(now()) @map("created_at")
+  createdBy     String?  @map("created_by") @db.Uuid
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id])
+
+  @@unique([opportunityId, userId])
+  @@index([tenantId])
+  @@map("opportunity_team")
+}
+
+model OpportunityStageHistory {
+  id            String            @id @default(uuid()) @db.Uuid
+  tenantId      String            @map("tenant_id") @db.Uuid
+  opportunityId String            @map("opportunity_id") @db.Uuid
+  fromStage     OpportunityStage? @map("from_stage")
+  toStage       OpportunityStage  @map("to_stage")
+  movedById     String            @map("moved_by_id") @db.Uuid
+  note          String?           @db.Text
+  at            DateTime          @default(now())
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  movedBy     User        @relation("StageMover", fields: [movedById], references: [id])
+
+  @@index([tenantId, opportunityId, at])
+  @@map("opportunity_stage_history")
+}
+
+// ---------------------------------------------------------------------
+// Activity (linha do tempo da oportunidade)
+// ---------------------------------------------------------------------
+
+model Activity {
+  id            String       @id @default(uuid()) @db.Uuid
+  tenantId      String       @map("tenant_id") @db.Uuid
+  opportunityId String       @map("opportunity_id") @db.Uuid
+  authorId      String?      @map("author_id") @db.Uuid
+  type          ActivityType
+  title         String?
+  content       String       @db.Text
+  rawText       String?      @map("raw_text") @db.Text
+  aiSummaryJson Json?        @map("ai_summary_json")
+  occurredAt    DateTime     @default(now()) @map("occurred_at")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+  createdBy     String?      @map("created_by") @db.Uuid
+  updatedBy     String?      @map("updated_by") @db.Uuid
+  deletedAt     DateTime?    @map("deleted_at")
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  author      User?       @relation("ActivityAuthor", fields: [authorId], references: [id])
+
+  @@index([tenantId, opportunityId, occurredAt])
+  @@map("activities")
+}
+
+// ---------------------------------------------------------------------
+// Task
+// ---------------------------------------------------------------------
+
+model Task {
+  id            String       @id @default(uuid()) @db.Uuid
+  tenantId      String       @map("tenant_id") @db.Uuid
+  opportunityId String?      @map("opportunity_id") @db.Uuid
+  assigneeId    String?      @map("assignee_id") @db.Uuid
+  title         String
+  description   String?      @db.Text
+  dueDate       DateTime?    @map("due_date") @db.Date
+  status        TaskStatus   @default(TODO)
+  priority      TaskPriority @default(MEDIUM)
+  completedAt   DateTime?    @map("completed_at")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+  createdBy     String?      @map("created_by") @db.Uuid
+  updatedBy     String?      @map("updated_by") @db.Uuid
+  deletedAt     DateTime?    @map("deleted_at")
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  opportunity Opportunity? @relation(fields: [opportunityId], references: [id])
+  assignee    User?        @relation("TaskAssignee", fields: [assigneeId], references: [id])
+
+  @@index([tenantId, status, dueDate])
+  @@index([tenantId, assigneeId, status])
+  @@map("tasks")
+}
+
+// ---------------------------------------------------------------------
+// Proposal e ProposalVersion
+// ---------------------------------------------------------------------
+
+model Proposal {
+  id             String    @id @default(uuid()) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  opportunityId  String    @map("opportunity_id") @db.Uuid
+  title          String
+  currentVersion Int       @default(1) @map("current_version")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  createdBy      String?   @map("created_by") @db.Uuid
+  updatedBy      String?   @map("updated_by") @db.Uuid
+  deletedAt      DateTime? @map("deleted_at")
+
+  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  opportunity Opportunity       @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  versions    ProposalVersion[]
+
+  @@index([tenantId, opportunityId])
+  @@map("proposals")
+}
+
+model ProposalVersion {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  proposalId  String    @map("proposal_id") @db.Uuid
+  version     Int
+  contentJson Json      @map("content_json")
+  totalValue  Decimal   @map("total_value") @db.Decimal(15, 2)
+  marginPct   Decimal?  @map("margin_pct") @db.Decimal(6, 2)
+  documentKey String?   @map("document_key")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  createdBy   String?   @map("created_by") @db.Uuid
+  updatedBy   String?   @map("updated_by") @db.Uuid
+  deletedAt   DateTime? @map("deleted_at")
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  proposal  Proposal   @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  author    User?      @relation("ProposalVersionAuthor", fields: [createdBy], references: [id])
+  approvals Approval[]
+
+  @@unique([proposalId, version])
+  @@index([tenantId])
+  @@map("proposal_versions")
+}
+
+model Approval {
+  id                String         @id @default(uuid()) @db.Uuid
+  tenantId          String         @map("tenant_id") @db.Uuid
+  proposalVersionId String         @map("proposal_version_id") @db.Uuid
+  approverId        String         @map("approver_id") @db.Uuid
+  status            ApprovalStatus @default(PENDING)
+  comment           String?        @db.Text
+  decidedAt         DateTime?      @map("decided_at")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+  createdBy         String?        @map("created_by") @db.Uuid
+  updatedBy         String?        @map("updated_by") @db.Uuid
+  deletedAt         DateTime?      @map("deleted_at")
+
+  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  proposalVersion ProposalVersion @relation(fields: [proposalVersionId], references: [id], onDelete: Cascade)
+  approver        User            @relation("ApprovalApprover", fields: [approverId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([tenantId, approverId, status])
+  @@map("approvals")
+}
+
+// ---------------------------------------------------------------------
+// Contract e parcelas
+// ---------------------------------------------------------------------
+
+model Contract {
+  id            String         @id @default(uuid()) @db.Uuid
+  tenantId      String         @map("tenant_id") @db.Uuid
+  opportunityId String         @map("opportunity_id") @db.Uuid
+  number        String?
+  status        ContractStatus @default(DRAFT)
+  ndaSignedAt   DateTime?      @map("nda_signed_at")
+  termsSignedAt DateTime?      @map("terms_signed_at")
+  startDate     DateTime?      @map("start_date") @db.Date
+  endDate       DateTime?      @map("end_date") @db.Date
+  totalValue    Decimal        @map("total_value") @db.Decimal(15, 2)
+  ndaKey        String?        @map("nda_key")
+  termsKey      String?        @map("terms_key")
+  contractKey   String?        @map("contract_key")
+  notes         String?        @db.Text
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  createdBy     String?        @map("created_by") @db.Uuid
+  updatedBy     String?        @map("updated_by") @db.Uuid
+  deletedAt     DateTime?      @map("deleted_at")
+
+  tenant       Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  opportunity  Opportunity           @relation(fields: [opportunityId], references: [id])
+  installments ContractInstallment[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, opportunityId])
+  @@map("contracts")
+}
+
+model ContractInstallment {
+  id              String            @id @default(uuid()) @db.Uuid
+  tenantId        String            @map("tenant_id") @db.Uuid
+  contractId      String            @map("contract_id") @db.Uuid
+  number          Int
+  dueDate         DateTime          @map("due_date") @db.Date
+  value           Decimal           @db.Decimal(15, 2)
+  status          InstallmentStatus @default(PENDING)
+  billingDataJson Json              @map("billing_data_json")
+  paidAt          DateTime?         @map("paid_at")
+  invoiceNumber   String?           @map("invoice_number")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+  createdBy       String?           @map("created_by") @db.Uuid
+  updatedBy       String?           @map("updated_by") @db.Uuid
+  deletedAt       DateTime?         @map("deleted_at")
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@unique([contractId, number])
+  @@index([tenantId, status, dueDate])
+  @@map("contract_installments")
+}
+
+// ---------------------------------------------------------------------
+// Partner: extensão de Company tipo PARTNER
+//   - PartnerLink: links públicos de auto-cadastro
+//   - PartnerTcAcceptance: aceite de Termos & Condições
+//   - PartnerEngagement: aprovação do parceiro em oportunidades
+// ---------------------------------------------------------------------
+
+model PartnerLink {
+  id               String    @id @default(uuid()) @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+  partnerCompanyId String?   @map("partner_company_id") @db.Uuid
+  token            String    @unique
+  expiresAt        DateTime? @map("expires_at")
+  usedAt           DateTime? @map("used_at")
+  maxUses          Int       @default(1) @map("max_uses")
+  uses             Int       @default(0)
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  createdBy        String?   @map("created_by") @db.Uuid
+  updatedBy        String?   @map("updated_by") @db.Uuid
+  deletedAt        DateTime? @map("deleted_at")
+
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  partnerCompany Company? @relation(fields: [partnerCompanyId], references: [id])
+
+  @@index([tenantId])
+  @@map("partner_links")
+}
+
+model PartnerTcAcceptance {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @map("tenant_id") @db.Uuid
+  partnerCompanyId String   @map("partner_company_id") @db.Uuid
+  tcVersion        String   @map("tc_version")
+  acceptedByName   String   @map("accepted_by_name")
+  acceptedByEmail  String   @map("accepted_by_email") @db.Citext
+  ip               String?
+  userAgent        String?  @map("user_agent")
+  acceptedAt       DateTime @default(now()) @map("accepted_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  tenant         Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  partnerCompany Company @relation(fields: [partnerCompanyId], references: [id])
+
+  @@index([tenantId, partnerCompanyId])
+  @@map("partner_tc_acceptances")
+}
+
+model PartnerEngagement {
+  id               String                  @id @default(uuid()) @db.Uuid
+  tenantId         String                  @map("tenant_id") @db.Uuid
+  opportunityId    String                  @map("opportunity_id") @db.Uuid
+  partnerCompanyId String                  @map("partner_company_id") @db.Uuid
+  status           PartnerEngagementStatus @default(PENDING_APPROVAL)
+  requestedById    String                  @map("requested_by_id") @db.Uuid
+  approvedById     String?                 @map("approved_by_id") @db.Uuid
+  decidedAt        DateTime?               @map("decided_at")
+  rejectionReason  String?                 @map("rejection_reason") @db.Text
+  createdAt        DateTime                @default(now()) @map("created_at")
+  updatedAt        DateTime                @updatedAt @map("updated_at")
+  deletedAt        DateTime?               @map("deleted_at")
+
+  tenant         Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  opportunity    Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  partnerCompany Company     @relation(fields: [partnerCompanyId], references: [id])
+  requestedBy    User        @relation("PartnerEngagementCreatedBy", fields: [requestedById], references: [id])
+  approvedBy     User?       @relation("PartnerEngagementApprovedBy", fields: [approvedById], references: [id])
+
+  @@unique([opportunityId, partnerCompanyId])
+  @@index([tenantId, status])
+  @@map("partner_engagements")
+}
+
+// ---------------------------------------------------------------------
+// Document e DocumentVersion (versionamento de arquivos em S3/R2)
+// ---------------------------------------------------------------------
+
+model Document {
+  id                String    @id @default(uuid()) @db.Uuid
+  tenantId          String    @map("tenant_id") @db.Uuid
+  relatedEntityType String    @map("related_entity_type")
+  relatedEntityId   String    @map("related_entity_id") @db.Uuid
+  filename          String
+  mimeType          String    @map("mime_type")
+  sizeBytes         BigInt    @map("size_bytes")
+  currentVersionId  String?   @map("current_version_id") @db.Uuid
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  createdBy         String?   @map("created_by") @db.Uuid
+  updatedBy         String?   @map("updated_by") @db.Uuid
+  deletedAt         DateTime? @map("deleted_at")
+
+  tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  versions DocumentVersion[]
+
+  @@index([tenantId, relatedEntityType, relatedEntityId])
+  @@map("documents")
+}
+
+model DocumentVersion {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  documentId   String    @map("document_id") @db.Uuid
+  version      Int
+  storageKey   String    @map("storage_key")
+  sizeBytes    BigInt    @map("size_bytes")
+  sha256       String
+  uploadedById String    @map("uploaded_by_id") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  uploadedBy User     @relation("DocumentVersionUploader", fields: [uploadedById], references: [id])
+
+  @@unique([documentId, version])
+  @@index([tenantId])
+  @@map("document_versions")
+}
+
+// ---------------------------------------------------------------------
+// Logs: AI Usage, Audit, Alerts
+// ---------------------------------------------------------------------
+
+model AIUsageLog {
+  id               String     @id @default(uuid()) @db.Uuid
+  tenantId         String     @map("tenant_id") @db.Uuid
+  userId           String?    @map("user_id") @db.Uuid
+  provider         AIProvider
+  model            String
+  promptTokens     Int        @map("prompt_tokens")
+  completionTokens Int        @map("completion_tokens")
+  totalTokens      Int        @map("total_tokens")
+  costUsd          Decimal    @map("cost_usd") @db.Decimal(12, 6)
+  requestType      String     @map("request_type")
+  latencyMs        Int?       @map("latency_ms")
+  success          Boolean    @default(true)
+  errorCode        String?    @map("error_code")
+  createdAt        DateTime   @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [userId], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, provider, model])
+  @@map("ai_usage_logs")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  userId    String?  @map("user_id") @db.Uuid
+  action    String
+  tableName String   @map("table_name")
+  recordId  String   @map("record_id") @db.Uuid
+  before    Json?
+  after     Json?
+  ip        String?
+  userAgent String?  @map("user_agent")
+  at        DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [userId], references: [id])
+
+  @@index([tenantId, at])
+  @@index([tenantId, tableName, recordId])
+  @@map("audit_logs")
+}
+
+model AlertLog {
+  id             String      @id @default(uuid()) @db.Uuid
+  tenantId       String      @map("tenant_id") @db.Uuid
+  type           AlertType
+  entityType     String      @map("entity_type")
+  entityId       String      @map("entity_id") @db.Uuid
+  scheduledFor   DateTime    @map("scheduled_for")
+  sentAt         DateTime?   @map("sent_at")
+  recipientEmail String      @map("recipient_email") @db.Citext
+  status         AlertStatus @default(PENDING)
+  errorMessage   String?     @map("error_message") @db.Text
+  payload        Json?
+  createdAt      DateTime    @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status, scheduledFor])
+  @@index([tenantId, type])
+  @@map("alert_logs")
+}
+
+// ---------------------------------------------------------------------
+// Embedding (pgvector)
+//   Modelo aceita dimensões variáveis; coluna fixada em 1536 (OpenAI/Anthropic).
+//   Para outros provedores, criar tabela paralela com dimensão diferente.
+// ---------------------------------------------------------------------
+
+model Embedding {
+  id          String                      @id @default(uuid()) @db.Uuid
+  tenantId    String                      @map("tenant_id") @db.Uuid
+  sourceType  String                      @map("source_type")
+  sourceId    String                      @map("source_id") @db.Uuid
+  contentHash String                      @map("content_hash")
+  model       String
+  dims        Int
+  vector      Unsupported("vector(1536)")
+  metadata    Json?
+  createdAt   DateTime                    @default(now()) @map("created_at")
+  deletedAt   DateTime?                   @map("deleted_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, sourceType, sourceId])
+  @@map("embeddings")
+}
+
+// ---------------------------------------------------------------------
+// ApprovalRule — configuração por tenant do fluxo de aprovação de propostas
+//   Tipos:
+//     UNIVERSAL          → toda proposta passa pelos aprovadores
+//     MIN_MARGIN_BELOW   → propostas com margin_pct < thresholdNumeric exigem aprovação
+//     TOTAL_VALUE_ABOVE  → propostas com valor > thresholdNumeric exigem aprovação
+//   approverRoles armazena os UserRoles que precisam aprovar (qualquer um basta? OU todos?
+//   regra: TODOS os roles listados precisam ter pelo menos 1 aprovador APPROVED).
+// ---------------------------------------------------------------------
+
+model ApprovalRule {
+  id               String               @id @default(uuid()) @db.Uuid
+  tenantId         String               @map("tenant_id") @db.Uuid
+  name             String
+  criteria         ApprovalRuleCriteria
+  thresholdNumeric Decimal?             @map("threshold_numeric") @db.Decimal(15, 2)
+  approverRoles    UserRole[]           @map("approver_roles")
+  enabled          Boolean              @default(true)
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+  createdBy        String?              @map("created_by") @db.Uuid
+  updatedBy        String?              @map("updated_by") @db.Uuid
+  deletedAt        DateTime?            @map("deleted_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, enabled])
+  @@map("approval_rules")
+}
+
+// ---------------------------------------------------------------------
+// ConsentLog — registro de consentimento de cookies/privacidade (LGPD)
+//   Imutável: nunca atualizar; cada revisão de consentimento gera nova linha.
+//   Sem soft delete — auditoria legal.
+// ---------------------------------------------------------------------
+
+model ConsentLog {
+  id            String          @id @default(uuid()) @db.Uuid
+  tenantId      String?         @map("tenant_id") @db.Uuid
+  userId        String?         @map("user_id") @db.Uuid
+  subjectEmail  String?         @map("subject_email") @db.Citext
+  category      ConsentCategory
+  accepted      Boolean
+  policyVersion String          @map("policy_version")
+  ip            String?
+  userAgent     String?         @map("user_agent")
+  createdAt     DateTime        @default(now()) @map("created_at")
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, userId, createdAt])
+  @@index([subjectEmail, createdAt])
+  @@map("consent_logs")
+}

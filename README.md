@@ -1,36 +1,58 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CRM B2B Multi-tenant
 
-## Getting Started
+CRM comercial multi-tenant para gestão de pipeline B2B (Prospect → Lead → Oportunidade → Proposta → Negociação → Aceite → Contrato), com IA integrada para resumos de comunicação e suporte a parceiros, fornecedores e clientes.
 
-First, run the development server:
+**Status:** Sprint 0 — Foundation concluído.
+Próximo: Sprint 1 — Autenticação e Cadastros Base.
+
+Veja [CLAUDE.md](./CLAUDE.md) para a visão técnica completa.
+
+## Quick start
 
 ```bash
+# 1. Variáveis de ambiente
+cp .env.example .env.local
+# (edite .env.local com suas chaves Clerk, Anthropic, etc.)
+
+# 2. Subir infra local (Postgres com pgvector + Redis)
+docker compose up -d postgres redis
+
+# 3. Aplicar migrações
+npx prisma migrate deploy
+
+# 4. Popular com 3 tenants de teste
+npm run db:seed
+
+# 5. Dev server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# → http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Comandos principais
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Comando | O que faz |
+|---|---|
+| `npm run dev` | Next.js em http://localhost:3000 |
+| `npm run build` | Build de produção |
+| `npm run type-check` | TypeScript sem erros |
+| `npm run lint` | ESLint |
+| `npm run test` | Vitest (unit + integration) |
+| `npm run test:e2e` | Playwright |
+| `npm run db:seed` | Popula 3 tenants de teste |
+| `npm run db:reset` | Reset + migrate + seed (DEV apenas) |
+| `npx prisma studio` | GUI do banco |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Arquitetura
 
-## Learn More
+- **Next.js 14** App Router + **TypeScript strict** + **Tailwind** + **shadcn/ui**
+- **tRPC** (interno) + REST OpenAPI (externo)
+- **PostgreSQL** + Prisma + **Row Level Security** + **pgvector**
+- **Clerk** (Google/Microsoft OAuth, magic link, TOTP 2FA)
+- **BullMQ** + Redis (cron de alertas, e-mails)
+- **Anthropic SDK** (Claude Haiku/Sonnet) + DataMaskingService para PII
 
-To learn more about Next.js, take a look at the following resources:
+Detalhes: [CLAUDE.md](./CLAUDE.md).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Licença
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Privado.

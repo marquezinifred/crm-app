@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-type-check:
+    name: Lint + Type-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run type-check
+
+  test:
+    name: Vitest (unit + integration)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: crm
+          POSTGRES_PASSWORD: crm_test_password
+          POSTGRES_DB: crm_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U crm -d crm_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://crm:crm_test_password@localhost:5432/crm_test?schema=public
+      REDIS_URL: redis://localhost:6379
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_dummy
+      CLERK_SECRET_KEY: sk_test_dummy
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Prisma migrate deploy
+        run: npx prisma migrate deploy
+      - run: npm run test
+
+  build:
+    name: Next.js build
+    runs-on: ubuntu-latest
+    needs: [lint-and-type-check]
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql://dummy:dummy@localhost:5432/dummy
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_dummy
+      CLERK_SECRET_KEY: sk_test_dummy
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run build
+
+  multi-tenancy-guard:
+    name: Guard — nenhuma query sem tenantId
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detectar usos diretos do Prisma sem isolamento
+        run: |
+          # Procura chamadas `prisma.<model>.<op>` em src/ que NÃO estejam
+          # dentro de runAsSystem(), context.ts, ou client.ts. Heurística
+          # rudimentar — Sprint 1+ substitui por regra ESLint custom.
+          BAD=$(grep -rn "prisma\." src/ \
+            --include='*.ts' --include='*.tsx' \
+            | grep -v "src/server/db/" \
+            | grep -v "src/server/trpc/context.ts" \
+            | grep -v "runAsSystem" \
+            | grep -v "\$queryRaw" \
+            | grep -v "\$executeRaw" \
+            | grep -v "import" \
+            | grep -v "//" \
+            || true)
+          if [ -n "$BAD" ]; then
+            echo "⚠️  Chamadas Prisma fora dos pontos de controle:"
+            echo "$BAD"
+            # Sprint 0: apenas warning. Sprint 1+ vira erro.
+            exit 0
+          fi
+          echo "✅ Nenhuma chamada Prisma suspeita."

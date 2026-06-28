@@ -1,0 +1,91 @@
+# =====================================================================
+# CRM B2B — Docker Compose (dev local)
+#
+# Subir tudo:
+#   docker compose up -d
+# Subir só infra (postgres + redis):
+#   docker compose up -d postgres redis
+# Migrar:
+#   docker compose exec app npx prisma migrate deploy
+# Seed:
+#   docker compose exec app npm run db:seed
+# =====================================================================
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: crm-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: crm
+      POSTGRES_PASSWORD: crm_dev_password
+      POSTGRES_DB: crm
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crm -d crm"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: crm-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: crm-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://crm:crm_dev_password@postgres:5432/crm?schema=public
+      REDIS_URL: redis://redis:6379
+    env_file:
+      - .env.local
+    ports:
+      - "3000:3000"
+
+  # Worker BullMQ: scan diário de alertas + envio de e-mails.
+  # Mesmo build da app; entry point diferente via CMD.
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: crm-worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://crm:crm_dev_password@postgres:5432/crm?schema=public
+      REDIS_URL: redis://redis:6379
+    env_file:
+      - .env.local
+    command: ["node", "--enable-source-maps", "src/jobs/index.js"]
+
+volumes:
+  postgres_data:
+  redis_data:

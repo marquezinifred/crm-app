@@ -32,7 +32,11 @@ type FilterInput = z.infer<typeof filterInput>;
  * tudo. Para PERFORMANCE, ANALISTA enxerga próprias linhas + média anônima
  * do time (sem detalhe individual de outros).
  */
-function visibility(role: UserRole, userId: string): Prisma.OpportunityWhereInput {
+function visibility(
+  role: UserRole,
+  userId: string,
+  partnerCompanyId: string | null,
+): Prisma.OpportunityWhereInput {
   if (
     role === 'SUPER_ADMIN' ||
     role === 'ADMIN' ||
@@ -44,6 +48,12 @@ function visibility(role: UserRole, userId: string): Prisma.OpportunityWhereInpu
   }
   if (role === 'ANALISTA') {
     return { OR: [{ ownerId: userId }, { team: { some: { userId } } }] };
+  }
+  if (role === 'PARCEIRO' && partnerCompanyId) {
+    return {
+      partnerCompanyId,
+      partnerEngagements: { some: { partnerCompanyId, status: 'APPROVED' } },
+    };
   }
   return { id: '00000000-0000-0000-0000-000000000000' };
 }
@@ -69,10 +79,14 @@ function whereFromFilters(f: FilterInput): Prisma.OpportunityWhereInput {
 async function loadOpps(
   role: UserRole,
   userId: string,
+  partnerCompanyId: string | null,
   filters: FilterInput,
 ): Promise<OpportunitySnap[]> {
   const opps = await prisma.opportunity.findMany({
-    where: { ...visibility(role, userId), ...whereFromFilters(filters) },
+    where: {
+      ...visibility(role, userId, partnerCompanyId),
+      ...whereFromFilters(filters),
+    },
     include: { owner: { select: { fullName: true } } },
   });
   return opps.map((o) => ({
@@ -94,17 +108,17 @@ const canRead = withCapability('opportunity', 'read');
 
 export const reportsRouter = router({
   funnel: canRead.input(filterInput.default({})).query(async ({ input, ctx }) => {
-    const opps = await loadOpps(ctx.user.role, ctx.user.id, input);
+    const opps = await loadOpps(ctx.user.role, ctx.user.id, ctx.user.partnerCompanyId, input);
     return computeFunnel(opps);
   }),
 
   winLoss: canRead.input(filterInput.default({})).query(async ({ input, ctx }) => {
-    const opps = await loadOpps(ctx.user.role, ctx.user.id, input);
+    const opps = await loadOpps(ctx.user.role, ctx.user.id, ctx.user.partnerCompanyId, input);
     return winLossBreakdown(opps);
   }),
 
   timePerStage: canRead.input(filterInput.default({})).query(async ({ input, ctx }) => {
-    const oppIds = (await loadOpps(ctx.user.role, ctx.user.id, input)).map((o) => o.id);
+    const oppIds = (await loadOpps(ctx.user.role, ctx.user.id, ctx.user.partnerCompanyId, input)).map((o) => o.id);
     if (oppIds.length === 0) {
       return {} as ReturnType<typeof avgDaysPerStage>;
     }
@@ -116,7 +130,7 @@ export const reportsRouter = router({
   }),
 
   performanceByOwner: canRead.input(filterInput.default({})).query(async ({ input, ctx }) => {
-    const opps = await loadOpps(ctx.user.role, ctx.user.id, input);
+    const opps = await loadOpps(ctx.user.role, ctx.user.id, ctx.user.partnerCompanyId, input);
     const report = performanceByOwner(opps);
     // ANALISTA: filtra para mostrar apenas a própria linha + manter teamAverage
     if (ctx.user.role === 'ANALISTA') {
@@ -131,7 +145,7 @@ export const reportsRouter = router({
   }),
 
   revenueProjection: canRead.input(filterInput.default({})).query(async ({ input, ctx }) => {
-    const opps = await loadOpps(ctx.user.role, ctx.user.id, input);
+    const opps = await loadOpps(ctx.user.role, ctx.user.id, ctx.user.partnerCompanyId, input);
     const tenant = await prisma.tenant.findUnique({
       where: { id: ctx.tenantId },
       select: { conversionRates: true },

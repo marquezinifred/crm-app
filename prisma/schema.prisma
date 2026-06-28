@@ -233,6 +233,18 @@ enum IncomingEmailStatus {
   REJECTED
 }
 
+enum DocumentCategory {
+  INSTITUCIONAL
+  PROPOSTA_TECNICA
+  PROPOSTA_COMERCIAL
+  ORCAMENTO
+  CONTRATO
+  NDA
+  TERMO_RESPONSABILIDADE
+  ACEITE_CLIENTE
+  OUTRO
+}
+
 enum AIProvider {
   ANTHROPIC
   OPENAI
@@ -302,6 +314,7 @@ model Tenant {
   approvalRules           ApprovalRule[]
   consentLogs             ConsentLog[]
   incomingEmails          IncomingEmail[]
+  documentTemplates       DocumentTemplate[]
 
   @@map("tenants")
 }
@@ -311,19 +324,23 @@ model Tenant {
 // ---------------------------------------------------------------------
 
 model User {
-  id          String    @id @default(uuid()) @db.Uuid
-  tenantId    String    @map("tenant_id") @db.Uuid
-  clerkId     String?   @unique @map("clerk_id")
-  email       String    @db.Citext
-  fullName    String    @map("full_name")
-  role        UserRole  @default(ANALISTA)
-  active      Boolean   @default(true)
-  lastLoginAt DateTime? @map("last_login_at")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  deletedAt   DateTime? @map("deleted_at")
+  id               String    @id @default(uuid()) @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+  clerkId          String?   @unique @map("clerk_id")
+  email            String    @db.Citext
+  fullName         String    @map("full_name")
+  role             UserRole  @default(ANALISTA)
+  active           Boolean   @default(true)
+  lastLoginAt      DateTime? @map("last_login_at")
+  // Para usuários com role=PARCEIRO: aponta para a Company (PARTNER) que ele
+  // representa. Resolve visibilidade do perfil parceiro (débito Sprint 2).
+  partnerCompanyId String?   @map("partner_company_id") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  deletedAt        DateTime? @map("deleted_at")
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  partnerCompany Company? @relation("UserPartnerCompany", fields: [partnerCompanyId], references: [id])
 
   ownedOpportunities         Opportunity[]             @relation("OpportunityOwner")
   teamMemberships            OpportunityTeam[]
@@ -443,6 +460,7 @@ model Company {
   partnerLinks  PartnerLink[]
   tcAcceptances PartnerTcAcceptance[]
   engagements   PartnerEngagement[]
+  partnerUsers  User[]                @relation("UserPartnerCompany")
 
   @@unique([tenantId, cnpj])
   @@index([tenantId, type])
@@ -920,25 +938,56 @@ model PartnerEngagement {
 // ---------------------------------------------------------------------
 
 model Document {
-  id                String    @id @default(uuid()) @db.Uuid
-  tenantId          String    @map("tenant_id") @db.Uuid
-  relatedEntityType String    @map("related_entity_type")
-  relatedEntityId   String    @map("related_entity_id") @db.Uuid
+  id                String           @id @default(uuid()) @db.Uuid
+  tenantId          String           @map("tenant_id") @db.Uuid
+  category          DocumentCategory @default(OUTRO)
+  relatedEntityType String           @map("related_entity_type")
+  relatedEntityId   String           @map("related_entity_id") @db.Uuid
   filename          String
-  mimeType          String    @map("mime_type")
-  sizeBytes         BigInt    @map("size_bytes")
-  currentVersionId  String?   @map("current_version_id") @db.Uuid
-  createdAt         DateTime  @default(now()) @map("created_at")
-  updatedAt         DateTime  @updatedAt @map("updated_at")
-  createdBy         String?   @map("created_by") @db.Uuid
-  updatedBy         String?   @map("updated_by") @db.Uuid
-  deletedAt         DateTime? @map("deleted_at")
+  mimeType          String           @map("mime_type")
+  sizeBytes         BigInt           @map("size_bytes")
+  currentVersionId  String?          @map("current_version_id") @db.Uuid
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+  createdBy         String?          @map("created_by") @db.Uuid
+  updatedBy         String?          @map("updated_by") @db.Uuid
+  deletedAt         DateTime?        @map("deleted_at")
 
   tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   versions DocumentVersion[]
 
   @@index([tenantId, relatedEntityType, relatedEntityId])
+  @@index([tenantId, category])
   @@map("documents")
+}
+
+// ---------------------------------------------------------------------
+// DocumentTemplate — biblioteca de templates por tenant
+//   Cada categoria pode ter múltiplos templates (ex: contrato curto +
+//   contrato longo). currentVersionStorageKey é o link/path do arquivo
+//   ativo; versões anteriores ficam preservadas em document_versions
+//   via relatedEntityType='template'.
+// ---------------------------------------------------------------------
+
+model DocumentTemplate {
+  id                       String           @id @default(uuid()) @db.Uuid
+  tenantId                 String           @map("tenant_id") @db.Uuid
+  category                 DocumentCategory
+  name                     String
+  description              String?          @db.Text
+  currentVersionStorageKey String?          @map("current_version_storage_key")
+  currentVersionNumber     Int              @default(1) @map("current_version_number")
+  active                   Boolean          @default(true)
+  createdAt                DateTime         @default(now()) @map("created_at")
+  updatedAt                DateTime         @updatedAt @map("updated_at")
+  createdBy                String?          @map("created_by") @db.Uuid
+  updatedBy                String?          @map("updated_by") @db.Uuid
+  deletedAt                DateTime?        @map("deleted_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, category, active])
+  @@map("document_templates")
 }
 
 model DocumentVersion {

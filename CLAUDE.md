@@ -11,12 +11,12 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 ## Sprint atual
 
-> **Sprint 6 — Comunicações, Busca e E-mail: ✅ CONCLUÍDO em 2026-06-27**
+> **Sprint 7 — Parceiros e Documentos: ✅ CONCLUÍDO em 2026-06-27**
 >
-> Próximo: **Sprint 7 — Parceiros e Documentos** (cadastro completo de
-> parceiro N:N + aceite T&C, comissão herdada, perfil restrito de parceiro
-> aprovado, biblioteca de templates + documentos por oportunidade com
-> versionamento, comparador de versões com IA).
+> Próximo: **Sprint 8 — Propostas, Aprovações e Contratos** (fluxo de
+> aprovação configurável por margem/valor/universal, versionamento de
+> propostas com comparador IA, gestão de contratos ativos com alertas
+> de renovação, handoff automático para operações/financeiro).
 
 ---
 
@@ -24,9 +24,7 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 | Origem | Pendência | Resolve em |
 |--------|-----------|-----------|
-| Sprint 2 | Visibilidade real do perfil `PARCEIRO` depende de resolver "qual `partnerCompany` este user representa" — hoje retorna lista vazia | Sprint 7 (módulo Parceiros completo) |
 | Sprint 2 | Validação `NEGOCIACAO → ACEITE` deveria exigir ≥ 1 `ProposalVersion` registrada na etapa de negociação | Sprint 8 (módulo Propostas/Aprovações) |
-| Sprint 2 | Validação `ACEITE → CONTRATO` deveria exigir documento da categoria `ACEITE_CLIENTE` anexado | Sprint 7 (módulo Documentos) |
 | Sprint 2 | E2E `pipeline-7-stages.spec.ts` está `test.skip` — depende de fixture Clerk + reset de banco entre testes em CI | Sprint 11 (Segurança + hardening de CI) |
 | Sprint 1 | Webhook Clerk `session.created` registra IP/UA do edge Clerk, não do dispositivo final — middleware Next deve gravar em paralelo via `x-forwarded-for` | Sprint 11 |
 
@@ -40,6 +38,39 @@ Cada item acima é referenciado nos prompts do sprint que vai resolvê-lo. Verif
 - [x] Prisma extension de tenant + AsyncLocalStorage
 - [x] Middleware Clerk + tRPC base + DataMaskingService + RBAC + AuditLog
 - [x] Docker, GitHub Actions CI, seed (3 tenants), .env.example
+
+### Sprint 7 — Parceiros e Documentos (concluído)
+- [x] Migration `0008_partners_documents`: `User.partnerCompanyId` (FK SET
+      NULL), enum `DocumentCategory`, `Document.category`, tabela
+      `document_templates` com RLS
+- [x] **Débito Sprint 2 resolvido**: visibilidade real do perfil PARCEIRO
+      em `opportunities` e `reports` (PARCEIRO vê apenas oportunidades onde
+      `partnerCompanyId = User.partnerCompanyId` E existe `PartnerEngagement`
+      com status APPROVED). Context tRPC agora carrega `partnerCompanyId`
+- [x] **Débito Sprint 2 resolvido**: validação ACEITE → CONTRATO exige
+      Document `category=ACEITE_CLIENTE` vinculado à oportunidade
+- [x] Router `partners`: listWithStats (oportunidades + comissão acumulada),
+      getTcText, updatePartnerConfig (commission, T&C text/versão),
+      linkUserToPartner, registerTcAcceptance, publicTcView/publicTcAccept
+      via token de `partner_links` (sem auth)
+- [x] Router `documents`: listByOpportunity, create (+v1), addVersion
+      (dedup por SHA-256), compare (mock IA)
+- [x] Router `templates`: list/create/uploadVersion/setActive por categoria
+- [x] `document-compare.service.ts` — Haiku gera JSON estruturado
+      (scopeChanges, valueChange, marginChange, items+/-, termChanges) com
+      DataMasking + circuit breaker + fallback metadata
+- [x] UI `/admin/partners` — lista com stats + form de config inline
+      (commission, T&C, ativo) + usuários parceiros vinculados
+- [x] UI `/admin/templates` — biblioteca agrupada por categoria + form
+      de adicionar
+- [x] UI `/p/tc/[token]` — aceite público de T&C com token de partnerLink;
+      registra IP+UA em `partner_tc_acceptances`
+- [x] UI `DocumentsSection` no `/pipeline/[id]` — upload (URL),
+      versionamento visual, link p/ abrir cada versão
+- [x] Sprint 7 NÃO implementa upload binário (S3); usa `storageKey` como
+      URL externa. Sprint 11 endurece com presigned URLs
+- [x] Testes: 126/126 unit (document-compare +3: emptyResult, circuit
+      breaker open/close)
 
 ### Sprint 6 — Comunicações, Busca e E-mail (concluído)
 - [x] Migration `0007_inbound_email_search` — `Tenant.inboundEmailSlug`

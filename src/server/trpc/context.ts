@@ -5,7 +5,11 @@ import type { User, UserRole } from '@prisma/client';
 export interface Context {
   req: Request;
   tenantId: string | null;
-  user: Pick<User, 'id' | 'email' | 'fullName' | 'role' | 'tenantId'> | null;
+  user:
+    | (Pick<User, 'id' | 'email' | 'fullName' | 'role' | 'tenantId'> & {
+        partnerCompanyId: string | null;
+      })
+    | null;
   ip: string | null;
   userAgent: string | null;
 }
@@ -17,7 +21,8 @@ export interface Context {
  *   - x-user-clerk-id
  *   - x-user-role
  *
- * Aqui resolvemos o User local correspondente ao clerkId.
+ * Aqui resolvemos o User local correspondente ao clerkId, incluindo o
+ * partnerCompanyId (Sprint 7) para resolver visibilidade do perfil PARCEIRO.
  */
 export async function createContext({ req }: FetchCreateContextFnOptions): Promise<Context> {
   const headers = req.headers;
@@ -32,13 +37,16 @@ export async function createContext({ req }: FetchCreateContextFnOptions): Promi
 
   let user: Context['user'] = null;
   if (clerkId && tenantId) {
-    // Bypass do tenant filter no Prisma extension acontece apenas para SYSTEM.
-    // Para resolver o user pelo clerkId precisamos consultar SEM injeção de
-    // tenant — usamos o cliente puro via $queryRaw seguro com parâmetro.
     const rows = await prisma.$queryRaw<
-      Array<Pick<User, 'id' | 'email' | 'fullName' | 'role' | 'tenantId'>>
+      Array<
+        Pick<User, 'id' | 'email' | 'fullName' | 'role' | 'tenantId'> & {
+          partnerCompanyId: string | null;
+        }
+      >
     >`
-      SELECT id, email, full_name AS "fullName", role, tenant_id AS "tenantId"
+      SELECT id, email, full_name AS "fullName", role,
+             tenant_id AS "tenantId",
+             partner_company_id AS "partnerCompanyId"
       FROM users
       WHERE clerk_id = ${clerkId}
         AND tenant_id = ${tenantId}::uuid
@@ -60,7 +68,6 @@ export async function createContext({ req }: FetchCreateContextFnOptions): Promi
 
 export type CreateContextOptions = FetchCreateContextFnOptions;
 
-// Helper de tipo para uso em testes
 export type AuthContext = Context & {
   user: NonNullable<Context['user']>;
   tenantId: string;

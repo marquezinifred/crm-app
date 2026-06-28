@@ -134,6 +134,28 @@ export async function advanceStage(input: AdvanceStageInput): Promise<{
           { missingFields: v.missingFields },
         );
       }
+
+      // ACEITE → CONTRATO exige documento da categoria ACEITE_CLIENTE anexado
+      // (fecha débito técnico do Sprint 2)
+      if (input.fromStage === 'ACEITE' && input.toStage === 'CONTRATO') {
+        const acceptanceDoc = await tx.document.findFirst({
+          where: {
+            tenantId: opp.tenantId,
+            relatedEntityType: 'opportunity',
+            relatedEntityId: opp.id,
+            category: 'ACEITE_CLIENTE',
+            deletedAt: null,
+          },
+          select: { id: true },
+        });
+        if (!acceptanceDoc) {
+          throw new StageTransitionError(
+            'Para avançar para Contrato é necessário anexar pelo menos 1 documento da categoria "Aceite do cliente".',
+            'MISSING_FIELDS',
+            { missingFields: ['document:ACEITE_CLIENTE'] },
+          );
+        }
+      }
     }
 
     const updated = await tx.opportunity.update({

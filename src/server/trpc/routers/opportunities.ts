@@ -33,14 +33,13 @@ const canCancel = withCapability('opportunity', 'cancel');
  *   - SUPER_ADMIN / ADMIN / DIRETOR_* : todas oportunidades
  *   - GESTOR : todas (visão consolidada do time)
  *   - ANALISTA : apenas próprias (owner) + onde é membro do time
- *   - PARCEIRO : apenas oportunidades onde o partnerCompany é dele E status APPROVED
- *
- * Sprint 2 implementa as 4 primeiras. Visibilidade do parceiro depende de
- * resolver "partnerCompany do user logado" — Sprint 7 (módulo de parceiros completo).
+ *   - PARCEIRO : apenas oportunidades onde partnerCompanyId = User.partnerCompanyId
+ *     E existe PartnerEngagement(status=APPROVED) para o par
  */
 function visibilityWhere(
   userId: string,
   role: string,
+  partnerCompanyId: string | null,
 ): Prisma.OpportunityWhereInput {
   if (
     role === 'SUPER_ADMIN' ||
@@ -59,6 +58,14 @@ function visibilityWhere(
       ],
     };
   }
+  if (role === 'PARCEIRO' && partnerCompanyId) {
+    return {
+      partnerCompanyId,
+      partnerEngagements: {
+        some: { partnerCompanyId, status: 'APPROVED' },
+      },
+    };
+  }
   // PARCEIRO sem partnerCompany resolvido → nada
   return { id: '00000000-0000-0000-0000-000000000000' };
 }
@@ -67,7 +74,7 @@ export const opportunitiesRouter = router({
   list: canRead.input(opportunityListInput).query(async ({ input, ctx }) => {
     const where: Prisma.OpportunityWhereInput = {
       deletedAt: null,
-      ...visibilityWhere(ctx.user.id, ctx.user.role),
+      ...visibilityWhere(ctx.user.id, ctx.user.role, ctx.user.partnerCompanyId),
       ...(input.stage ? { stage: input.stage } : {}),
       ...(input.status ? { status: input.status } : {}),
       ...(input.ownerId ? { ownerId: input.ownerId } : {}),
@@ -107,7 +114,7 @@ export const opportunitiesRouter = router({
     const where: Prisma.OpportunityWhereInput = {
       deletedAt: null,
       status: 'ACTIVE',
-      ...visibilityWhere(ctx.user.id, ctx.user.role),
+      ...visibilityWhere(ctx.user.id, ctx.user.role, ctx.user.partnerCompanyId),
       ...(input.ownerId ? { ownerId: input.ownerId } : {}),
       ...(input.segmentId ? { clientCompany: { segmentId: input.segmentId } } : {}),
       ...(input.territoryId ? { clientCompany: { territoryId: input.territoryId } } : {}),
@@ -142,7 +149,7 @@ export const opportunitiesRouter = router({
       where: {
         id: input.id,
         deletedAt: null,
-        ...visibilityWhere(ctx.user.id, ctx.user.role),
+        ...visibilityWhere(ctx.user.id, ctx.user.role, ctx.user.partnerCompanyId),
       },
       include: {
         clientCompany: true,

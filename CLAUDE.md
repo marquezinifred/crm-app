@@ -28,6 +28,11 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 > - `docs/CRM_Especificacao_e_Implementacao.docx` (Sprint 10.5)
 > - `docs/venzo_brand_guide.docx` (paleta, tipografia Plus Jakarta
 >   Sans, componentes, voz/tom — fonte da verdade do design system)
+> - `docs/Sprint_10_5_WCAG_Refinements.md` (5 refinamentos da
+>   validação WCAG: combinatorial, sugestão dupla, regra texto
+>   grande, relatório pós-publicação, override Enterprise com
+>   aceite formal — sobrescreve a validação simples descrita nos
+>   .docx; +3 dias de esforço)
 >
 > Depois: **Sprint 11 — Segurança, LGPD e Conformidade** (Cloudflare
 > WAF, rate limiting, security headers, cookie banner LGPD, workflows

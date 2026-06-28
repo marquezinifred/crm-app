@@ -49,7 +49,7 @@ export default async function RootLayout({
 
   return (
     <ClerkProvider>
-      <html lang="pt-BR" suppressHydrationWarning style={brandStyle as unknown as React.CSSProperties}>
+      <html lang="pt-BR" suppressHydrationWarning style={brandStyle}>
         <head>
           <link rel="preconnect" href="https://fonts.googleapis.com" />
           <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />

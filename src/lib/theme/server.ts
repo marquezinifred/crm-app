@@ -38,14 +38,20 @@ export async function resolveTenantTheme(): Promise<ResolvedTheme> {
   }
 }
 
-/** Constrói o style="..." com CSS vars --brand-* a partir do theme. */
-export function buildBrandStyle(themeConfig: ResolvedTheme['themeConfig']): string {
+/**
+ * Constrói o objeto CSS com as vars --brand-* a partir do theme.
+ * React exige objeto, não string — usar como `style={buildBrandStyle(theme)}`.
+ */
+export function buildBrandStyle(
+  themeConfig: ResolvedTheme['themeConfig'],
+): React.CSSProperties {
   const safe = (hex: string) => (/^#[0-9A-Fa-f]{6}$/.test(hex) ? hex : '#7C3AED');
-  return [
-    `--brand-primary: ${safe(themeConfig.primaryColor)}`,
-    `--brand-primary-dark: ${safe(themeConfig.primaryDark)}`,
-    `--brand-primary-light: ${safe(themeConfig.primaryLight)}`,
-    `--brand-accent: ${safe(themeConfig.accentColor)}`,
-    `--brand-font: '${themeConfig.fontFamily.replace(/'/g, '')}', 'Plus Jakarta Sans', system-ui, sans-serif`,
-  ].join('; ');
+  const fontStack = `'${themeConfig.fontFamily.replace(/'/g, '')}', 'Plus Jakarta Sans', system-ui, sans-serif`;
+  return {
+    '--brand-primary': safe(themeConfig.primaryColor),
+    '--brand-primary-dark': safe(themeConfig.primaryDark),
+    '--brand-primary-light': safe(themeConfig.primaryLight),
+    '--brand-accent': safe(themeConfig.accentColor),
+    '--brand-font': fontStack,
+  } as React.CSSProperties;
 }

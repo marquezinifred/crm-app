@@ -180,7 +180,7 @@ export default function NewOpportunityPage() {
           <button
             type="submit"
             disabled={create.isLoading}
-            className="rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white"
+            className="rounded bg-brand px-4 py-2 text-sm font-medium text-white"
           >
             {create.isLoading ? 'Criando…' : 'Criar oportunidade'}
           </button>

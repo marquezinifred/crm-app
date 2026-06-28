@@ -99,7 +99,7 @@ export default function OpportunityDetailPage() {
                 onClick={() =>
                   advance.mutate({ id: opp.id, fromStage: opp.stage, toStage: next })
                 }
-                className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white"
+                className="rounded bg-brand px-3 py-1.5 text-sm font-medium text-white"
               >
                 Avançar para {STAGE_LABELS[next]} →
               </button>
@@ -143,7 +143,7 @@ export default function OpportunityDetailPage() {
                   ...coerceFields(editStageFields),
                 })
               }
-              className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white"
+              className="rounded bg-brand px-3 py-1.5 text-sm font-medium text-white"
             >
               Salvar alterações
             </button>

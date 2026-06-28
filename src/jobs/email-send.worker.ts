@@ -8,6 +8,7 @@ import {
   renderPipelineAlert,
   renderTaskAlert,
 } from '@/lib/email/templates';
+import { sendPushForAlertRecipient } from '@/server/services/push-sender.service';
 import { makeWorker, QUEUE_NAMES, type EmailSendJobData } from './queues';
 
 /**
@@ -71,6 +72,19 @@ export function startEmailSendWorker() {
       }
 
       const result = await sendEmail({ to: tos, ...rendered });
+      // Em paralelo: push notification para o destinatário primário
+      try {
+        await sendPushForAlertRecipient(alert.recipientEmail, {
+          title: rendered.subject.slice(0, 80),
+          body: '',
+          url: payload.opportunityId
+            ? `${appUrl}/pipeline/${payload.opportunityId}`
+            : appUrl,
+        });
+      } catch (err) {
+        console.error('[email-send] push falhou', err);
+      }
+
       if (result.ok) {
         await prisma.alertLog.update({
           where: { id: alertId },

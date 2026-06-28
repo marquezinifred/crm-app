@@ -4,6 +4,7 @@ import { trpc } from '@/lib/trpc/client';
 import { AlertType, AlertStatus } from '@prisma/client';
 import { urgencyFromDate } from '@/lib/utils/hooks';
 import { cn } from '@/lib/utils/cn';
+import { EnablePushButton } from '@/components/layout/EnablePushButton';
 
 const urgencyColor = {
   ok: 'bg-emerald-500',
@@ -23,11 +24,14 @@ export default function DashboardPage() {
 
   return (
     <main className="mx-auto max-w-4xl p-4 md:p-6">
-      <header className="mb-6">
-        <h1 className="text-2xl font-bold">Olá, {me.data?.fullName?.split(' ')[0] ?? ''}</h1>
-        <p className="text-sm text-neutral-600">
-          Central de Alertas — próximos 14 dias
-        </p>
+      <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Olá, {me.data?.fullName?.split(' ')[0] ?? ''}</h1>
+          <p className="text-sm text-neutral-600">
+            Central de Alertas — próximos 14 dias
+          </p>
+        </div>
+        <EnablePushButton />
       </header>
 
       {isLoading && <p className="text-sm text-neutral-600">Carregando alertas…</p>}

@@ -255,6 +255,12 @@ enum ImportDedupStrategy {
   CREATE_NEW
 }
 
+enum PoweredByMode {
+  VISIBLE
+  SUBTLE
+  HIDDEN
+}
+
 enum DocumentCategory {
   INSTITUCIONAL
   PROPOSTA_TECNICA
@@ -342,6 +348,8 @@ model Tenant {
   incomingEmails          IncomingEmail[]
   documentTemplates       DocumentTemplate[]
   importJobs              ImportJob[]
+  pushSubscriptions       PushSubscription[]
+  settings                TenantSettings?
 
   @@map("tenants")
 }
@@ -1256,4 +1264,49 @@ model IncomingEmail {
 
   @@index([tenantId, status, receivedAt])
   @@map("incoming_emails")
+}
+
+// ---------------------------------------------------------------------
+// PushSubscription — Web Push (Sprint 10)
+//   Cada user pode ter múltiplas (laptop + celular + tablet).
+//   Identifica unicamente por endpoint.
+// ---------------------------------------------------------------------
+
+model PushSubscription {
+  id         String    @id @default(uuid()) @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  endpoint   String    @unique @db.Text
+  p256dhKey  String    @map("p256dh_key")
+  authKey    String    @map("auth_key")
+  userAgent  String?   @map("user_agent")
+  lastSeenAt DateTime  @default(now()) @map("last_seen_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  deletedAt  DateTime? @map("deleted_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId])
+  @@map("push_subscriptions")
+}
+
+// ---------------------------------------------------------------------
+// TenantSettings (Sprint 10.5 — White-Label Theming)
+//   1:1 com Tenant. Guarda theme_config completo (paleta + fonte + logo),
+//   poweredBy enforcement do badge Venzo e wcag_overrides (lista de
+//   publicações Enterprise que aprovaram override formal).
+// ---------------------------------------------------------------------
+
+model TenantSettings {
+  tenantId       String        @id @map("tenant_id") @db.Uuid
+  themeConfig    Json          @map("theme_config")
+  poweredBy      PoweredByMode @default(VISIBLE) @map("powered_by")
+  wcagOverrides  Json          @default("[]") @map("wcag_overrides")
+  themingEnabled Boolean       @default(true) @map("theming_enabled")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+  updatedBy      String?       @map("updated_by") @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_settings")
 }

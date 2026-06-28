@@ -16,7 +16,7 @@ export default function PipelinePage() {
           <h1 className="text-lg font-semibold">Pipeline</h1>
           <a
             href="/pipeline/new"
-            className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800"
+            className="rounded bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-dark"
           >
             + Nova oportunidade
           </a>
@@ -64,7 +64,7 @@ export default function PipelinePage() {
               </button>
               <a
                 href={`/pipeline/${advanceError.oppId}`}
-                className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800"
+                className="rounded bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-dark"
               >
                 Editar oportunidade
               </a>

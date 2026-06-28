@@ -18,6 +18,9 @@ import { partnersRouter } from './partners';
 import { documentsRouter, templatesRouter } from './documents';
 import { proposalsRouter, approvalsRouter } from './proposals';
 import { approvalRulesRouter, contractsConfigRouter } from './approval-rules';
+import { importsRouter } from './imports';
+import { pushRouter } from './push';
+import { themeRouter } from './theme';
 
 export const appRouter = router({
   health: publicProcedure.query(() => ({
@@ -64,6 +67,9 @@ export const appRouter = router({
   approvals: approvalsRouter,
   approvalRules: approvalRulesRouter,
   contractsConfig: contractsConfigRouter,
+  imports: importsRouter,
+  push: pushRouter,
+  theme: themeRouter,
 });
 
 export type AppRouter = typeof appRouter;

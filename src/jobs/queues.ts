@@ -17,6 +17,7 @@ export function bullConnection(): ConnectionOptions {
 export const QUEUE_NAMES = {
   alertsScan: 'alerts-scan',
   emailSend: 'email-send',
+  importRun: 'import-run',
 } as const;
 
 export function makeQueue<T = unknown>(name: string): Queue<T> {
@@ -46,4 +47,8 @@ export interface AlertsScanJobData {
 
 export interface EmailSendJobData {
   alertLogId: string;
+}
+
+export interface ImportRunJobData {
+  importJobId: string;
 }

@@ -11,10 +11,13 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 ## Sprint atual
 
-> **Sprint 10 — PWA, Mobile e Performance: ✅ CONCLUÍDO em 2026-06-27**
+> **Sprint 10.5 — White-Label Theming e Identidade Venzo: ✅ CONCLUÍDO em 2026-06-28**
 >
-> Próximo: **Sprint 10.5 — White-Label Theming e Identidade da
-> Plataforma Venzo** (tabela `tenant_settings.theme_config` JSONB,
+> Próximo: **Sprint 11 — Segurança, LGPD e Conformidade** (Cloudflare
+> WAF, rate limiting, security headers, cookie banner LGPD, workflows
+> LGPD, logs imutáveis, OWASP ZAP). Fecha os 2 últimos débitos.
+>
+> Histórico Sprint 10.5: (tabela `tenant_settings.theme_config` JSONB,
 > CSS custom props `--brand-*` injetadas no RootLayout, cache Redis
 > TTL 1h com invalidação imediata, UI self-service de paleta + fontes
 > Google + logo, validação WCAG AA (contraste ≥ 4.5:1) com sugestão
@@ -57,6 +60,58 @@ Cada item acima é referenciado nos prompts do sprint que vai resolvê-lo. Verif
 - [x] Prisma extension de tenant + AsyncLocalStorage
 - [x] Middleware Clerk + tRPC base + DataMaskingService + RBAC + AuditLog
 - [x] Docker, GitHub Actions CI, seed (3 tenants), .env.example
+
+### Sprint 10.5 — White-Label Theming e Identidade Venzo (concluído)
+- [x] Migration `0012_tenant_settings_theming` — tabela `tenant_settings`
+      1:1 com tenants (theme_config JSONB, powered_by enum, wcag_overrides
+      JSONB, theming_enabled bool, RLS) + backfill com defaults Venzo
+      (#7C3AED/#3B1F6A/#C084FC/#F5A623/Plus Jakarta Sans) + powered_by
+      por plano
+- [x] Enum `PoweredByMode` (VISIBLE/SUBTLE/HIDDEN)
+- [x] `src/lib/theme/types.ts` — VENZO_DEFAULTS, themeConfigSchema (Zod),
+      mapping TenantPlan→VenzoPlan, helpers de capacidade por plano
+      (canHidePoweredBy, canUseFreeformHex, canOverrideWcag etc)
+- [x] `src/lib/theme/curated-palettes.ts` — 8 paletas Growth harmônicas
+      com Venzo
+- [x] `src/lib/theme/curated-fonts.ts` — 6 fontes Google (Plus Jakarta
+      Sans, Inter, Manrope, DM Sans, Outfit, Public Sans) + googleFontsUrl()
+- [x] `wcag-validator.service.ts` — computeContrast (algoritmo WCAG
+      relativo de luminância) + TEXT_CONTEXTS (9 contextos com 3 ou 4.5
+      conforme tamanho/peso) + validateThemeCombinations combinatorial
+      em 8 pontos de uso real (botões, badges, hover, accent)
+- [x] `contrast-suggester.service.ts` — sugestão dupla via HSL iteration
+      (passos 5%, max 8 cada direção) retornando { darker, lighter,
+      unsupported }
+- [x] `theme.service.ts` — getThemeConfig (cache Redis 1h TTL),
+      updateThemeConfig (enforce plano, WCAG combinatorial, override
+      Enterprise com justification ≥30 + DPO, invalida cache, audit
+      log com wcag_level)
+- [x] `src/lib/feature-flags.ts` — stub Unleash com flag
+      `tenant_theming_enabled` default true; substituível em Sprint 12
+- [x] Router tRPC `theme`: get, validate, suggestContrastFix,
+      listCuratedPalettes, listCuratedFonts, update,
+      publishWithOverride (Enterprise), auditHistory, planInfo
+- [x] `src/lib/theme/server.ts` — resolveTenantTheme via headers (lê
+      x-tenant-id do middleware) + buildBrandStyle injetando 5 vars
+      CSS no `<html style>` do RootLayout
+- [x] `globals.css` — utilities `.bg-brand`, `.text-brand`, `.border-brand`,
+      `.hover:bg-brand-dark`, `.bg-brand-accent` consumindo as vars
+- [x] Refactor: botões CTA `bg-neutral-900` → `bg-brand` em pipeline/*,
+      imports, e demais CTAs
+- [x] `<PoweredByBadge>` three-state (visible 14px centro / subtle 9px
+      canto / hidden null) usando `var(--brand-primary)`
+- [x] UI `/admin/branding` — tabs Paleta/Tipografia/Logo/Histórico,
+      color pickers (Enterprise) ou dropdown (Growth), painel WCAG
+      lateral com semáforo, panel sugestão dupla, banner amarelo se
+      overrides ativos, modal override com checkbox DPO + textarea ≥30
+- [x] Plan enforcement server-side: Starter 403, Growth 422 fora da
+      lista, Enterprise hex livre + override permitido. Powered by
+      HIDDEN só Enterprise (validado no backend)
+- [x] env: UNLEASH_URL, UNLEASH_API_TOKEN, NEXT_PUBLIC_VAPID_*,
+      INBOUND_WEBHOOK_SECRET (todos optional)
+- [x] Testes: 185/185 unit (wcag-validator +8, contrast-suggester +5,
+      theme-plan-matrix +13). Cobertura: pass/fail por contexto,
+      sugestão dupla, plano matrix, curadoria
 
 ### Sprint 10 — PWA, Mobile e Performance (concluído)
 - [x] Migration `0011_push_subscriptions` — tabela com endpoint UNIQUE,

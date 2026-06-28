@@ -30,6 +30,11 @@ const envSchema = z.object({
   // Webhook inbound de e-mail — segredo via querystring ?secret=...
   INBOUND_WEBHOOK_SECRET: z.string().optional(),
 
+  // Web Push (VAPID) — gerar com `npx web-push generate-vapid-keys`
+  NEXT_PUBLIC_VAPID_PUBLIC_KEY: z.string().optional(),
+  VAPID_PRIVATE_KEY: z.string().optional(),
+  VAPID_SUBJECT: z.string().default('mailto:noreply@crm.local'),
+
   // Resend (email)
   RESEND_API_KEY: z.string().optional(),
   RESEND_FROM: z.string().email().default('noreply@crm.local'),

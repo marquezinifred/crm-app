@@ -53,3 +53,16 @@
     font-feature-settings: 'rlig' 1, 'calt' 1;
   }
 }
+
+/* Brand utilities — Sprint 10.5 white-label
+   Mapeiam Tailwind-like classes para CSS vars --brand-* injetadas pelo
+   RootLayout a partir de tenant_settings.theme_config. */
+.bg-brand { background-color: var(--brand-primary); }
+.bg-brand-dark { background-color: var(--brand-primary-dark); }
+.bg-brand-light { background-color: var(--brand-primary-light); }
+.bg-brand-accent { background-color: var(--brand-accent); }
+.text-brand { color: var(--brand-primary); }
+.text-brand-dark { color: var(--brand-primary-dark); }
+.text-brand-accent { color: var(--brand-accent); }
+.border-brand { border-color: var(--brand-primary); }
+.hover\:bg-brand-dark:hover { background-color: var(--brand-primary-dark); }

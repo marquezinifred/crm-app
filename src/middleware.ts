@@ -34,9 +34,12 @@ export default authMiddleware({
       return NextResponse.next();
     }
 
-    // Sem usuário em rota protegida → Clerk redireciona pro sign-in
+    // Sem usuário em rota protegida → manda pro sign-in local
     if (!auth.userId) {
-      return NextResponse.next();
+      const url = req.nextUrl.clone();
+      url.pathname = '/sign-in';
+      url.searchParams.set('redirect_url', req.nextUrl.pathname);
+      return NextResponse.redirect(url);
     }
 
     // Extrai tenantId do JWT — Sprint 1 configura JWT template no Clerk
@@ -48,13 +51,26 @@ export default authMiddleware({
         })
       | null;
 
-    const tenantId =
+    const rawTenantId =
       sessionClaims?.public?.tenantId ??
       sessionClaims?.org_id ??
       null;
+    // Trata string vazia e o literal não-substituído do template
+    const tenantId =
+      rawTenantId && rawTenantId !== '' && !rawTenantId.includes('{{')
+        ? rawTenantId
+        : null;
 
     if (!tenantId) {
-      // Usuário autenticado mas sem tenant → mandar pro onboarding
+      // Sem tenant: rotas tRPC e API seguem (a procedure responsável,
+      // ex: onboarding.createFirstTenant, é quem cria o tenant — e
+      // outras procedures retornam UNAUTHORIZED em JSON, não HTML).
+      // Página de UI redireciona pro onboarding.
+      if (req.nextUrl.pathname.startsWith('/api/')) {
+        const requestHeaders = new Headers(req.headers);
+        requestHeaders.set('x-user-clerk-id', auth.userId);
+        return NextResponse.next({ request: { headers: requestHeaders } });
+      }
       const url = req.nextUrl.clone();
       url.pathname = '/onboarding';
       return NextResponse.redirect(url);

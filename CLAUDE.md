@@ -11,11 +11,11 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 ## Sprint atual
 
-> **Sprint 4 — Atividades, Tarefas e IA: ✅ CONCLUÍDO em 2026-06-27**
+> **Sprint 5 — Relatórios, Analytics e Equipe: ✅ CONCLUÍDO em 2026-06-27**
 >
-> Próximo: **Sprint 5 — Relatórios, Analytics e Equipe** (estrutura
-> dinâmica de relatórios com filtros, funil de conversão, performance
-> por responsável, projeção de receita com IA sugerindo parâmetros).
+> Próximo: **Sprint 6 — Comunicações, Busca e E-mail** (endereço de
+> e-mail por tenant via webhook inbound, vinculação por IA por remetente
+> ou código #ID, busca em linguagem natural via pgvector + reranking).
 
 ---
 
@@ -39,6 +39,31 @@ Cada item acima é referenciado nos prompts do sprint que vai resolvê-lo. Verif
 - [x] Prisma extension de tenant + AsyncLocalStorage
 - [x] Middleware Clerk + tRPC base + DataMaskingService + RBAC + AuditLog
 - [x] Docker, GitHub Actions CI, seed (3 tenants), .env.example
+
+### Sprint 5 — Relatórios, Analytics e Equipe (concluído)
+- [x] Migration `0006_conversion_rates` — `Tenant.conversionRates JSONB`
+      com defaults B2B (5/15/30/50/70/85/100)
+- [x] `analytics.service.ts` — funções puras: `computeFunnel`,
+      `avgDaysPerStage`, `winLossBreakdown`, `performanceByOwner`,
+      `projectRevenue` (cenários base/best/worst)
+- [x] `conversion-rate-suggestion.service.ts` — sugere taxas via
+      histórico próprio (≥30 fechadas) OU IA com contexto de segmento/
+      território (Claude Haiku com masking). Retorna source/rationale/rates
+- [x] Router tRPC `reports`: funnel, winLoss, timePerStage,
+      performanceByOwner (ANALISTA vê apenas própria linha + média
+      anônima), revenueProjection, conversionRates (get/update),
+      suggestConversionRates. Filtros dinâmicos: from/to/ownerId/stage/
+      segmentId/territoryId. Visibilidade por perfil aplicada
+- [x] `excel-export.service.ts` + endpoint `GET /api/v1/reports/export`
+      gera xlsx com abas Resumo/Funil/Performance/Projeção via exceljs
+- [x] UI `/reports` — filtros + funil SVG inline (sem libs) + stats
+      (projeção base/best/worst, win rate, valor ganho) + tabela
+      performance + motivos de perda + projeção por estágio + botão
+      Exportar Excel
+- [x] UI `/admin/conversion-rates` — edição inline + botão "Sugerir
+      com IA" com modal de preview (atual vs sugerida) + aceitar/descartar
+- [x] Testes: 114/114 unit (analytics +9, incluindo funil, win rate,
+      projeção com cap 100%, performance, avgDaysPerStage)
 
 ### Sprint 4 — Atividades, Tarefas e IA (concluído)
 - [x] `DataMaskingService` estendido: PESSOA (nomes PT-BR com conectores),

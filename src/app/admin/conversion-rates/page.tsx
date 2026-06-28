@@ -1,0 +1,126 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { trpc } from '@/lib/trpc/client';
+import { Button } from '@/components/ui/button';
+import { STAGES, STAGE_LABELS } from '@/components/pipeline/types';
+import type { OpportunityStage } from '@prisma/client';
+
+export default function ConversionRatesPage() {
+  const current = trpc.reports.conversionRates.useQuery();
+  const utils = trpc.useUtils();
+  const [rates, setRates] = useState<Record<OpportunityStage, number> | null>(null);
+  const [suggestion, setSuggestion] = useState<{
+    source: string;
+    rationale: string;
+    rates: Record<OpportunityStage, number>;
+  } | null>(null);
+
+  useEffect(() => {
+    if (current.data) setRates(current.data);
+  }, [current.data]);
+
+  const save = trpc.reports.updateConversionRates.useMutation({
+    onSuccess: () => {
+      utils.reports.conversionRates.invalidate();
+      utils.reports.revenueProjection.invalidate();
+    },
+  });
+  const suggest = trpc.reports.suggestConversionRates.useMutation({
+    onSuccess: (data) => setSuggestion(data),
+  });
+
+  if (!rates) return <main className="p-6">Carregando…</main>;
+
+  return (
+    <main className="mx-auto max-w-2xl p-6">
+      <h1 className="mb-2 text-2xl font-bold">Taxas de conversão</h1>
+      <p className="mb-4 text-sm text-neutral-600">
+        Percentual esperado de oportunidades que avançam de cada estágio.
+        Usado pela projeção de receita no `/reports`.
+      </p>
+
+      <div className="mb-4 flex gap-2">
+        <Button
+          type="button"
+          onClick={() => suggest.mutate()}
+          disabled={suggest.isLoading}
+          variant="outline"
+        >
+          {suggest.isLoading ? 'Analisando…' : 'Sugerir com IA'}
+        </Button>
+      </div>
+
+      {suggestion && (
+        <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-4">
+          <p className="mb-1 text-xs font-medium uppercase text-blue-900">
+            Sugestão ({suggestion.source})
+          </p>
+          <p className="mb-3 text-sm text-blue-900">{suggestion.rationale}</p>
+          <table className="mb-3 w-full text-sm">
+            <thead className="text-left text-xs uppercase text-blue-700">
+              <tr>
+                <th>Estágio</th>
+                <th className="text-right">Atual</th>
+                <th className="text-right">Sugerida</th>
+              </tr>
+            </thead>
+            <tbody>
+              {STAGES.map((s) => (
+                <tr key={s} className="border-t border-blue-200">
+                  <td className="py-1">{STAGE_LABELS[s]}</td>
+                  <td className="text-right">{rates[s]}%</td>
+                  <td className="text-right font-medium">{suggestion.rates[s]}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              onClick={() => {
+                setRates({ ...suggestion.rates });
+                setSuggestion(null);
+              }}
+            >
+              Aceitar sugestão
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setSuggestion(null)}>
+              Descartar
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <form
+        className="space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save.mutate({ rates });
+        }}
+      >
+        {STAGES.map((s) => (
+          <label key={s} className="flex items-center justify-between gap-3">
+            <span className="text-sm font-medium">{STAGE_LABELS[s]}</span>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={rates[s]}
+                onChange={(e) => setRates({ ...rates, [s]: Number(e.target.value) })}
+                className="w-20 rounded border px-2 py-1 text-right"
+                disabled={s === 'CONTRATO'}
+              />
+              <span className="text-sm text-neutral-500">%</span>
+            </div>
+          </label>
+        ))}
+
+        <Button type="submit" disabled={save.isLoading}>
+          {save.isLoading ? 'Salvando…' : 'Salvar'}
+        </Button>
+      </form>
+    </main>
+  );
+}

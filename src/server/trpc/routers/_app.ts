@@ -12,6 +12,7 @@ import { contractsRouter } from './contracts';
 import { alertsRouter } from './alerts';
 import { activitiesRouter, tasksRouter } from './activities';
 import { aiConfigRouter } from './ai-config';
+import { reportsRouter } from './reports';
 
 export const appRouter = router({
   health: publicProcedure.query(() => ({
@@ -47,6 +48,7 @@ export const appRouter = router({
   activities: activitiesRouter,
   tasks: tasksRouter,
   aiConfig: aiConfigRouter,
+  reports: reportsRouter,
 });
 
 export type AppRouter = typeof appRouter;

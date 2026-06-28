@@ -35,11 +35,14 @@ export async function audit(entry: AuditEntry): Promise<void> {
   }
 
   try {
-    if (ctx?.tenantId && ctx.tenantId !== SYSTEM_TENANT_SENTINEL) {
-      // Caminho normal: extension injeta tenantId
-      await prisma.auditLog.create({
+    // Sempre injetar tenantId explicitamente — não depender do Prisma
+    // extension. Usar runAsSystem para que o extension não tente
+    // re-injetar / validar tenant context que pode estar ausente.
+    await runAsSystem(() =>
+      prisma.auditLog.create({
         data: {
-          userId: ctx.userId,
+          tenantId: effectiveTenantId,
+          userId: ctx?.userId ?? null,
           action: entry.action,
           tableName: entry.tableName,
           recordId: entry.recordId,
@@ -47,26 +50,9 @@ export async function audit(entry: AuditEntry): Promise<void> {
           after: (entry.after ?? null) as never,
           ip: entry.ip ?? null,
           userAgent: entry.userAgent ?? null,
-        } as never,
-      });
-    } else {
-      // Caminho sistêmico: injetar tenantId explicitamente via runAsSystem
-      await runAsSystem(() =>
-        prisma.auditLog.create({
-          data: {
-            tenantId: effectiveTenantId,
-            userId: ctx?.userId ?? null,
-            action: entry.action,
-            tableName: entry.tableName,
-            recordId: entry.recordId,
-            before: (entry.before ?? null) as never,
-            after: (entry.after ?? null) as never,
-            ip: entry.ip ?? null,
-            userAgent: entry.userAgent ?? null,
-          },
-        }),
-      );
-    }
+        },
+      }),
+    );
   } catch (err) {
     console.error('[audit] falha ao gravar log:', err);
   }

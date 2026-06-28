@@ -278,6 +278,7 @@ export async function updateThemeConfig(input: UpdateThemeInput): Promise<Update
       action: 'theme.update',
       tableName: 'tenant_settings',
       recordId: input.tenantId,
+      tenantIdOverride: input.tenantId,
       before: before
         ? {
             themeConfig: before.themeConfig,

@@ -32,8 +32,16 @@ export default function BrandingPage() {
     if (themeQ.data?.themeConfig) setDraft(themeQ.data.themeConfig);
   }, [themeQ.data]);
 
+  // Só valida quando as 4 cores estão em hex válido — evita 400s
+  // enquanto o usuário ainda está digitando um valor parcial.
+  const hexRe = /^#[0-9A-Fa-f]{6}$/;
+  const allHexValid =
+    hexRe.test(draft.primaryColor) &&
+    hexRe.test(draft.primaryDark) &&
+    hexRe.test(draft.primaryLight) &&
+    hexRe.test(draft.accentColor);
   const validateQ = trpc.theme.validate.useQuery(draft, {
-    enabled: !!draft.primaryColor,
+    enabled: allHexValid,
   });
 
   const update = trpc.theme.update.useMutation({

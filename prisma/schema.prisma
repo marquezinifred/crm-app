@@ -227,6 +227,12 @@ enum AlertStatus {
   FAILED
 }
 
+enum IncomingEmailStatus {
+  PENDING
+  LINKED
+  REJECTED
+}
+
 enum AIProvider {
   ANTHROPIC
   OPENAI
@@ -259,6 +265,9 @@ model Tenant {
   // Taxas de conversão por estágio (JSON { stage: pct }) — usadas pela
   // projeção de receita. Default: 5/15/30/50/70/85/100 (do funil).
   conversionRates   Json?      @map("conversion_rates")
+  // Slug único do tenant para o endereço de e-mail inbound:
+  //   crm-<slug>@inbound.<domínio>. Configurável pelo Admin.
+  inboundEmailSlug  String?    @unique @map("inbound_email_slug") @db.Citext
   createdAt         DateTime   @default(now()) @map("created_at")
   updatedAt         DateTime   @updatedAt @map("updated_at")
   deletedAt         DateTime?  @map("deleted_at")
@@ -292,6 +301,7 @@ model Tenant {
   opportunityStageHistory OpportunityStageHistory[]
   approvalRules           ApprovalRule[]
   consentLogs             ConsentLog[]
+  incomingEmails          IncomingEmail[]
 
   @@map("tenants")
 }
@@ -1100,4 +1110,40 @@ model ConsentLog {
   @@index([tenantId, userId, createdAt])
   @@index([subjectEmail, createdAt])
   @@map("consent_logs")
+}
+
+// ---------------------------------------------------------------------
+// IncomingEmail — espelhamento bruto de e-mails recebidos via webhook
+//   inbound (Postmark/Resend Inbound). Cada item começa em PENDING e
+//   passa por tentativa automática de vinculação. Itens não vinculados
+//   ficam na /inbox para revisão manual.
+// ---------------------------------------------------------------------
+
+model IncomingEmail {
+  id                  String              @id @default(uuid()) @db.Uuid
+  tenantId            String              @map("tenant_id") @db.Uuid
+  fromEmail           String              @map("from_email") @db.Citext
+  toAddresses         String[]            @map("to_addresses")
+  ccAddresses         String[]            @default([]) @map("cc_addresses")
+  subject             String?
+  bodyText            String?             @map("body_text") @db.Text
+  bodyHtml            String?             @map("body_html") @db.Text
+  receivedAt          DateTime            @default(now()) @map("received_at")
+  rawPayload          Json                @map("raw_payload")
+  status              IncomingEmailStatus @default(PENDING)
+  linkedActivityId    String?             @map("linked_activity_id") @db.Uuid
+  linkedOpportunityId String?             @map("linked_opportunity_id") @db.Uuid
+  linkConfidence      Decimal?            @map("link_confidence") @db.Decimal(5, 4)
+  linkMethod          String?             @map("link_method")
+  linkedAt            DateTime?           @map("linked_at")
+  linkedById          String?             @map("linked_by_id") @db.Uuid
+  rejectionReason     String?             @map("rejection_reason")
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
+  deletedAt           DateTime?           @map("deleted_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status, receivedAt])
+  @@map("incoming_emails")
 }

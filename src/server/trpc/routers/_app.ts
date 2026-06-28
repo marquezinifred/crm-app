@@ -13,6 +13,7 @@ import { alertsRouter } from './alerts';
 import { activitiesRouter, tasksRouter } from './activities';
 import { aiConfigRouter } from './ai-config';
 import { reportsRouter } from './reports';
+import { inboxRouter, searchRouter, adminEmailRouter } from './inbox';
 
 export const appRouter = router({
   health: publicProcedure.query(() => ({
@@ -49,6 +50,9 @@ export const appRouter = router({
   tasks: tasksRouter,
   aiConfig: aiConfigRouter,
   reports: reportsRouter,
+  inbox: inboxRouter,
+  search: searchRouter,
+  adminEmail: adminEmailRouter,
 });
 
 export type AppRouter = typeof appRouter;

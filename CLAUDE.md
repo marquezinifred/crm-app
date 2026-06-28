@@ -11,11 +11,12 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 ## Sprint atual
 
-> **Sprint 5 — Relatórios, Analytics e Equipe: ✅ CONCLUÍDO em 2026-06-27**
+> **Sprint 6 — Comunicações, Busca e E-mail: ✅ CONCLUÍDO em 2026-06-27**
 >
-> Próximo: **Sprint 6 — Comunicações, Busca e E-mail** (endereço de
-> e-mail por tenant via webhook inbound, vinculação por IA por remetente
-> ou código #ID, busca em linguagem natural via pgvector + reranking).
+> Próximo: **Sprint 7 — Parceiros e Documentos** (cadastro completo de
+> parceiro N:N + aceite T&C, comissão herdada, perfil restrito de parceiro
+> aprovado, biblioteca de templates + documentos por oportunidade com
+> versionamento, comparador de versões com IA).
 
 ---
 
@@ -39,6 +40,38 @@ Cada item acima é referenciado nos prompts do sprint que vai resolvê-lo. Verif
 - [x] Prisma extension de tenant + AsyncLocalStorage
 - [x] Middleware Clerk + tRPC base + DataMaskingService + RBAC + AuditLog
 - [x] Docker, GitHub Actions CI, seed (3 tenants), .env.example
+
+### Sprint 6 — Comunicações, Busca e E-mail (concluído)
+- [x] Migration `0007_inbound_email_search` — `Tenant.inboundEmailSlug`
+      (citext unique), tabela `incoming_emails` (raw payload + status
+      PENDING/LINKED/REJECTED + dados de vínculo), índices GIN tsvector
+      PT-BR em `activities` e `incoming_emails` para fallback de busca
+- [x] `inbound-email.service.ts` — ingestão de payload com normalizadores
+      `fromPostmark` e `fromResend`, extração de slug por
+      `extractSlugFromAddresses`
+- [x] Endpoint `POST /api/v1/inbound/email` aceita Postmark/Resend/
+      genérico com proteção via `?secret=` (INBOUND_WEBHOOK_SECRET)
+- [x] `email-link.service.ts` — 3 heurísticas em ordem:
+      `#<oppId>` no subject (conf 1.0) > match por contato (conf 0.85 se
+      unique, senão sugestões) > Claude Haiku rank das top oportunidades
+      ativas. Cria Activity tipo EMAIL automática quando conf ≥ 0.8
+- [x] `embeddings.service.ts` — opcional via OpenAI text-embedding-3-small;
+      grava em `embeddings` (pgvector) com dedup por contentHash SHA-256
+- [x] `semantic-search.service.ts` — pipeline candidate retrieval →
+      hydrate → rerank Haiku. Cai para tsvector PT-BR sem OPENAI_API_KEY
+- [x] Routers tRPC: `inbox` (list/byId/retryAutoLink/linkManually/reject),
+      `search` (natural com rerank opcional), `adminEmail` (getSlug/setSlug/
+      regenerateSlug)
+- [x] UI `/inbox` — lista expansível com sugestões + vincular manual +
+      rejeitar + retry IA
+- [x] UI `/search` — busca natural com indicador de modo (vector/tsvector)
+      e reranqueamento + exemplos
+- [x] UI `/admin/email-inbound` — endereço completo + copiar + regenerar
+      + instruções de uso (#ID no subject)
+- [x] env: `OPENAI_API_KEY`, `OPENAI_EMBEDDING_MODEL`,
+      `INBOUND_WEBHOOK_SECRET` (todos optional)
+- [x] Testes: 123/123 unit (inbound-email +9: slug parser, #ID parser,
+      normalizadores Postmark/Resend)
 
 ### Sprint 5 — Relatórios, Analytics e Equipe (concluído)
 - [x] Migration `0006_conversion_rates` — `Tenant.conversionRates JSONB`

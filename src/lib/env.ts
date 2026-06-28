@@ -22,6 +22,14 @@ const envSchema = z.object({
   // Perplexity (benchmarks)
   PERPLEXITY_API_KEY: z.string().optional(),
 
+  // OpenAI — embeddings (text-embedding-3-small). Sem isto, busca cai para
+  // Postgres tsvector full-text português (sem semântica, só palavras-chave).
+  OPENAI_API_KEY: z.string().optional(),
+  OPENAI_EMBEDDING_MODEL: z.string().default('text-embedding-3-small'),
+
+  // Webhook inbound de e-mail — segredo via querystring ?secret=...
+  INBOUND_WEBHOOK_SECRET: z.string().optional(),
+
   // Resend (email)
   RESEND_API_KEY: z.string().optional(),
   RESEND_FROM: z.string().email().default('noreply@crm.local'),

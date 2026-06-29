@@ -30,6 +30,121 @@ design system Venzo:
 - **Voice & tone Venzo** no microcopy (substituir "Nenhum item encontrado" por "3 negócios aguardando sua atenção")
 - **WCAG 2.1 AA** verificado em CI via axe-core
 
+## Pré-requisitos arquiteturais (antes de qualquer código)
+
+Cinco pontos identificados em revisão do plano que precisam estar
+resolvidos antes da execução começar — caso contrário viram bugs no
+QA ou retrabalho no meio do sprint.
+
+### P1. DetailSheet sem quebrar deep links — Next.js intercepting routes
+
+**Problema:** o plano original substitui a full-page `/pipeline/[id]`
+por slide-in 400px, quebrando URLs compartilháveis, botão Voltar do
+browser e links externos.
+
+**Solução:** **intercepting routes do App Router**:
+- `app/pipeline/[id]/page.tsx` — full-page **mantida** (fallback pra
+  acesso direto, mobile, link compartilhado, F5)
+- `app/pipeline/@modal/(.)[id]/page.tsx` — intercepta a navegação
+  vinda do `/pipeline` (kanban) e renderiza o DetailSheet 400px
+  como overlay sobre a kanban, mantendo a URL `/pipeline/[id]` no
+  browser
+- `app/pipeline/layout.tsx` ganha o slot `{modal}` ao lado do
+  `{children}`
+- URL `/pipeline/{id}` direta → full-page; clique no card do kanban
+  → DetailSheet; botão Voltar fecha sheet sem perder o kanban
+
+Documentação: https://nextjs.org/docs/app/building-your-application/routing/intercepting-routes
+
+### P2. ThemeToggle sem flash (FOUC) — script inline pre-hidratação
+
+**Problema:** SSR não conhece o `localStorage` → HTML chega dark →
+React hidrata → lê pref → troca pra light → flash visível em users
+que escolheram light.
+
+**Solução:** usar **`next-themes`** (lib dedicada pra Next 14 App
+Router; é exatamente pra isso) com:
+```tsx
+// app/layout.tsx
+<html lang="pt-BR" suppressHydrationWarning>
+  <ThemeProvider attribute="data-theme" defaultTheme="dark" enableSystem>
+    {children}
+  </ThemeProvider>
+</html>
+```
+`next-themes` injeta um script inline no `<head>` que lê o
+localStorage e seta `data-theme` **antes** da hidratação, eliminando
+o flash. `suppressHydrationWarning` no `<html>` é obrigatório porque
+o atributo `data-theme` será diferente entre server e client.
+
+Alternativa sem dep: script inline manual no `<head>` —
+mais código, mesmo efeito.
+
+### P3. Tailwind + CSS vars com alpha modifiers — formato HSL
+
+**Problema:** `bg-primary/50` quebra porque Tailwind não consegue
+calcular alpha a partir de `var(--color-primary)` em formato `#hex`
+ou `rgb()`.
+
+**Solução:** expor cores em **canais HSL separados** nos CSS vars:
+```css
+:root {
+  --brand-primary-h: 262;
+  --brand-primary-s: 84%;
+  --brand-primary-l: 58%;
+  /* ... mesmo padrão pras outras */
+}
+```
+```ts
+// tailwind.config.ts
+colors: {
+  brand: {
+    primary: 'hsl(var(--brand-primary-h) var(--brand-primary-s) var(--brand-primary-l) / <alpha-value>)',
+  }
+}
+```
+Agora `bg-brand-primary/50` funciona naturalmente. Aplicar pra
+**todos** os tokens onde opacity faz sentido (brand-*, semânticos
+success/danger/warning/info, neutros pro hover/zebra).
+
+### P4. Visual regression baseline — capturado ANTES do sprint
+
+**Problema:** plano original lista "25 screenshots" como entregável
+final, mas pra ser regressão REAL, o baseline precisa existir antes
+de qualquer mudança.
+
+**Solução:** **Passo 0 do sprint** (antes de qualquer commit de
+código):
+1. Script Playwright `scripts/visual-baseline.ts` que percorre 25
+   rotas-chave, tira screenshot em 3 viewports (375/768/1280) e
+   salva em `tests/visual/baseline/{route}-{viewport}.png`
+2. Commit do baseline (`chore: capture visual baseline before
+   Sprint 14`) — esse é o ponto de comparação
+3. Durante o sprint, cada PR roda o mesmo script salvando em
+   `tests/visual/current/` e gera diff em `tests/visual/diff/`
+4. Aprovação manual dos diffs no fim do sprint substitui o
+   baseline
+
+### P5. Viewport tablet (768–1024px) — definição explícita
+
+**Problema:** spec define desktop ≥ 768px (sidebar fixa) e mobile
+< 768px (BottomNav). Mas no iPad em portrait (768×1024), o sidebar
+fica perfeito? Tablet em landscape sem mouse?
+
+**Solução:** **3 zonas, não 2**:
+- **< 768px** (mobile) — BottomNav fixo no rodapé, sem sidebar
+- **768–1023px** (tablet) — Sidebar **escondida por padrão**, botão
+  hamburger no topbar abre como **overlay sobre o conteúdo** (igual
+  Linear mobile/tablet). BottomNav some.
+- **≥ 1024px** (desktop) — Sidebar 240px fixa lado a lado com
+  conteúdo, colapsável pra 56px
+
+Atualizar tailwind config com breakpoint `md: 768px`, `lg: 1024px`.
+Sidebar component recebe prop `variant: "overlay" | "fixed"`
+selecionada automaticamente via media query.
+
+---
+
 ## Escopo detalhado
 
 ### 1. Design tokens (foundation)
@@ -248,33 +363,46 @@ empty state, erro técnico, sucesso, alerta deve ser revisado.
 
 ## Critérios de aceite
 
-- ✅ Dark mode é o default — usuário vê app escura no primeiro acesso
+- ✅ Dark mode é o default — usuário vê app escura no primeiro acesso,
+  **sem flash** ao trocar pra light (FOUC eliminado via next-themes)
 - ✅ Light mode funciona igualmente bem — toggle no topbar
-- ✅ Sidebar desktop 240px, agrupada, colapsável, persistente
+- ✅ Sidebar 240px no desktop (≥ 1024px), overlay com hamburger no
+  tablet (768–1023px), some no mobile (< 768px)
 - ✅ Plus Jakarta Sans carregada em todas as telas, hierarquia visível
-- ✅ Botão primário violeta tem 1 só ocorrência por tela
+- ✅ Botão primário violeta tem 1 só ocorrência por tela **(exceção:
+  modais têm seu próprio Primary sem violar a regra da tela mãe)**
+- ✅ Deep link `/pipeline/{id}` direto renderiza full-page; clique
+  no card do kanban abre DetailSheet via intercepting route mantendo
+  a URL atualizada
 - ✅ Kanban tem OpportunityCard refinado com IA badge
 - ✅ Empty states em **toda** a app têm voz Venzo (verificar por grep
-  de "Nenhum encontrado" — não pode sobrar nenhum)
+  de "Nenhum encontrado" — zero ocorrências)
+- ✅ Bonus check não-bloqueante: `grep -rE 'text-gray-[0-9]|text-slate-[0-9]|bg-gray-[0-9]|bg-slate-[0-9]' src/components src/app` deve
+  retornar zero (caça classes Tailwind hardcoded que escaparam da
+  tokenização)
+- ✅ Tailwind alpha modifiers funcionam: `bg-brand-primary/50`,
+  `text-brand-primary/80` rendem corretamente em dark e light
 - ✅ Contraste validado: dark mode passa em 100% das combinações,
   light mode também
 - ✅ axe-core zero violações AA em PR
 - ✅ Lighthouse Accessibility ≥ 90 em 4 rotas-chave
 - ✅ 217 testes anteriores continuam passando + ≥ 20 novos de design
   system
-- ✅ Visual regression: 25 screenshots de telas-chave comparadas a
-  versão anterior (Playwright)
+- ✅ Visual regression: baseline capturado **antes** do sprint
+  começar (Passo 0), diffs aprovados manualmente no fim
 
 ## Esforço estimado
 
-- **Foundation (tokens + theme switch + AppShell)**: ~2 dias
+- **Passo 0 — visual baseline capturado**: ~0.5 dia
+- **Foundation (tokens HSL + next-themes + AppShell com tablet/overlay)**: ~2.5 dias
 - **Componentes base refeitos**: ~2 dias
-- **Componentes CRM-específicos**: ~2 dias
+- **Componentes CRM-específicos (incluindo DetailSheet via intercepting routes)**: ~2.5 dias
 - **Refactor das 25 telas existentes**: ~3 dias
 - **Voice & tone pass**: ~1 dia
-- **A11y + Performance + Testes**: ~1 dia
+- **A11y + Performance + Testes + visual diff approval**: ~1.5 dias
 
-**Total: 10–11 dias** (~2 semanas)
+**Total: ~13 dias** (~2.5 semanas) — aumentou 2 dias vs estimativa
+inicial pelos pré-requisitos arquiteturais (P1–P5).
 
 ## NÃO fazer neste sprint (escopo fora)
 

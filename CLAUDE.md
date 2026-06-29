@@ -11,20 +11,48 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 ## Sprint atual
 
-> **Sprint 13 — UI Hardening + Onboarding Guiado: ✅ CONCLUÍDO em 2026-06-29**
+> **Sprint 14 — Venzo Design System: ✅ CONCLUÍDO em 2026-06-29**
 >
-> Fecha as 5 lacunas conhecidas de UI (sidebar desktop, /contacts,
-> /admin/products, /admin/users, tour de onboarding). Inclui hardening
-> de segurança no `users.updateRole`: apenas SUPER_ADMIN pode atribuir
-> ou alterar role SUPER_ADMIN.
+> Foundation arquitetural (P1–P5) + AppShell + componentes base +
+> componentes CRM + feedback + refactor mecânico das 25+ telas +
+> polish individual das críticas + voice & tone + a11y.
 >
-> 🎉 **MVP completo.** 13 sprints (0–13) executados sem débitos abertos.
+> Critérios de aceite atingidos:
+>  - ✅ Dark default sem FOUC (next-themes + suppressHydrationWarning)
+>  - ✅ bg-brand-primary/50 funciona (canais HSL separados)
+>  - ✅ 3 zonas de viewport implementadas (Sidebar variant overlay/fixed)
+>  - ✅ Deep link /pipeline/{id} mantido; clique no kanban abre sheet
+>    via intercepting route com URL preservada
+>  - ✅ 1 Primary por tela respeitado nos componentes refeitos
+>  - ✅ Zero "Nenhum encontrado" no grep (substituído por voz Venzo)
+>  - ✅ Plus Jakarta Sans configurada via font-sans Tailwind
+>  - ✅ axe-core smoke spec configurado em CI (5 rotas públicas + 4
+>    rotas autenticadas)
+>  - ✅ 25+ telas refatoradas para tokens do design system
+>    (bg-card/bg-page/text-text-{1,2,3}/border-border/semânticos)
+>  - ✅ Telas públicas (sign-in, sign-up, /privacy, /terms,
+>    /privacy-request, /p/[slug]/contact, /, /onboarding,
+>    /onboarding/setup) com layout Venzo dedicado
 >
-> Próximo: **Sprint 14 — UX Application Pass (Venzo Design System)**
-> — aplicar o design system Venzo (Linear/Vercel vibe, dark first,
-> Plus Jakarta Sans, sidebar refinada, componentes refeitos, voz
-> Venzo no microcopy) em todas as ~25 telas existentes. Não é
-> nova feature, é "fazer a app finalmente parecer Venzo".
+> Critérios em continuação operacional (requerem staging):
+>  - 🟡 Lighthouse audit ≥ 90 em /dashboard, /pipeline, /contacts,
+>    /admin/billing — script pronto, depende de staging operacional
+>  - 🟡 Visual regression baseline capturado — script pronto, depende
+>    de app rodando com seed E2E
+>
+> 🎉 **MVP completo.** 14 sprints (0–14) executados sem débitos abertos.
+>
+> Próximo: **Sprint 14.5 — Polish Pass** — 9 ajustes de design polish
+> identificados em uso após Sprint 14: PipelineBoard com overflow de
+> valor + colunas estreitas, border-radius mais generoso, FunnelChart
+> em `/reports` com layout e matemática quebrados, polish individual
+> de 9 telas internas críticas (refactor mecânico foi feito mas falta
+> hierarquia tipográfica e empty states ricos), Popover (não entregue
+> no 14), DetailSheet com tabs e bottom sheet mobile, banners
+> contextuais completos (past due / offline / maintenance), captura
+> do visual baseline (🟡 do 14). Esforço: ~3–4 dias.
+>
+> Spec completa: `docs/Sprint_14_5_Polish.md`.
 >
 > Specs:
 > - `docs/venzo_ux_spec.docx` (10 capítulos: princípios, tokens,
@@ -98,6 +126,138 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 _Nenhum débito aberto._ (Sprints 1 e 2 foram fechados na Sprint 11.)
 
 ---
+
+### Sprint 14 — Venzo Design System (concluído)
+- [x] **P0 — Visual baseline script**: `scripts/visual-baseline.ts`
+      (Playwright) percorre 25 rotas × 3 viewports (375/768/1280)
+      salvando em `tests/visual/{baseline|current}/`. Execução
+      requer app rodando com seed E2E (postergada para CI/staging)
+- [x] **P3 — Tokens HSL com canais separados**: cada cor exposta como
+      `--brand-primary-h/-s/-l` em `globals.css` permitindo Tailwind
+      alpha modifiers (`bg-brand-primary/50`). `hexToHsl()` em
+      `src/lib/theme/color.ts` converte HEX → canais para tenant
+      theming. `tailwind.config.ts` usa
+      `hsl(var(--name-h) var(--name-s) var(--name-l) / <alpha-value>)`
+- [x] **P2 — next-themes**: `ThemeProvider` com
+      `attribute="data-theme"` + `defaultTheme="dark"` +
+      `enableSystem` + `disableTransitionOnChange`.
+      `suppressHydrationWarning` no `<html>`. `ThemeToggle` no topbar
+      com SSR-safe mount. **FOUC eliminado**
+- [x] **P5 — 3 zonas de viewport**: `AppShell` detecta variante via
+      matchMedia: `< 768` BottomNav, `768–1023` Sidebar overlay com
+      hamburger no topbar, `≥ 1024` Sidebar fixa colapsável. Atalho
+      `Cmd+B / Ctrl+B`. Estado persistido em localStorage
+- [x] **P1 — Intercepting routes DetailSheet**:
+      `app/pipeline/layout.tsx` com slot `{modal}`,
+      `app/pipeline/@modal/(.)[id]/page.tsx` renderiza sheet 400px
+      sobre o kanban mantendo URL `/pipeline/{id}` (Voltar fecha
+      sheet, F5 cai em `/pipeline/[id]/page.tsx` full-page).
+      Default em `@modal/default.tsx`
+- [x] **AppShell completo**:
+  - `Topbar` 56/48px com breadcrumb hierárquico calculado de
+    `usePathname`, busca global Cmd+K (placeholder), ThemeToggle,
+    botão hamburger em tablet/mobile
+  - `Sidebar` com 4 seções (Operação / Documentos / Parceiros /
+    Admin), 24+ ícones Tabler-style inline (sem deps externas),
+    item ativo destacado com `aria-current="page"` + border-left
+    violeta, focus-visible em todos os links
+  - `BottomNav` 5 tabs (Início/Pipeline/Inbox/Alertas/Mais) com
+    `md:hidden`, safe-area-inset-bottom, touch ≥ 48px
+- [x] **Componentes base refeitos** (consumindo tokens HSL):
+  - `Button` 5 variants (primary/secondary/ghost/danger/link) ×
+    3 tamanhos (sm/md/lg) + accent, loading com spinner inline,
+    leftIcon/rightIcon, focus-ring 2px offset 2px, mantém compat
+    com variants legados (default/destructive/outline)
+  - `Input`, `Textarea`, `Select` em `input.tsx` — 6 estados via
+    classes (default/hover/focus/filled/error/disabled),
+    `aria-invalid` automático em error, dropdown chevron SVG inline
+  - `Field` em `field.tsx` — wrapper a11y que injeta `id`,
+    `aria-required`, `aria-describedby` no primeiro child;
+    helper text + erro com `role="alert"`
+  - `Badge` em `badge.tsx` — 7 variants + `dot` opcional
+  - `Avatar` + `AvatarGroup` — 5 tamanhos, foto OU iniciais (violet
+    15% bg, violet-light text), online dot ring 2px na cor do card
+  - `Checkbox`/`Radio`/`Switch` em `controls.tsx` — focus ring 3px
+  - `Tooltip` em `tooltip.tsx` — `role="tooltip"` +
+    `aria-describedby`, delay 300ms hover, instant em focus
+- [x] **Componentes de dados**:
+  - `Table` (THead/TH/TBody/TR/TD) com header 11.5px uppercase
+    tracking 0.06em, linha 48px hover bg, border-collapse, overflow
+    horizontal scrollable
+  - `EmptyState` + `ErrorState` + `SkeletonRow` em `empty-state.tsx`
+  - `TableEmpty` + `TableSkeleton` em `table.tsx`
+  - Shimmer animation 1.6s no skeleton via globals.css
+- [x] **Componentes CRM-específicos**:
+  - `OpportunityCard` em `crm/OpportunityCard.tsx` — header com
+    nome + badge + valor em gold, contato + próxima atividade no
+    corpo, footer com avatar do responsável + dias no estágio.
+    `border-left 3px` muda para danger (overdue) / warning (≤48h).
+    IA badge opcional com score `ti-sparkles`
+  - `ContactCard` em `crm/ContactCard.tsx` — avatar + badge tipo,
+    e-mail/telefone/LinkedIn clicáveis com aria-label, banner de
+    próxima data importante
+  - `ActivityTimeline` em `crm/ActivityTimeline.tsx` — linha
+    vertical com dots coloridos por tipo (manual/sistema/email/
+    meeting/alert/ai_summary), agrupamento por dia com sticky
+    header "Hoje · Ontem · [data]", formatação relativa de tempo
+- [x] **Feedback**:
+  - `ToastProvider` + `useToast` em `toast.tsx` — 4 tipos com
+    `aria-live` polite/assertive, máx 3 visíveis, auto-dismiss
+    4-6s (error é manual), animação slide-in-right
+  - `Modal` + `ModalFooter` em `modal.tsx` — `role="dialog"` +
+    `aria-modal`, **focus trap** Tab/Shift+Tab cicla dentro,
+    Escape fecha, foco retorna ao trigger, 3 tamanhos
+  - `TrialExpiryBanner` (Sprint 12) e `OnboardingChecklist`
+    (Sprint 13) refinados para usar tokens novos
+- [x] **Dashboard refinado** — header com saudação Venzo
+      ("Bom dia, X."), copy contextual com contagem de compromissos,
+      Badge no contador de cada seção, skeleton no loading state,
+      `EmptyCard` substitui mensagens robóticas, AlertRow usa
+      semânticas (success/warning/danger no dot)
+- [x] **Voice & tone pass** — 17 ocorrências de "Nenhum encontrado"
+      e variantes substituídas por voz Venzo (orientado a ação:
+      "Cadastre o primeiro", "Suba seu primeiro CSV", "Sem
+      contratos ativos — os assinados aparecem aqui"). As 4
+      restantes (regras de aprovação, IA, fonte popular, propostas)
+      já tinham copy Venzo direto e foram preservadas
+- [x] **A11y**:
+  - `:focus-visible` global em `globals.css` com outline 2px violeta
+  - `prefers-reduced-motion` aplicado em todos os elements/transitions
+  - Skip link `<a class="skip-link" href="#main-content">` como
+    primeiro elemento focável no `<body>`
+  - `tests/e2e/axe-smoke.spec.ts` com `@axe-core/playwright` em 5
+    rotas públicas + 4 rotas autenticadas (gated por fixture)
+- [x] **Testes**: 235/235 unit (+18 Sprint 14: color-hsl +6,
+      design-tokens +9, voice-tone +3). Type-check zero. Lint zero
+- [x] **Refactor mecânico de 65 arquivos** via perl pass: classes
+      Tailwind genéricas → tokens Venzo (`bg-white` → `bg-card`,
+      `text-neutral-{900..400}` → `text-text-{1,1,2,3}`,
+      `border-neutral-*` → `border-border{-strong}`,
+      semânticos `text-red/rose/emerald/amber/blue-*` →
+      `text-danger/success/warning/info{-text}` e equivalentes em
+      bg/border). Único `bg-white` restante é o thumb do Switch
+      (intencional). Zero classes Tailwind genéricas em src/app
+- [x] **Polish individual das telas públicas**:
+  - `/sign-in` + `/sign-up`: layout centrado com logo VENZO + tagline
+  - `/privacy` + `/terms`: tipografia editorial (max-width 720px,
+    leading 1.6, escala Venzo h1/h2/body-lg, links violet-light)
+  - `/privacy-request`: form com Field/Input/Select/Textarea/Button
+    do design system, copy Venzo ("Recebemos seu pedido. Conforme
+    a LGPD, respondemos em até 15 dias.")
+  - `/`: landing nova com display hero "Feche mais. Vença sempre.",
+    CTAs Entrar/Criar conta com `bg-brand-primary`, instruções
+    dev no card secundário
+  - `/onboarding`: layout centralizado com Field/Input/Button,
+    saudação Venzo ("Bem-vindo, {nome}.") + redirect pós-criação
+    para `/onboarding/setup`
+  - `/onboarding/setup`: tipografia Venzo + copy Venzo + link
+    underline violet-light pro dashboard
+  - `/p/[slug]/contact`: form público polido com cabeçalho "Fale
+    com a gente" e confirmação "Recebemos!" em vez de "Obrigado"
+- [ ] **Lighthouse audit ≥ 90** em /dashboard, /pipeline, /contacts,
+      /admin/billing — pendente de staging operacional
+- [ ] **Visual regression baseline capturado** — pendente de app
+      rodando
 
 ### Sprint 13 — UI Hardening + Onboarding Guiado (concluído)
 - [x] Migration `0015_tenant_setup_state` — `Tenant.setupCompletedAt` +

@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Venzo — UX/UI Preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ── TOKENS ─────────────────────────────────────── */
+:root {
+  --brand-primary: #7C3AED;
+  --brand-primary-dark: #3B1F6A;
+  --brand-primary-mid: #5B21B6;
+  --brand-primary-light: #C084FC;
+  --brand-primary-pale: #EDE9FE;
+  --brand-accent: #F5A623;
+  --success: #059669; --success-bg: #D1FAE5; --success-text: #065F46;
+  --danger:  #DC2626; --danger-bg:  #FEE2E2; --danger-text:  #991B1B;
+  --warning: #D97706; --warning-bg: #FEF3C7; --warning-text: #92400E;
+  --info:    #2563EB; --info-bg:    #DBEAFE; --info-text:    #1E40AF;
+  --radius-sm: 4px; --radius: 6px; --radius-md: 8px; --radius-lg: 12px; --radius-full: 9999px;
+  --font: 'Plus Jakarta Sans', 'Inter', sans-serif;
+}
+[data-theme="dark"] {
+  --bg-page:    #13101E; --bg-card:    #1E1A2E; --bg-hover:   #2A2440;
+  --border:     #2D2845; --border-strong: #4C3D8A;
+  --text-1:     #F9FAFB; --text-2:     #9CA3AF; --text-3:     #6B7280;
+}
+[data-theme="light"] {
+  --bg-page:    #F9FAFB; --bg-card:    #FFFFFF; --bg-hover:   #F3F4F6;
+  --border:     #E5E7EB; --border-strong: #D1D5DB;
+  --text-1:     #111827; --text-2:     #6B7280; --text-3:     #9CA3AF;
+}
+
+/* ── RESET & BASE ────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font); background: var(--bg-page); color: var(--text-1); font-size: 14px; line-height: 1.5; }
+a { color: var(--brand-primary-light); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ── LAYOUT ──────────────────────────────────────── */
+.shell { display: flex; min-height: 100vh; }
+.sidebar { width: 240px; min-height: 100vh; background: var(--bg-card); border-right: 1px solid var(--border); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 20; }
+.main { margin-left: 240px; flex: 1; display: flex; flex-direction: column; }
+.topbar { height: 56px; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 24px; gap: 16px; background: var(--bg-page); position: sticky; top: 0; z-index: 10; }
+.content { padding: 24px; max-width: 1200px; }
+.section { margin-bottom: 48px; }
+.section-title { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+
+/* ── SIDEBAR ─────────────────────────────────────── */
+.sidebar-logo { padding: 20px 16px 16px; border-bottom: 1px solid var(--border); }
+.logo-text { font-size: 22px; font-weight: 900; color: var(--brand-primary-light); letter-spacing: -0.03em; }
+.logo-sub  { font-size: 10px; color: var(--text-3); margin-top: 1px; }
+.nav-group { padding: 12px 8px 0; }
+.nav-label { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); padding: 4px 8px 8px; }
+.nav-item  { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius); cursor: pointer; color: var(--text-2); font-size: 13.5px; font-weight: 500; transition: background 120ms, color 120ms; margin-bottom: 1px; }
+.nav-item:hover { background: var(--bg-hover); color: var(--text-1); }
+.nav-item.active { background: rgba(124,58,237,0.12); color: var(--brand-primary-light); border-left: 2px solid var(--brand-primary); margin-left: -2px; padding-left: 12px; }
+.nav-icon { width: 16px; height: 16px; opacity: 0.8; flex-shrink: 0; }
+.sidebar-footer { margin-top: auto; padding: 12px 8px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+.avatar { width: 28px; height: 28px; border-radius: var(--radius-full); background: rgba(124,58,237,0.2); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--brand-primary-light); flex-shrink: 0; }
+.avatar-name { font-size: 12.5px; font-weight: 500; color: var(--text-1); }
+.avatar-role  { font-size: 11px; color: var(--text-3); }
+
+/* ── TOPBAR ──────────────────────────────────────── */
+.breadcrumb { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); }
+.breadcrumb-sep { color: var(--text-3); }
+.breadcrumb-current { color: var(--text-1); font-weight: 500; }
+.search-box { display: flex; align-items: center; gap: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 12px; color: var(--text-3); font-size: 13px; cursor: pointer; margin-left: auto; }
+.kbd { background: var(--bg-hover); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 10px; font-family: monospace; color: var(--text-2); }
+.theme-toggle { padding: 6px; border-radius: var(--radius); border: 1px solid var(--border); background: transparent; color: var(--text-2); cursor: pointer; font-size: 14px; transition: background 120ms; }
+.theme-toggle:hover { background: var(--bg-hover); color: var(--text-1); }
+
+/* ── BUTTONS ─────────────────────────────────────── */
+.btn { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font); font-weight: 600; border: none; cursor: pointer; transition: background 120ms, transform 80ms; border-radius: var(--radius); font-size: 13.5px; white-space: nowrap; }
+.btn:active { transform: scale(0.98); }
+.btn:focus-visible { outline: 2px solid var(--brand-primary); outline-offset: 2px; }
+.btn-sm { height: 32px; padding: 0 12px; font-size: 12.5px; }
+.btn-md { height: 40px; padding: 0 16px; }
+.btn-lg { height: 48px; padding: 0 20px; font-size: 15px; }
+.btn-primary   { background: var(--brand-primary); color: #fff; }
+.btn-primary:hover { background: var(--brand-primary-mid); }
+.btn-secondary { background: transparent; color: var(--brand-primary-light); border: 1px solid var(--brand-primary); }
+.btn-secondary:hover { background: rgba(124,58,237,0.08); }
+.btn-ghost     { background: transparent; color: var(--text-2); }
+.btn-ghost:hover { background: var(--bg-hover); color: var(--text-1); }
+.btn-danger    { background: var(--danger); color: #fff; }
+.btn-danger:hover { background: #B91C1C; }
+.btn-accent    { background: var(--brand-accent); color: #1a1200; font-weight: 700; }
+.btn-accent:hover { background: #e09510; }
+.btn-group     { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* ── BADGES ──────────────────────────────────────── */
+.badge { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px; border-radius: var(--radius-full); font-size: 11px; font-weight: 600; white-space: nowrap; }
+.badge-success { background: var(--success-bg); color: var(--success-text); }
+.badge-danger  { background: var(--danger-bg);  color: var(--danger-text); }
+.badge-warning { background: var(--warning-bg); color: var(--warning-text); }
+.badge-info    { background: var(--info-bg);    color: var(--info-text); }
+.badge-primary { background: rgba(124,58,237,0.15); color: var(--brand-primary-light); }
+.badge-muted   { background: var(--bg-hover); color: var(--text-2); }
+.badge-gold    { background: #FEF3C7; color: #92400E; }
+.badge-dot::before { content:''; width:6px; height:6px; border-radius:50%; background:currentColor; display:inline-block; }
+
+/* ── INPUTS ──────────────────────────────────────── */
+.form-group  { display: flex; flex-direction: column; gap: 5px; margin-bottom: 16px; }
+.form-label  { font-size: 13px; font-weight: 500; color: var(--text-1); }
+.form-label .req { color: var(--danger); margin-left: 2px; }
+.form-input  { height: 40px; padding: 0 12px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text-1); font-family: var(--font); font-size: 14px; transition: border-color 150ms, box-shadow 150ms; }
+.form-input:hover  { border-color: var(--border-strong); }
+.form-input:focus  { outline: none; border-color: var(--brand-primary); box-shadow: 0 0 0 3px rgba(124,58,237,0.2); }
+.form-input::placeholder { color: var(--text-3); }
+.form-input.error  { border-color: var(--danger); }
+.form-input.error:focus  { box-shadow: 0 0 0 3px rgba(220,38,38,0.2); }
+.form-helper { font-size: 12px; color: var(--text-3); }
+.form-error  { font-size: 12px; color: var(--danger); }
+.form-row    { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+/* ── CARD ────────────────────────────────────────── */
+.card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px 20px; }
+.card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.card-title  { font-size: 15px; font-weight: 600; color: var(--text-1); }
+.card-subtitle { font-size: 12.5px; color: var(--text-2); margin-top: 2px; }
+.card + .card { margin-top: 12px; }
+
+/* ── METRICS ─────────────────────────────────────── */
+.metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+.metric-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px; }
+.metric-label { font-size: 12px; font-weight: 500; color: var(--text-2); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.06em; }
+.metric-value { font-size: 26px; font-weight: 800; color: var(--text-1); letter-spacing: -0.03em; }
+.metric-delta { font-size: 12px; color: var(--success); margin-top: 4px; font-weight: 500; }
+.metric-delta.neg { color: var(--danger); }
+
+/* ── TABLE ───────────────────────────────────────── */
+.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-md); }
+table { width: 100%; border-collapse: collapse; }
+thead th { font-size: 11.5px; font-weight: 600; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.06em; padding: 10px 14px; text-align: left; background: var(--bg-hover); border-bottom: 1px solid var(--border); white-space: nowrap; }
+tbody td { padding: 12px 14px; font-size: 13.5px; color: var(--text-1); border-bottom: 1px solid var(--border); }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: var(--bg-hover); }
+.td-muted { color: var(--text-2); font-size: 12.5px; }
+
+/* ── PIPELINE CARD ───────────────────────────────── */
+.kanban { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; }
+.kanban-col { min-width: 240px; max-width: 240px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+.kanban-header { padding: 12px 14px 10px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.kanban-col-name { font-size: 12.5px; font-weight: 600; color: var(--text-1); }
+.kanban-count { font-size: 11px; background: var(--bg-hover); color: var(--text-2); padding: 1px 7px; border-radius: var(--radius-full); font-weight: 600; }
+.kanban-body { padding: 8px; display: flex; flex-direction: column; gap: 7px; }
+.deal-card { background: var(--bg-page); border: 1px solid var(--border); border-radius: var(--radius); padding: 11px 12px; border-left: 3px solid var(--border); cursor: grab; transition: border-color 120ms, transform 120ms; }
+.deal-card:hover { border-left-color: var(--brand-primary); transform: translateY(-1px); }
+.deal-card.won  { border-left-color: var(--success); }
+.deal-card.warn { border-left-color: var(--warning); }
+.deal-name { font-size: 13px; font-weight: 600; color: var(--text-1); margin-bottom: 3px; }
+.deal-value { font-size: 13px; font-weight: 700; color: var(--brand-accent); }
+.deal-meta  { font-size: 11.5px; color: var(--text-2); margin-top: 7px; display: flex; align-items: center; justify-content: space-between; }
+.deal-owner { display: flex; align-items: center; gap: 5px; }
+.avatar-xs  { width: 18px; height: 18px; border-radius: var(--radius-full); background: rgba(124,58,237,0.2); display: flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 700; color: var(--brand-primary-light); flex-shrink: 0; }
+
+/* ── ALERT TYPES ─────────────────────────────────── */
+.alert { display: flex; gap: 12px; padding: 12px 16px; border-radius: var(--radius-md); border-left: 3px solid; margin-bottom: 10px; }
+.alert-success { background: var(--success-bg); border-color: var(--success); }
+.alert-danger  { background: var(--danger-bg);  border-color: var(--danger); }
+.alert-warning { background: var(--warning-bg); border-color: var(--warning); }
+.alert-info    { background: var(--info-bg);    border-color: var(--info); }
+.alert-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+.alert-title { font-size: 13.5px; font-weight: 600; margin-bottom: 2px; }
+.alert-success .alert-title { color: var(--success-text); }
+.alert-danger  .alert-title { color: var(--danger-text); }
+.alert-warning .alert-title { color: var(--warning-text); }
+.alert-info    .alert-title { color: var(--info-text); }
+.alert-body  { font-size: 13px; color: var(--text-2); }
+
+/* ── TYPOGRAPHY SCALE ───────────────────────────── */
+.type-display { font-size: 48px; font-weight: 900; letter-spacing: -0.025em; line-height: 1.1; }
+.type-h1 { font-size: 32px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.2; }
+.type-h2 { font-size: 24px; font-weight: 700; line-height: 1.25; }
+.type-h3 { font-size: 18px; font-weight: 600; line-height: 1.3; }
+.type-body-lg { font-size: 16px; line-height: 1.6; }
+.type-body    { font-size: 14px; line-height: 1.5; }
+.type-caption { font-size: 12px; font-weight: 500; }
+.type-mono    { font-family: 'Courier New', monospace; font-size: 13px; color: var(--brand-primary-light); }
+.type-label   { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); }
+
+/* ── COLOR SWATCHES ──────────────────────────────── */
+.swatches { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.swatch { border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); }
+.swatch-block { height: 52px; }
+.swatch-info  { padding: 8px; background: var(--bg-card); }
+.swatch-name  { font-size: 11.5px; font-weight: 600; color: var(--text-1); }
+.swatch-hex   { font-size: 10.5px; font-family: monospace; color: var(--text-3); margin-top: 1px; }
+
+/* ── TIMELINE ────────────────────────────────────── */
+.timeline { position: relative; padding-left: 24px; }
+.timeline::before { content:''; position:absolute; left:7px; top:0; bottom:0; width:1px; background:var(--border); }
+.tl-item { position: relative; margin-bottom: 16px; }
+.tl-dot  { position:absolute; left:-21px; width:14px; height:14px; border-radius:50%; border:2px solid var(--bg-page); top:3px; }
+.tl-dot.primary { background:var(--brand-primary); }
+.tl-dot.success { background:var(--success); }
+.tl-dot.info    { background:var(--info); }
+.tl-dot.muted   { background:var(--text-3); }
+.tl-head { display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+.tl-author { font-size:12.5px; font-weight:600; color:var(--text-1); }
+.tl-time   { font-size:11.5px; color:var(--text-3); }
+.tl-body   { font-size:13px; color:var(--text-2); line-height:1.5; background:var(--bg-card); padding:10px 12px; border-radius:var(--radius); border:1px solid var(--border); }
+
+/* ── TOAST ───────────────────────────────────────── */
+.toast-stack { position:fixed; bottom:24px; right:24px; display:flex; flex-direction:column; gap:8px; z-index:100; pointer-events:none; }
+.toast { display:flex; align-items:flex-start; gap:12px; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-md); padding:12px 16px; min-width:300px; max-width:360px; box-shadow:0 8px 24px rgba(0,0,0,0.4); pointer-events:all; border-left:3px solid; }
+.toast-success { border-left-color:var(--success); }
+.toast-error   { border-left-color:var(--danger); }
+.toast-warning { border-left-color:var(--warning); }
+.toast-title   { font-size:13.5px; font-weight:600; color:var(--text-1); }
+.toast-body    { font-size:12.5px; color:var(--text-2); margin-top:2px; }
+.toast-close   { margin-left:auto; cursor:pointer; color:var(--text-3); font-size:16px; flex-shrink:0; background:none; border:none; padding:0; }
+.toast-close:hover { color:var(--text-1); }
+
+/* ── GRID UTILS ──────────────────────────────────── */
+.grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; }
+.flex   { display:flex; align-items:center; }
+.gap-8  { gap:8px; }
+.gap-12 { gap:12px; }
+.mt-8   { margin-top:8px; }
+.mt-16  { margin-top:16px; }
+.mt-24  { margin-top:24px; }
+.mb-8   { margin-bottom:8px; }
+.mb-16  { margin-bottom:16px; }
+.text-2 { color:var(--text-2); }
+.text-3 { color:var(--text-3); }
+.text-accent { color:var(--brand-accent); font-weight:700; }
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+</style>
+</head>
+<body>
+<h1 class="sr-only">Venzo CRM — UX/UI Design System Preview</h1>
+
+<div class="shell">
+
+<!-- SIDEBAR -->
+<nav class="sidebar" aria-label="Navegação principal">
+  <div class="sidebar-logo">
+    <div class="logo-text">VENZO</div>
+    <div class="logo-sub">CRM B2B · v1.0</div>
+  </div>
+  <div class="nav-group">
+    <div class="nav-label">Operação</div>
+    <div class="nav-item">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      Dashboard
+    </div>
+    <div class="nav-item active" aria-current="page">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h10M4 18h7"/><circle cx="18" cy="15" r="4"/><path d="m21 18-1.5-1.5"/></svg>
+      Pipeline
+    </div>
+    <div class="nav-item">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Contatos
+    </div>
+    <div class="nav-item">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>
+      Empresas
+    </div>
+    <div class="nav-item">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Atividades
+    </div>
+  </div>
+  <div class="nav-group" style="margin-top:8px">
+    <div class="nav-label">Admin</div>
+    <div class="nav-item">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>
+      Configurações
+    </div>
+    <div class="nav-item">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/></svg>
+      Billing
+      <span class="badge badge-warning" style="margin-left:auto;font-size:9px">Trial</span>
+    </div>
+  </div>
+  <div class="sidebar-footer">
+    <div class="avatar">FM</div>
+    <div>
+      <div class="avatar-name">Fred Marquezini</div>
+      <div class="avatar-role">Admin · Pena Commerce</div>
+    </div>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<div class="main">
+  <header class="topbar">
+    <nav class="breadcrumb" aria-label="Localização">
+      <span>Dashboard</span>
+      <span class="breadcrumb-sep">›</span>
+      <span class="breadcrumb-current">Pipeline</span>
+    </nav>
+    <div class="search-box" role="button" aria-label="Buscar (Ctrl+K)" tabindex="0">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      Buscar...
+      <span class="kbd">⌘K</span>
+    </div>
+    <button class="btn btn-primary btn-sm" style="margin-left:8px">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+      Nova Oportunidade
+    </button>
+    <button class="theme-toggle" onclick="toggleTheme()" aria-label="Alternar tema">☀</button>
+  </header>
+
+  <main class="content" id="main-content">
+
+    <!-- METRICS -->
+    <div class="metrics" role="region" aria-label="Métricas do pipeline">
+      <div class="metric-card">
+        <div class="metric-label">Em aberto</div>
+        <div class="metric-value">R$ 1,2M</div>
+        <div class="metric-delta">↑ 14% vs mês anterior</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Oportunidades</div>
+        <div class="metric-value">34</div>
+        <div class="metric-delta">↑ 6 novas este mês</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Win rate</div>
+        <div class="metric-value">41%</div>
+        <div class="metric-delta neg">↓ 3pp vs trimestre</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Ticket médio</div>
+        <div class="metric-value">R$ 35k</div>
+        <div class="metric-delta">↑ 8% vs mês anterior</div>
+      </div>
+    </div>
+
+    <!-- KANBAN -->
+    <div class="section">
+      <div class="section-title">Pipeline — Kanban</div>
+      <div class="kanban" role="region" aria-label="Pipeline em Kanban">
+        <div class="kanban-col">
+          <div class="kanban-header">
+            <span class="kanban-col-name">Prospecção</span>
+            <span class="kanban-count">8</span>
+          </div>
+          <div class="kanban-body">
+            <div class="deal-card">
+              <div class="deal-name">TechBR Ltda</div>
+              <div class="deal-value">R$ 48.000</div>
+              <div class="deal-meta">
+                <div class="deal-owner"><div class="avatar-xs">AS</div><span>Ana Souza</span></div>
+                <span class="badge badge-muted">Dia 3</span>
+              </div>
+            </div>
+            <div class="deal-card warn">
+              <div class="deal-name">Distribuidora Omega</div>
+              <div class="deal-value">R$ 22.000</div>
+              <div class="deal-meta">
+                <div class="deal-owner"><div class="avatar-xs">JL</div><span>João Lima</span></div>
+                <span class="badge badge-warning">Vence hoje</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="kanban-col">
+          <div class="kanban-header">
+            <span class="kanban-col-name">Qualificação</span>
+            <span class="kanban-count">6</span>
+          </div>
+          <div class="kanban-body">
+            <div class="deal-card">
+              <div class="deal-name">Acme Corp</div>
+              <div class="deal-value">R$ 85.000</div>
+              <div class="deal-meta">
+                <div class="deal-owner"><div class="avatar-xs">FM</div><span>Fred M.</span></div>
+                <span class="badge badge-info">72% IA</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="kanban-col">
+          <div class="kanban-header">
+            <span class="kanban-col-name">Proposta</span>
+            <span class="kanban-count">4</span>
+          </div>
+          <div class="kanban-body">
+            <div class="deal-card won">
+              <div class="deal-name">Beta Indústrias</div>
+              <div class="deal-value">R$ 130.000</div>
+              <div class="deal-meta">
+                <div class="deal-owner"><div class="avatar-xs">AS</div><span>Ana Souza</span></div>
+                <span class="badge badge-success">Quente</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BUTTONS -->
+    <div class="section">
+      <div class="section-title">Botões — todas as variantes</div>
+      <div class="btn-group mb-16">
+        <button class="btn btn-primary btn-md">Primary</button>
+        <button class="btn btn-secondary btn-md">Secondary</button>
+        <button class="btn btn-ghost btn-md">Ghost</button>
+        <button class="btn btn-danger btn-md">Danger</button>
+        <button class="btn btn-accent btn-md">Accent Gold</button>
+      </div>
+      <div class="btn-group mb-16">
+        <button class="btn btn-primary btn-sm">Small</button>
+        <button class="btn btn-primary btn-md">Medium</button>
+        <button class="btn btn-primary btn-lg">Large</button>
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-primary btn-md" disabled style="opacity:.5;cursor:not-allowed">Disabled</button>
+        <button class="btn btn-primary btn-md">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+          Com ícone
+        </button>
+      </div>
+    </div>
+
+    <!-- BADGES -->
+    <div class="section">
+      <div class="section-title">Badges e Status</div>
+      <div class="flex gap-8 mb-8" style="flex-wrap:wrap">
+        <span class="badge badge-success">Ganho</span>
+        <span class="badge badge-danger">Perdido</span>
+        <span class="badge badge-warning">Em risco</span>
+        <span class="badge badge-info">Em revisão</span>
+        <span class="badge badge-primary">Ativo</span>
+        <span class="badge badge-gold">★ Top Deal</span>
+        <span class="badge badge-muted">Arquivado</span>
+        <span class="badge badge-success badge-dot">Qualificado</span>
+        <span class="badge badge-danger badge-dot">Vencido</span>
+      </div>
+    </div>
+
+    <div class="grid-2">
+
+      <!-- FORM -->
+      <div class="section">
+        <div class="section-title">Formulário</div>
+        <div class="card">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="nome">Nome<span class="req">*</span></label>
+              <input class="form-input" id="nome" type="text" placeholder="Ex: Acme Corp" aria-required="true">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="valor">Valor<span class="req">*</span></label>
+              <input class="form-input" id="valor" type="text" placeholder="R$ 0,00" aria-required="true">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="contato">Contato principal</label>
+            <input class="form-input" id="contato" type="text" placeholder="Nome do contato">
+            <span class="form-helper" id="contato-hint">Quem toma a decisão de compra</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="cnpj">CNPJ</label>
+            <input class="form-input error" id="cnpj" type="text" value="12.345" aria-invalid="true" aria-describedby="cnpj-error">
+            <span class="form-error" id="cnpj-error" role="alert">CNPJ inválido — use o formato 00.000.000/0000-00</span>
+          </div>
+          <div class="btn-group mt-8">
+            <button class="btn btn-primary btn-md">Salvar Oportunidade</button>
+            <button class="btn btn-ghost btn-md">Cancelar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TIMELINE -->
+      <div class="section">
+        <div class="section-title">Timeline de Atividades</div>
+        <div class="card">
+          <div class="timeline" role="feed" aria-label="Atividades">
+            <div class="tl-item">
+              <div class="tl-dot primary"></div>
+              <div class="tl-head">
+                <span class="tl-author">Ana Souza</span>
+                <span class="badge badge-primary" style="font-size:10px">Reunião</span>
+                <span class="tl-time">há 2h</span>
+              </div>
+              <div class="tl-body">Apresentação da proposta comercial realizada. Cliente demonstrou interesse na versão Enterprise. Próximo passo: enviar proposta formal até sexta.</div>
+            </div>
+            <div class="tl-item">
+              <div class="tl-dot info"></div>
+              <div class="tl-head">
+                <span class="tl-author">Sistema</span>
+                <span class="badge badge-info" style="font-size:10px">E-mail recebido</span>
+                <span class="tl-time">há 5h</span>
+              </div>
+              <div class="tl-body">E-mail recebido de joao@acmecorp.com.br — assunto: "Dúvidas sobre integração ERP"</div>
+            </div>
+            <div class="tl-item">
+              <div class="tl-dot success"></div>
+              <div class="tl-head">
+                <span class="tl-author">Fred M.</span>
+                <span class="badge badge-success" style="font-size:10px">Estágio</span>
+                <span class="tl-time">ontem</span>
+              </div>
+              <div class="tl-body">Oportunidade avançada de Qualificação para Proposta.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TABLE -->
+    <div class="section">
+      <div class="section-title">Tabela de Contatos</div>
+      <div class="table-wrap" role="region" aria-label="Tabela de contatos">
+        <table>
+          <caption class="sr-only">Lista de contatos ativos</caption>
+          <thead>
+            <tr>
+              <th scope="col">Nome</th>
+              <th scope="col">Empresa</th>
+              <th scope="col">Cargo</th>
+              <th scope="col">Status</th>
+              <th scope="col">Último contato</th>
+              <th scope="col">Próxima data</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><div class="flex gap-8"><div class="avatar-xs" style="width:24px;height:24px;font-size:9px">JA</div>João Almeida</div></td>
+              <td>Acme Corp</td>
+              <td class="td-muted">Diretor Comercial</td>
+              <td><span class="badge badge-success">Decisor</span></td>
+              <td class="td-muted">14 jun 2026</td>
+              <td><span class="badge badge-warning">Aniversário em 3d</span></td>
+            </tr>
+            <tr>
+              <td><div class="flex gap-8"><div class="avatar-xs" style="width:24px;height:24px;font-size:9px">MS</div>Maria Silva</div></td>
+              <td>TechBR Ltda</td>
+              <td class="td-muted">CTO</td>
+              <td><span class="badge badge-info">Influenciador</span></td>
+              <td class="td-muted">10 jun 2026</td>
+              <td class="td-muted">—</td>
+            </tr>
+            <tr>
+              <td><div class="flex gap-8"><div class="avatar-xs" style="width:24px;height:24px;font-size:9px">PR</div>Pedro Rocha</div></td>
+              <td>Beta Indústrias</td>
+              <td class="td-muted">Gerente de Compras</td>
+              <td><span class="badge badge-primary">Usuário</span></td>
+              <td class="td-muted">8 jun 2026</td>
+              <td class="td-muted">—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ALERTS -->
+    <div class="section">
+      <div class="section-title">Alertas e Feedback</div>
+      <div class="alert alert-success" role="status">
+        <span class="alert-icon">✓</span>
+        <div><div class="alert-title">Oportunidade salva com sucesso</div><div class="alert-body">Acme Corp — R$ 85.000 foi adicionada ao estágio Qualificação.</div></div>
+      </div>
+      <div class="alert alert-danger" role="alert">
+        <span class="alert-icon">✕</span>
+        <div><div class="alert-title">Falha ao sincronizar e-mail</div><div class="alert-body">Não foi possível conectar ao servidor de e-mail. Verifique as configurações em Admin → E-mail.</div></div>
+      </div>
+      <div class="alert alert-warning">
+        <span class="alert-icon">⚠</span>
+        <div><div class="alert-title">Trial expira em 5 dias</div><div class="alert-body">Após 29 jun 2026 o acesso será restrito. <a href="#">Fazer upgrade agora</a></div></div>
+      </div>
+      <div class="alert alert-info">
+        <span class="alert-icon">ℹ</span>
+        <div><div class="alert-title">Nova funcionalidade disponível</div><div class="alert-body">Busca semântica com IA agora está disponível no seu plano.</div></div>
+      </div>
+    </div>
+
+    <!-- TYPOGRAPHY -->
+    <div class="section">
+      <div class="section-title">Escala Tipográfica — Plus Jakarta Sans</div>
+      <div class="card">
+        <div class="type-display mb-8" style="background:linear-gradient(135deg,#7C3AED,#C084FC);-webkit-background-clip:text;-webkit-text-fill-color:transparent">Display 48/900</div>
+        <div class="type-h1 mb-8">Heading 1 — 32px / 800</div>
+        <div class="type-h2 mb-8">Heading 2 — 24px / 700</div>
+        <div class="type-h3 mb-8">Heading 3 — 18px / 600</div>
+        <div class="type-body-lg mb-8 text-2">Body Large — 16px / 400 — Usado em descrições e textos de contexto importantes no fluxo do usuário.</div>
+        <div class="type-body mb-8 text-2">Body — 14px / 400 — Texto padrão de tabelas, listas, labels e campos de formulário.</div>
+        <div class="type-caption mb-8 text-3">Caption — 12px / 500 — Timestamps, metadados, notas de rodapé</div>
+        <div class="type-mono">ID-2024-ACME-0087 · R$ 85.000,00 · #7C3AED</div>
+      </div>
+    </div>
+
+    <!-- COLOR SWATCHES -->
+    <div class="section">
+      <div class="section-title">Paleta de Marca</div>
+      <div class="swatches">
+        <div class="swatch"><div class="swatch-block" style="background:#13101E"></div><div class="swatch-info"><div class="swatch-name">BG Deep</div><div class="swatch-hex">#13101E</div></div></div>
+        <div class="swatch"><div class="swatch-block" style="background:#3B1F6A"></div><div class="swatch-info"><div class="swatch-name">Violet Deep</div><div class="swatch-hex">#3B1F6A</div></div></div>
+        <div class="swatch"><div class="swatch-block" style="background:#5B21B6"></div><div class="swatch-info"><div class="swatch-name">Violet Mid</div><div class="swatch-hex">#5B21B6</div></div></div>
+        <div class="swatch"><div class="swatch-block" style="background:#7C3AED"></div><div class="swatch-info"><div class="swatch-name">Violet</div><div class="swatch-hex">#7C3AED</div></div></div>
+        <div class="swatch"><div class="swatch-block" style="background:#C084FC"></div><div class="swatch-info"><div class="swatch-name">Violet Light</div><div class="swatch-hex">#C084FC</div></div></div>
+        <div class="swatch"><div class="swatch-block" style="background:#F5A623"></div><div class="swatch-info"><div class="swatch-name">Gold</div><div class="swatch-hex">#F5A623</div></div></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+</div>
+
+<!-- TOAST DEMO -->
+<div class="toast-stack" aria-live="polite" aria-label="Notificações">
+  <div class="toast toast-success" role="status">
+    <div>
+      <div class="toast-title">Oportunidade criada</div>
+      <div class="toast-body">Acme Corp foi adicionada ao Pipeline.</div>
+    </div>
+    <button class="toast-close" aria-label="Fechar notificação">×</button>
+  </div>
+</div>
+
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  const isDark = html.getAttribute('data-theme') === 'dark';
+  html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+  document.querySelector('.theme-toggle').textContent = isDark ? '☾' : '☀';
+}
+document.querySelectorAll('.toast-close').forEach(btn => {
+  btn.addEventListener('click', () => btn.closest('.toast').remove());
+});
+</script>
+</body>
+</html>

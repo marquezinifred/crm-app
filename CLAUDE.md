@@ -11,16 +11,38 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 ## Sprint atual
 
-> **Sprint 12 — Billing e Self-service: ✅ CONCLUÍDO em 2026-06-28**
+> **Sprint 13 — UI Hardening + Onboarding Guiado: ✅ CONCLUÍDO em 2026-06-29**
 >
-> 🎉 **MVP completo.** 12 sprints (0–12) executados sem débitos abertos.
+> Fecha as 5 lacunas conhecidas de UI (sidebar desktop, /contacts,
+> /admin/products, /admin/users, tour de onboarding). Inclui hardening
+> de segurança no `users.updateRole`: apenas SUPER_ADMIN pode atribuir
+> ou alterar role SUPER_ADMIN.
 >
-> Próximo (pós-MVP): hardening de produção (Sentry+Axiom wiring real,
+> 🎉 **MVP completo.** 13 sprints (0–13) executados sem débitos abertos.
+>
+> Próximo: **Sprint 14 — UX Application Pass (Venzo Design System)**
+> — aplicar o design system Venzo (Linear/Vercel vibe, dark first,
+> Plus Jakarta Sans, sidebar refinada, componentes refeitos, voz
+> Venzo no microcopy) em todas as ~25 telas existentes. Não é
+> nova feature, é "fazer a app finalmente parecer Venzo".
+>
+> Specs:
+> - `docs/venzo_ux_spec.docx` (10 capítulos: princípios, tokens,
+>   shell/navegação, componentes base, dados, CRM-específicos,
+>   feedback, acessibilidade WCAG 2.1 AA, responsividade,
+>   checklist)
+> - `docs/venzo_ui_preview.html` (protótipo HTML executável com
+>   dark/light toggle, 631 linhas — referência visual concreta)
+> - `docs/venzo_brand_guide.docx` (paleta, tipografia, voz —
+>   continua sendo fonte da verdade)
+> - `docs/Sprint_14_UX_Application.md` (plano de execução,
+>   refactor map, voice & tone com exemplos antes/depois)
+>
+> Depois: hardening de produção (Sentry+Axiom wiring real,
 > Lighthouse audit, smoke test contra ambiente staging, load test
-> com k6), Sprint 13+ depende de feedback de campo. Sugestões para
-> roadmap: módulo de comissões automáticas, integração nativa
-> WhatsApp Business, marketplace de templates de proposta, agente
-> autônomo de prospecção.
+> com k6). Roadmap futuro: módulo de comissões automáticas,
+> integração nativa WhatsApp Business, marketplace de templates
+> de proposta, agente autônomo de prospecção.
 >
 > Histórico Sprint 11: migration `0013_lgpd_security`
 > (`data_subject_requests` com SLA 15d ANPD + `policy_acceptances`
@@ -76,6 +98,59 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 _Nenhum débito aberto._ (Sprints 1 e 2 foram fechados na Sprint 11.)
 
 ---
+
+### Sprint 13 — UI Hardening + Onboarding Guiado (concluído)
+- [x] Migration `0015_tenant_setup_state` — `Tenant.setupCompletedAt` +
+      `Tenant.tourDismissedAt`
+- [x] **Hardening segurança**: `users.updateRole` + `users.invite` agora
+      têm guard `assertCanAssignSuperAdmin` — apenas SUPER_ADMIN pode
+      atribuir/alterar role SUPER_ADMIN. ADMIN tentando promover ou
+      rebaixar SUPER_ADMIN recebe FORBIDDEN. UI espelha desabilitando
+      a opção no dropdown
+- [x] `onboarding-progress.service.ts` — `computeChecklist(tenantId)`
+      retorna 9 steps com heurísticas em tempo real (counts de users/
+      companies/products/approval_rules/territories/segments + booleans
+      de aiApiKey/inboundSlug/themeConfig); `dismissTour` +
+      `markSetupCompleteIfDone`
+- [x] Router `onboarding` estendido com `progress` (query),
+      `dismissTour` (mutation), `markCompleteIfDone` (mutation)
+- [x] `Sidebar.tsx` desktop fixa (>= md) — 2 seções (Operação 10 itens /
+      Administração 13 itens), colapsável com persistência em
+      localStorage, atalho `Cmd+B`/`Ctrl+B`, item ativo destacado com
+      `aria-current="page"`, item colapsado vira ícone com tooltip
+- [x] `SidebarSpacer` reserva largura para o main content (60 expandido,
+      14 colapsado) reagindo a evento de storage
+- [x] `AppShell` envolve children + Sidebar + BottomNav
+      (BottomNav agora restrito a `md:hidden` pelo seu próprio CSS;
+      hidden nas rotas auth/legal)
+- [x] `RootLayout` — `BottomNav` standalone substituído por `AppShell`
+- [x] WCAG explícito em todos os novos componentes:
+      - botão de colapsar tem `aria-expanded` + `aria-label` +
+        `focus-visible:ring-2 focus-visible:ring-brand`
+      - todos os forms usam pattern `<Field label htmlFor>` com `aria-required`
+        inferido automaticamente
+      - tabelas com `<caption>` e `scope="col"` em todas as headers
+      - progress bar usa `role="progressbar"` com `aria-valuenow/min/max`
+      - lista de steps com `role="list"` e ícones com `aria-label`
+- [x] `/contacts` standalone — lista com filtros (busca, área, tipo de
+      relacionamento), form unificado create/update, soft delete,
+      vinculação opcional a empresa
+- [x] `/admin/products` CRUD completo — name, type (5 opções),
+      sku, minMarginPct (0-100), active flag, soft delete
+- [x] `/admin/users` CRUD — tabela com lastLoginAt, dropdown role com
+      7 opções (SUPER_ADMIN só visível para SUPER_ADMIN), modal de
+      convite com role default ANALISTA, botão desativar com confirm
+- [x] `OnboardingChecklist` componente — 2 variantes: `compact`
+      (card no /dashboard, dispensável) e `full` (página completa).
+      Esconde quando `setupCompletedAt` ou `tourDismissedAt` setados
+- [x] `/onboarding/setup` — página dedicada com checklist `full`
+      mostrada após `createFirstTenant`; auto-tenta marcar como
+      completo ao montar
+- [x] `/more` mantém lista funcional para mobile + aviso visual em
+      desktop apontando para a sidebar (sem redirect server-side, deep
+      links continuam funcionando)
+- [x] Testes: 217/217 unit (+10 Sprint 13: onboarding-progress shape +5,
+      users-role-guard SUPER_ADMIN +5). Type-check zero. Lint zero
 
 ### Sprint 12 — Billing e Self-service (concluído)
 - [x] Migration `0014_billing` — Tenant ganha stripeCustomerId/

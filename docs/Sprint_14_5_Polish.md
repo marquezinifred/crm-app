@@ -10,6 +10,20 @@ Esforço estimado: **3–4 dias** (não exige migrations nem novas APIs;
 
 ---
 
+## ⚠️ Ordem de execução obrigatória
+
+Pra evitar invalidar o baseline visual e retrabalho:
+
+1. **Item 2** (border-radius) — **PRIMEIRO**, antes de qualquer outra
+   coisa. Muda tokens globais e afeta cada canto da app.
+2. **Itens 1, 3, 4, 5, 6, 7** — em qualquer ordem.
+3. **Item 9** (visual baseline) — **POR ÚLTIMO**, após todas as
+   mudanças visuais terem aterrissado. Captura o estado final como
+   baseline pra próximos sprints.
+4. **Item 8** (Lighthouse) — standby (depende de staging — Sprint 15).
+
+---
+
 ## 1. PipelineBoard + OpportunityCard — overflow de valor
 
 **Problema:** valores monetários ultrapassam a largura dos cards
@@ -152,7 +166,7 @@ os tokens via CSS vars.
 
 ---
 
-## 4. Polish individual das telas internas críticas
+## 4. Polish individual das telas internas críticas (~21 rotas)
 
 **Problema:** Sprint 14 entregou refactor **mecânico** das 25+ telas
 (perl pass substituindo `bg-white` → `bg-card` etc) mas só 8 telas
@@ -164,7 +178,10 @@ As **telas internas** ainda têm potencial de inconsistências:
 hierarquia tipográfica, espaçamento, voz Venzo profunda, empty states
 ricos, microcopy.
 
-**Solução:** pass de polish nas 9 telas internas críticas:
+**Solução:** pass de polish em **9 operacionais + 12 admin = 21 rotas**.
+`/admin/branding` e `/admin/billing` já receberam polish profundo no
+Sprint 14 (são as 2 telas mais maduras do admin) — listadas abaixo
+mas a verificação é leve.
 
 | Rota | Foco |
 |---|---|
@@ -177,9 +194,21 @@ ricos, microcopy.
 | `/approvals` | Lista densa com badge status, ações rápidas (Aprovar/Rejeitar inline com confirm modal) |
 | `/contracts` | Tabela com filtros (status, lead time), badge status semântico |
 | `/imports` | Wizard com steps refinados (number+label, ativo highlight, completed check) |
-| `/admin/*` (12 rotas) | Layout consistente: header `<h1>Título</h1><p>Descrição</p>` + ação primária à direita; conteúdo em card |
+| `/admin/ai` | PageHeader + form do design system |
+| `/admin/alerts` | PageHeader + config card |
+| `/admin/approval-rules` | PageHeader + Table de regras + Modal de criar/editar |
+| `/admin/billing` | ✅ já polida no Sprint 14 — verificação leve |
+| `/admin/branding` | ✅ já polida no Sprint 14 — verificação leve |
+| `/admin/contracts` | PageHeader + config card (handoff emails, lead times) |
+| `/admin/conversion-rates` | PageHeader + Table de estágios editável + Sugestão IA |
+| `/admin/email-inbound` | PageHeader + config card (slug, webhook secret) |
+| `/admin/partners` | PageHeader + Table de parceiros + Modal de convite |
+| `/admin/privacy` | PageHeader + Table de pedidos LGPD com badge de SLA |
+| `/admin/products` | PageHeader + Table de produtos + Modal de criar/editar |
+| `/admin/templates` | PageHeader + Table de templates por categoria |
+| `/admin/users` | PageHeader + Table de usuários + Modal de convite |
 
-Aplicar em cada rota:
+Aplicar em cada rota (exceto as 2 já marcadas ✅):
 - `<PageHeader title="X" description="Y" primaryAction={<Button>}>`
 - Tabela/lista usando `Table` + `TableEmpty` + `TableSkeleton`
 - Empty state com `<EmptyState icon title description action>`
@@ -189,30 +218,28 @@ Aplicar em cada rota:
 
 ---
 
-## 5. Popover (não implementado no Sprint 14)
+## 5. Popover (via shadcn — não from scratch)
 
 **Problema:** Tooltip foi entregue, Popover não.
 
-**Solução:**
+**Solução:** **NÃO construir do zero.** O projeto já usa shadcn/ui +
+Radix; o `Popover` do Radix tem focus trap, Escape, posicionamento
+automático via Floating UI e é totalmente acessível.
+
+```bash
+npx shadcn-ui@latest add popover
+```
+
+Isso adiciona `@radix-ui/react-popover` no `package.json` e cria
+`src/components/ui/popover.tsx` como wrapper estilizado do Radix.
+Depois é só customizar pra consumir tokens Venzo:
 
 ```tsx
-// src/components/ui/popover.tsx
-export function Popover({ trigger, children }: ...) {
-  const [open, setOpen] = useState(false);
-  // ...focus trap, Escape fecha, posicionamento auto-adjust
-  return (
-    <>
-      {cloneElement(trigger, { onClick: () => setOpen(o => !o) })}
-      {open && createPortal(
-        <div role="dialog" aria-modal="false"
-             className="absolute z-50 max-w-80 rounded-lg border border-border bg-card p-4 shadow-lg">
-          {children}
-        </div>,
-        document.body
-      )}
-    </>
-  );
-}
+// src/components/ui/popover.tsx (após shadcn add)
+// — confirmar que PopoverContent usa:
+//   bg-card border-border rounded-lg shadow-lg p-4
+//   max-w-80 z-50
+//   data-[state=open]:animate-in data-[state=closed]:animate-out
 ```
 
 **Usos imediatos:**
@@ -220,24 +247,38 @@ export function Popover({ trigger, children }: ...) {
 - Settings inline do card de oportunidade
 - Métricas detalhadas do funil (hover no valor total da coluna)
 
-**Esforço:** ~3h.
+**Esforço:** ~1h (era 3h — shadcn add economiza ~2h).
 
 ---
 
-## 6. DetailSheet com tabs + bottom sheet mobile
+## 6. DetailSheet com tabs + bottom sheet mobile (sem swipe gesture)
 
 **Problema:** Sprint 14 entregou as intercepting routes (URL preservada,
 sheet de 400px no desktop) mas **falta:**
 - Tabs internas (Visão Geral / Atividades / Documentos / Histórico)
-- Bottom sheet mobile 85vh com handle de arrastar
+- Bottom sheet mobile 85vh
 - Animação slide-in 200ms
+
+**Decisão arquitetural — swipe-down fica fora do escopo:**
+O projeto **não tem `framer-motion`** (confirmado no `package.json`).
+Implementar swipe-down com snap e threshold corretos exige adicionar
+`framer-motion` (~130kb) + decisões sobre snap intermediário,
+threshold de velocidade, etc. Pra evitar inflar bundle e inventar
+comportamentos sem spec, **bottom sheet fecha apenas via:**
+- Botão X no header
+- Tap no overlay
+- Tecla Escape
+- Botão Voltar do navegador (intercepting route já cuida)
+
+Swipe-down entra num sprint futuro **se** framer-motion for adotado
+oficialmente (provavelmente Sprint 15+ pra microinterações).
 
 **Solução:**
 
 ```tsx
 // app/pipeline/@modal/(.)[id]/page.tsx
 <Sheet variant={isMobile ? 'bottom' : 'right'} onClose={...}>
-  <SheetHeader title={opp.name} status={opp.stage} />
+  <SheetHeader title={opp.name} status={opp.stage} onClose={...} />
   <Tabs defaultValue="overview">
     <TabsList>
       <TabsTrigger value="overview">Visão Geral</TabsTrigger>
@@ -251,13 +292,19 @@ sheet de 400px no desktop) mas **falta:**
 </Sheet>
 ```
 
-- Desktop: `slide-in-right` 400px, overlay dim 40%
-- Mobile (`< 768px`): bottom sheet 85vh, swipe down fecha, handle de arrastar
+- Desktop: `slide-in-right` 400px via CSS transition (300ms), overlay dim 40%
+- Mobile (`< 768px`): bottom sheet 85vh com slide-up via CSS transition; overlay tap fecha
 - Escape fecha; foco retorna ao trigger
+- Handle de arrastar mantido como **decoração visual** (linha cinza
+  ao topo) mesmo sem ser arrastável — sinaliza affordance pra
+  futuro swipe
 
-**Arquivos:** `src/components/ui/sheet.tsx` (novo), `src/components/ui/tabs.tsx` (se ainda não tem), `app/pipeline/@modal/(.)[id]/page.tsx`.
+**Arquivos:** `src/components/ui/sheet.tsx` (novo, **sem** framer-motion;
+puro CSS + Radix Dialog), `src/components/ui/tabs.tsx` (via
+`npx shadcn-ui@latest add tabs` se ainda não existe),
+`app/pipeline/@modal/(.)[id]/page.tsx`.
 
-**Esforço:** ~4h.
+**Esforço:** ~3h (era 4h — sem swipe economiza ~1h).
 
 ---
 
@@ -271,8 +318,8 @@ sheet de 400px no desktop) mas **falta:**
 
 **Solução:**
 
-`<ContextBanner variant="past-due | offline | maintenance" />` no
-`<AppShell>` no topo, abaixo do `<TrialExpiryBanner>`:
+`<ContextBanners />` no `<AppShell>` no topo, abaixo do
+`<TrialExpiryBanner>`:
 
 ```tsx
 // src/components/layout/ContextBanners.tsx
@@ -281,7 +328,7 @@ export function ContextBanners() {
     <>
       <PastDueBanner />     {/* checa subscription.status === 'past_due' */}
       <OfflineBanner />     {/* navigator.onLine listener */}
-      <MaintenanceBanner /> {/* env MAINTENANCE_WINDOW_START/END */}
+      <MaintenanceBanner /> {/* env NEXT_PUBLIC_MAINTENANCE_MESSAGE */}
     </>
   );
 }
@@ -290,7 +337,29 @@ export function ContextBanners() {
 Spec §7.3:
 - **Past due** — vermelho, link pra `/admin/billing`, não descartável
 - **Offline** — amarelo, ícone `wifi-off`, reconecta automaticamente
-- **Manutenção** — info azul, data e hora de conclusão
+- **Manutenção** — info azul, descartável
+
+**Formato do env de manutenção (decidido):**
+
+```bash
+# .env.local — vazio (default) = banner oculto
+NEXT_PUBLIC_MAINTENANCE_MESSAGE=
+
+# Qualquer string não-vazia = banner visível com aquela mensagem
+NEXT_PUBLIC_MAINTENANCE_MESSAGE=Manutenção programada até 14h. Sistema disponível em breve.
+```
+
+Simples, flexível, ops controla pelo Vercel env vars sem deploy.
+Sem parsing de range temporal, sem ISO date, sem boolean. Se ops
+quiser que o banner suma, esvazia o env e revalida.
+
+Atualizar `src/lib/env.ts`:
+```ts
+NEXT_PUBLIC_MAINTENANCE_MESSAGE: z.string().optional().default(''),
+```
+
+`MaintenanceBanner` retorna `null` se mensagem vazia, render do banner
+caso contrário.
 
 **Esforço:** ~2h.
 
@@ -343,19 +412,20 @@ Captura o estado atual pós-Sprint 14 como baseline. Próximos sprints
 
 ## Resumo de esforço
 
-| Item | Esforço |
-|---|---|
-| 1. PipelineBoard + OpportunityCard overflow | 2–3h |
-| 2. Border-radius bump | 30min |
-| 3. FunnelChart `/reports` | 3–4h |
-| 4. Polish 9 telas internas | 1.5–2 dias |
-| 5. Popover | 3h |
-| 6. DetailSheet tabs + bottom sheet | 4h |
-| 7. Banners contextuais (past due, offline, maintenance) | 2h |
-| 8. Lighthouse audit (depende staging) | standby |
-| 9. Visual baseline (pode agora) | 1.5h |
+| Item | Esforço | Ajuste vs v1 |
+|---|---|---|
+| **2. Border-radius bump (PRIMEIRO)** | 30min | — |
+| 1. PipelineBoard + OpportunityCard overflow | 2–3h | — |
+| 3. FunnelChart `/reports` | 3–4h | — |
+| 4. Polish 21 rotas internas (9 + 12 admin) | 1.5–2 dias | escopo explícito |
+| 5. Popover via `shadcn add popover` | **1h** | ⬇️ era 3h, não from scratch |
+| 6. DetailSheet tabs + bottom sheet (sem swipe) | **3h** | ⬇️ era 4h, sem framer-motion |
+| 7. Banners (past due, offline, maintenance) | 2h | NEXT_PUBLIC_MAINTENANCE_MESSAGE definido |
+| **9. Visual baseline (POR ÚLTIMO)** | 1.5h | move pro fim |
+| 8. Lighthouse audit (depende staging) | standby | — |
 
-**Total: ~3–4 dias** de trabalho de design polish.
+**Total: ~3 dias** de trabalho de design polish (era 3–4; ajustes
+de escopo apertaram).
 
 ## Não é escopo desse sprint
 
@@ -368,13 +438,20 @@ Captura o estado atual pós-Sprint 14 como baseline. Próximos sprints
 
 ## Critérios de aceite
 
+- ✅ Border-radius dos cards mais generoso aplicado **primeiro**
+  (sm 6 / 8 / md 12 / lg 16 / xl 20)
 - ✅ Pipeline kanban: colunas ≥ 280px, valores em gold/tabular-nums abaixo do nome, sem overflow
-- ✅ Border-radius dos cards mais generoso (visual respira)
 - ✅ FunnelChart com layout interno, largura por contagem, sinal correto, opcionalmente SVG funil
-- ✅ 9 telas internas com `<PageHeader>` consistente + empty states com voz Venzo + tabelas refinadas
-- ✅ Popover disponível como componente
-- ✅ DetailSheet com 4 tabs no desktop + bottom sheet mobile
-- ✅ Past due / offline / maintenance banners funcionando
-- ✅ Visual baseline capturado e commitado (item 9)
+- ✅ **21 rotas internas** com `<PageHeader>` consistente + empty
+  states com voz Venzo + tabelas refinadas (9 operacionais + 12
+  admin, exceto `/admin/branding` e `/admin/billing` que já tinham
+  polish profundo)
+- ✅ Popover via shadcn (`@radix-ui/react-popover` agregado no package)
+- ✅ DetailSheet com 4 tabs no desktop + bottom sheet mobile (fecha
+  via X, overlay, Escape; swipe-down fora do escopo — Sprint 15+)
+- ✅ Past due / offline / maintenance banners funcionando.
+  `NEXT_PUBLIC_MAINTENANCE_MESSAGE` controla manutenção (vazio = oculto)
+- ✅ Visual baseline capturado **por último**, após todos os items
+  visuais, e commitado em `tests/visual/baseline/`
 - ✅ 235+ testes anteriores continuam passando + ≥ 10 novos
 - 🟡 Lighthouse ≥ 90 (aguarda staging — Sprint 15)

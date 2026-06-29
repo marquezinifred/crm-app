@@ -16,7 +16,7 @@ jobs:
   npm-audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -31,7 +31,7 @@ jobs:
     container:
       image: returntocorp/semgrep
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: semgrep ci --config p/owasp-top-ten --config p/typescript --config p/nextjs --sarif --output=semgrep.sarif || true
       - uses: github/codeql-action/upload-sarif@v3
         if: always()
@@ -43,7 +43,7 @@ jobs:
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: ZAP baseline scan (staging)
         uses: zaproxy/action-baseline@v0.12.0
         with:

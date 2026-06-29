@@ -11,11 +11,39 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 ## Sprint atual
 
-> **Sprint 10.5 — White-Label Theming e Identidade Venzo: ✅ CONCLUÍDO em 2026-06-28**
+> **Sprint 12 — Billing e Self-service: ✅ CONCLUÍDO em 2026-06-28**
 >
-> Próximo: **Sprint 11 — Segurança, LGPD e Conformidade** (Cloudflare
-> WAF, rate limiting, security headers, cookie banner LGPD, workflows
-> LGPD, logs imutáveis, OWASP ZAP). Fecha os 2 últimos débitos.
+> 🎉 **MVP completo.** 12 sprints (0–12) executados sem débitos abertos.
+>
+> Próximo (pós-MVP): hardening de produção (Sentry+Axiom wiring real,
+> Lighthouse audit, smoke test contra ambiente staging, load test
+> com k6), Sprint 13+ depende de feedback de campo. Sugestões para
+> roadmap: módulo de comissões automáticas, integração nativa
+> WhatsApp Business, marketplace de templates de proposta, agente
+> autônomo de prospecção.
+>
+> Histórico Sprint 11: migration `0013_lgpd_security`
+> (`data_subject_requests` com SLA 15d ANPD + `policy_acceptances`
+> imutável + `connection_logs` WORM Marco Civil), middleware aplica
+> security headers globais (HSTS, CSP, X-Frame-Options DENY,
+> Permissions-Policy), rate limiter Redis sliding window (5
+> login/15min/IP, 10 form público/min, 1000 req/min/tenant),
+> cookie banner granular 4 categorias com ConsentLog integration,
+> workflows LGPD `collectPersonalData` (export JSON) +
+> `anonymizeSubject` (preserva FKs, scrubba activities), endpoint
+> público `POST /api/v1/privacy-request` + router tRPC `privacy`,
+> UI `/privacy-request` + `/admin/privacy`, Política Privacidade
+> + Termos versionados com `PolicyAcceptGate` que força aceite,
+> Dependabot 3 ecossistemas (npm/actions/docker) + GH Actions
+> security workflow (npm audit, Semgrep p/owasp-top-ten, ZAP
+> baseline semanal).
+
+> **Débitos zerados na Sprint 11:**
+>  - Sprint 1: middleware grava x-real-ip a partir de
+>    x-forwarded-for em paralelo ao webhook Clerk ✅
+>  - Sprint 2: E2E `pipeline-7-stages.spec.ts` agora roda via
+>    fixture (E2E_TEST_TENANT_ID + E2E_RESET_URL + bypass
+>    `/api/e2e/login` ativo só em NODE_ENV=test) ✅
 >
 > Histórico Sprint 10.5: (tabela `tenant_settings.theme_config` JSONB,
 > CSS custom props `--brand-*` injetadas no RootLayout, cache Redis
@@ -45,14 +73,111 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 ## Débitos técnicos com dependência cruzada (registrados para sprints futuros)
 
-| Origem | Pendência | Resolve em |
-|--------|-----------|-----------|
-| Sprint 2 | E2E `pipeline-7-stages.spec.ts` está `test.skip` — depende de fixture Clerk + reset de banco entre testes em CI | Sprint 11 (Segurança + hardening de CI) |
-| Sprint 1 | Webhook Clerk `session.created` registra IP/UA do edge Clerk, não do dispositivo final — middleware Next deve gravar em paralelo via `x-forwarded-for` | Sprint 11 |
-
-Cada item acima é referenciado nos prompts do sprint que vai resolvê-lo. Verificar este quadro antes de iniciar Sprints 7, 8 e 11.
+_Nenhum débito aberto._ (Sprints 1 e 2 foram fechados na Sprint 11.)
 
 ---
+
+### Sprint 12 — Billing e Self-service (concluído)
+- [x] Migration `0014_billing` — Tenant ganha stripeCustomerId/
+      stripeSubscriptionId/subscriptionStatus/currentPeriodEnd/
+      trialEndsAt + tabela `billing_events` IMUTÁVEL (RLS sem
+      UPDATE/DELETE, idempotência via stripe_event_id UNIQUE) +
+      tabela `usage_snapshots` com RLS padrão + backfill
+      trial_ends_at = created_at + 14d nos tenants TRIAL
+- [x] 2 enums: `BillingEventType` (7 tipos), `SubscriptionStatus`
+      (TRIALING/ACTIVE/PAST_DUE/CANCELED/INCOMPLETE)
+- [x] `stripe-client.ts` — Stripe SDK singleton + `priceIdForPlan` +
+      `planFromPriceId` (mapeia STRIPE_PRICE_STARTER/PRO/ENTERPRISE)
+- [x] `billing-checkout.service.ts` — `ensureCustomer` (cria/recupera
+      Stripe Customer com metadata.tenantId) + `startCheckoutSession`
+      (subscription mode + promotion codes + success/cancel URLs) +
+      `openCustomerPortal` (URL do Billing Portal)
+- [x] `billing-webhook.service.ts` — processa 7 tipos de evento Stripe
+      (checkout.session.completed, customer.subscription.*,
+      invoice.paid/payment_failed, trial_will_end); idempotente via
+      lookup BillingEvent.stripeEventId; `applySubscription`
+      atualiza Tenant.plan + status + currentPeriodEnd
+- [x] Endpoint `POST /api/stripe/webhook` valida assinatura via
+      `Stripe.webhooks.constructEvent` + chama processStripeEvent;
+      retorna 503 se Stripe não configurado, 400 sem assinatura,
+      500 em erro recuperável (Stripe reenvia)
+- [x] `plan-limits.ts` — PLAN_LIMITS por tenant (maxUsers/companies/
+      contacts/storageBytes/aiTokensMonth + 6 features booleans);
+      Enterprise tem Infinity; hidePoweredBy/overrideWcag só Enterprise
+- [x] `usage.service.ts` — `collectCurrentUsage` agrega counts +
+      storage (sum sizeBytes de documentVersions) + tokens IA do mês +
+      cost convertido para centavos; `takeSnapshot` grava em
+      usage_snapshots
+- [x] `storage-s3.service.ts` — wrapper @aws-sdk/client-s3 +
+      s3-request-presigner; uploadObject + presignDownload (24h);
+      retorna null se S3 não configurado (fallback gracioso)
+- [x] Privacy workflow agora envia ACCESS/PORTABILITY para S3 com
+      key `privacy-exports/<tenantId>/<requestId>.json`; fallback
+      inline:base64 mantido. `exportPayload` retorna `{kind:'s3',url}`
+      com presigned 24h OU `{kind:'inline',preview}`
+- [x] Router tRPC `billing` — status (plano + Stripe status),
+      startCheckout (URL de redirect), openPortal, currentUsage
+      (com checks vs limites), history (últimos 50 eventos)
+- [x] UI `/admin/billing` — card plano atual com status + período +
+      trial; 3 cards de planos com features e botão Mudar;
+      seção Uso atual com 5 barras (users/companies/contacts/storage/
+      tokens) coloridas (verde <80%, âmbar 80–100%, vermelho excedido);
+      histórico de eventos
+- [x] `TrialExpiryBanner` global no layout — amarelo se trial termina
+      em ≤7 dias, vermelho se já expirou ou subscription past_due
+- [x] env: `STRIPE_PRICE_STARTER`, `STRIPE_PRICE_PRO`,
+      `STRIPE_PRICE_ENTERPRISE` (todos optional)
+- [x] Testes: 207/207 unit (+11 Sprint 12: plan-limits +7,
+      stripe-client +4)
+
+### Sprint 11 — Segurança, LGPD e Conformidade (concluído)
+- [x] Migration `0013_lgpd_security` — `data_subject_requests` (SLA 15d
+      ANPD via dueAt auto-calculado, status PENDING/IN_PROGRESS/
+      COMPLETED/REJECTED, processed_by_id, export_file_key), tabela
+      `policy_acceptances` IMUTÁVEL (RLS sem policies UPDATE/DELETE),
+      tabela `connection_logs` WORM (Marco Civil Art. 15, INSERT/SELECT
+      apenas) + 3 enums + RLS padrão para data_subject_requests
+- [x] Middleware Next — aplica `SECURITY_HEADERS` em todas as respostas
+      (HSTS prod, CSP com frame-ancestors none + object-src none,
+      X-Frame-Options DENY, Permissions-Policy camera/mic/geo desligados,
+      X-Content-Type-Options nosniff, Referrer-Policy strict-origin)
+- [x] **Fechado débito Sprint 1**: middleware propaga `x-real-ip`
+      derivado de `x-forwarded-for` em paralelo ao webhook Clerk
+- [x] `rate-limiter.service.ts` — sliding window via Redis INCR+EXPIRE,
+      fallback open quando Redis indisponível, helpers LOGIN_LIMIT
+      (5/15min), PUBLIC_FORM_LIMIT (10/min), API_LIMIT_PER_TENANT (1000/min)
+- [x] `CookieBanner` LGPD granular — 4 categorias com STRICTLY_NECESSARY
+      sempre on, persiste em localStorage E grava `ConsentLog` no
+      backend via `POST /api/v1/consent` (com IP + tenant_id se autenticado)
+- [x] `privacy-workflow.service.ts` — `collectPersonalData` agrega
+      users/contacts/activities/audit/consent + nota sobre Marco Civil;
+      `anonymizeSubject` substitui PII por anon-{base36} preservando
+      FKs, scrubba rawText de activities, marca deleted_at em users
+      e contacts; logs de conexão preservados
+- [x] Endpoint público `POST /api/v1/privacy-request` (com rate limit
+      PUBLIC_FORM_LIMIT) + endpoint público `POST /api/v1/consent`
+- [x] Router tRPC `privacy` — submitRequest (public), listPending/listAll
+      (admin), process (gera export ou anonimiza), reject, exportPayload,
+      acceptPolicy, myAcceptedVersions
+- [x] UI `/privacy-request` (público, sem auth) + `/admin/privacy` (fila
+      com badges de status, indicador ATRASADO em vermelho se dueAt
+      vencido, botões Processar e Rejeitar com justificativa)
+- [x] `/privacy` + `/terms` páginas estáticas versionadas via
+      `POLICY_VERSIONS` + `PolicyAcceptGate` modal forçando aceite
+      quando versão atual não consta em `policy_acceptances`
+- [x] `.github/dependabot.yml` — npm semanal (grupos prod/dev), GH
+      Actions semanal, Docker mensal
+- [x] `.github/workflows/security.yml` — npm audit (rompe build em
+      vulnerabilidade ≥ high), Semgrep (p/owasp-top-ten + p/typescript
+      + p/nextjs com SARIF upload), ZAP baseline scan semanal contra
+      STAGING_URL
+- [x] **Fechado débito Sprint 2**: fixture E2E em
+      `tests/e2e/fixtures/auth.ts` (loginAsAdmin + resetDatabase) +
+      bypass `POST /api/e2e/login` ativo APENAS em NODE_ENV=test;
+      pipeline-7-stages.spec.ts não mais `test.skip`, agora skip
+      condicional na ausência de env vars E2E_TEST_TENANT_ID
+- [x] Testes: 196/196 unit (+11 Sprint 11: security-headers +4,
+      rate-limiter +4, anonymizer +3). Lint zero. Type-check zero
 
 ### Sprint 0 — Foundation (concluído)
 - [x] Next.js 14 + TS strict + Tailwind + shadcn/ui

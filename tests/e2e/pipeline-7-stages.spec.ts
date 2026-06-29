@@ -1,23 +1,31 @@
 import { test, expect } from '@playwright/test';
+import { loginAsAdmin, resetDatabase } from './fixtures/auth';
 
 /**
- * E2E "percorrer os 7 estágios" — Sprint 2.
+ * E2E "percorrer os 7 estágios" — Sprint 2 + fixture Sprint 11.
  *
  * Cobertura: criar oportunidade em Prospect → preencher campos por estágio →
  * avançar para Lead → Oportunidade → Proposta → Negociação → Aceite → Contrato.
  *
- * REQUER:
- *   - App rodando com banco seedado (3 tenants, usuários, companies)
- *   - Auth simulado: a página /pipeline expõe os botões diretamente; em ambiente
- *     com Clerk real, este teste depende de session cookie setado por fixture
- *     em CI (não coberto neste sprint — Sprint 11 endurece auth E2E).
+ * Pré-requisitos no ambiente CI:
+ *   - App rodando com NODE_ENV=test e endpoint /api/e2e/login habilitado
+ *   - E2E_TEST_TENANT_ID, E2E_TEST_USER_CLERK_ID configurados
+ *   - E2E_RESET_URL apontando para handler que executa `prisma migrate reset --skip-seed && seed`
  *
- * Por enquanto este spec é skipped por padrão. Tirar o `test.skip` para rodar
- * localmente quando o banco e o Clerk estiverem configurados.
+ * Localmente: definir essas variáveis e rodar `npm run test:e2e`.
  */
 
+const hasFixture = !!(process.env.E2E_TEST_TENANT_ID && process.env.E2E_TEST_USER_CLERK_ID);
+
 test.describe('Pipeline 7 estágios', () => {
-  test.skip('cria oportunidade e percorre Prospect → Contrato', async ({ page }) => {
+  test.beforeAll(async () => {
+    if (hasFixture) await resetDatabase();
+  });
+
+  test.skip(!hasFixture, 'fixture E2E não configurado (defina E2E_TEST_TENANT_ID + E2E_TEST_USER_CLERK_ID)');
+
+  test('cria oportunidade e percorre Prospect → Contrato', async ({ page, context }) => {
+    await loginAsAdmin(page, context);
     await page.goto('/pipeline/new');
 
     await page.getByLabel(/Título/).fill('E2E test deal');

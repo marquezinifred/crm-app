@@ -261,6 +261,44 @@ enum PoweredByMode {
   HIDDEN
 }
 
+enum DataSubjectRequestType {
+  ACCESS
+  CORRECTION
+  DELETION
+  PORTABILITY
+  OBJECTION
+}
+
+enum DataSubjectRequestStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+}
+
+enum PolicyDocument {
+  PRIVACY_POLICY
+  TERMS_OF_USE
+}
+
+enum BillingEventType {
+  CHECKOUT_COMPLETED
+  SUBSCRIPTION_CREATED
+  SUBSCRIPTION_UPDATED
+  SUBSCRIPTION_CANCELED
+  INVOICE_PAID
+  INVOICE_FAILED
+  TRIAL_WILL_END
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+}
+
 enum DocumentCategory {
   INSTITUCIONAL
   PROPOSTA_TECNICA
@@ -312,6 +350,12 @@ model Tenant {
   handoffEmails           String[]   @default([]) @map("handoff_emails")
   // Antecedências (em dias) para alertas de renovação contratual
   contractRenewalLeadDays Int[]      @default([90, 60, 30]) @map("contract_renewal_lead_days")
+  // Billing — Sprint 12
+  stripeCustomerId        String?    @unique @map("stripe_customer_id")
+  stripeSubscriptionId    String?    @unique @map("stripe_subscription_id")
+  subscriptionStatus      SubscriptionStatus? @map("subscription_status")
+  currentPeriodEnd        DateTime?  @map("current_period_end")
+  trialEndsAt             DateTime?  @map("trial_ends_at")
   createdAt               DateTime   @default(now()) @map("created_at")
   updatedAt               DateTime   @updatedAt @map("updated_at")
   deletedAt               DateTime?  @map("deleted_at")
@@ -350,6 +394,11 @@ model Tenant {
   importJobs              ImportJob[]
   pushSubscriptions       PushSubscription[]
   settings                TenantSettings?
+  dataSubjectRequests     DataSubjectRequest[]
+  policyAcceptances       PolicyAcceptance[]
+  connectionLogs          ConnectionLog[]
+  billingEvents           BillingEvent[]
+  usageSnapshots          UsageSnapshot[]
 
   @@map("tenants")
 }
@@ -1310,3 +1359,130 @@ model TenantSettings {
 
   @@map("tenant_settings")
 }
+
+// ---------------------------------------------------------------------
+// DataSubjectRequest (LGPD §18 — direitos do titular)
+//   Solicitações de acesso/correção/eliminação/portabilidade/oposição.
+//   SLA ANPD: 15 dias entre submittedAt e completedAt. due_at = +15d.
+// ---------------------------------------------------------------------
+
+model DataSubjectRequest {
+  id              String                   @id @default(uuid()) @db.Uuid
+  tenantId        String                   @map("tenant_id") @db.Uuid
+  requestType     DataSubjectRequestType   @map("request_type")
+  status          DataSubjectRequestStatus @default(PENDING)
+  subjectEmail    String                   @map("subject_email") @db.Citext
+  subjectName     String?                  @map("subject_name")
+  description     String?                  @db.Text
+  submittedAt     DateTime                 @default(now()) @map("submitted_at")
+  dueAt           DateTime                 @map("due_at")
+  completedAt     DateTime?                @map("completed_at")
+  exportFileKey   String?                  @map("export_file_key")
+  rejectionReason String?                  @map("rejection_reason") @db.Text
+  processedById   String?                  @map("processed_by_id") @db.Uuid
+  ip              String?
+  userAgent       String?                  @map("user_agent")
+  createdAt       DateTime                 @default(now()) @map("created_at")
+  updatedAt       DateTime                 @updatedAt @map("updated_at")
+  deletedAt       DateTime?                @map("deleted_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status, dueAt])
+  @@index([tenantId, subjectEmail])
+  @@map("data_subject_requests")
+}
+
+// ---------------------------------------------------------------------
+// PolicyAcceptance (Marco Civil — aceite registrado por versão)
+//   Aceite de Termos de Uso e Política de Privacidade. Cada nova versão
+//   exige novo aceite dos usuários ativos. Imutável (sem UPDATE/DELETE).
+// ---------------------------------------------------------------------
+
+model PolicyAcceptance {
+  id         String         @id @default(uuid()) @db.Uuid
+  tenantId   String         @map("tenant_id") @db.Uuid
+  userId     String?        @map("user_id") @db.Uuid
+  document   PolicyDocument
+  version    String
+  acceptedAt DateTime       @default(now()) @map("accepted_at")
+  ip         String?
+  userAgent  String?        @map("user_agent")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId, document])
+  @@map("policy_acceptances")
+}
+
+// ---------------------------------------------------------------------
+// ConnectionLog (Marco Civil Art. 15 — retenção mínima 1 ano)
+//   Logs de conexão imutáveis: IP, duração, método de auth, data/hora.
+//   Política RLS sem UPDATE/DELETE — append-only. Não é apagado nem em
+//   LGPD §18 (logs legais sobrevivem).
+// ---------------------------------------------------------------------
+
+model ConnectionLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String?  @map("tenant_id") @db.Uuid
+  userId      String?  @map("user_id") @db.Uuid
+  clerkUserId String?  @map("clerk_user_id")
+  ip          String?
+  userAgent   String?  @map("user_agent")
+  path        String?
+  durationMs  Int?     @map("duration_ms")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  @@index([clerkUserId, createdAt])
+  @@map("connection_logs")
+}
+
+// ---------------------------------------------------------------------
+// BillingEvent — Sprint 12
+//   Idempotência de webhooks Stripe. Cada stripeEventId só processa
+//   uma vez. Mantém payload bruto para auditoria/replay.
+// ---------------------------------------------------------------------
+
+model BillingEvent {
+  id              String           @id @default(uuid()) @db.Uuid
+  tenantId        String?          @map("tenant_id") @db.Uuid
+  type            BillingEventType
+  stripeEventId   String           @unique @map("stripe_event_id")
+  payload         Json
+  processedAt     DateTime         @default(now()) @map("processed_at")
+  error           String?
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, processedAt])
+  @@map("billing_events")
+}
+
+// ---------------------------------------------------------------------
+// UsageSnapshot — Sprint 12
+//   Snapshot diário do uso por tenant (BullMQ cron). Usado para
+//   enforcement de plano + gráficos /admin/billing. Granularidade dia.
+// ---------------------------------------------------------------------
+
+model UsageSnapshot {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  capturedAt      DateTime @default(now()) @map("captured_at")
+  // counts
+  userCount       Int      @default(0) @map("user_count")
+  companyCount    Int      @default(0) @map("company_count")
+  contactCount    Int      @default(0) @map("contact_count")
+  opportunityCount Int     @default(0) @map("opportunity_count")
+  storageBytes    BigInt   @default(0) @map("storage_bytes")
+  aiTokensMonth   Int      @default(0) @map("ai_tokens_month")
+  aiCostCentsMonth Int     @default(0) @map("ai_cost_cents_month")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, capturedAt])
+  @@map("usage_snapshots")
+}
+

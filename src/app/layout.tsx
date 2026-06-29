@@ -4,6 +4,8 @@ import localFont from 'next/font/local';
 import { TrpcProvider } from '@/lib/trpc/provider';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { PoweredByBadge } from '@/components/layout/PoweredByBadge';
+import { CookieBanner } from '@/components/legal/CookieBanner';
+import { TrialExpiryBanner } from '@/components/billing/TrialExpiryBanner';
 import { resolveTenantTheme, buildBrandStyle } from '@/lib/theme/server';
 import { googleFontsUrl } from '@/lib/theme/curated-fonts';
 import './globals.css';
@@ -62,9 +64,13 @@ export default async function RootLayout({
           className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground pb-16 md:pb-0`}
           style={{ fontFamily: 'var(--brand-font)' }}
         >
-          <TrpcProvider>{children}</TrpcProvider>
+          <TrpcProvider>
+            <TrialExpiryBanner />
+            {children}
+          </TrpcProvider>
           <BottomNav />
           <PoweredByBadge poweredBy={theme.poweredBy} />
+          <CookieBanner />
         </body>
       </html>
     </ClerkProvider>

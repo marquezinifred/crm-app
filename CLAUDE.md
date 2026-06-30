@@ -542,6 +542,13 @@ foram fechados na Sprint 11.
 - P-01 Fix `/companies/new` + `/contacts/new` 404 — commit `54dab90`
 - Sprint 15A débito UNIQUE(clerk_id) — commit `62ea353` (migration 0026 + dual identity)
 - Platform Owner setup completo (JWT template + public_metadata + seed)
+- P-11 Middleware dual identity (headers Platform) — `src/middleware.ts`
+  injetava só `x-tenant-id/x-user-clerk-id/x-user-role` no branch
+  final, omitindo `x-platform-*` mesmo com `platformRole=PLATFORM_OWNER`
+  no JWT. Resultado: `/platform/dashboard` retornava 403 do tRPC pra
+  Fred (dual identity). Fix: helper `injectPlatformHeadersIfOwner()`
+  chamado em paralelo aos headers tenant. +4 testes unitários,
+  372/378 passing (4 falhas + 2 skipped pré-existentes por env vars)
 
 ---
 

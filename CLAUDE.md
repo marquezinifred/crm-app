@@ -168,6 +168,19 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 >    (substitui MaintenanceBanner com targeting ALL/BY_PLAN/MANUAL).
 >    Pré-requisito de escala. Depende de 15A.
 >
+> 3. **Sprint 15C — Usabilidade: Forms, Listas Configuráveis e
+>    QuickCreate** — ~7 dias. Spec: `docs/Sprint_15C_Usabilidade_Forms.md`.
+>    QuickCreate Pattern reutilizável (criar empresa/contato/produto
+>    inline sem perder contexto do form pai), correções no form de
+>    empresa (scroll quebrado, toasts ausentes, País/Estado/Cidade
+>    IBGE), CEP auto-fill + máscaras visuais CNPJ/CEP, 3 tabelas
+>    novas configuráveis (lead_sources, industries, contact_roles)
+>    com UI unificada em /admin/listas, hardening UX
+>    (auto-focus, dirty state warning, loading buttons), aplicação
+>    cross-forms. Migrations 0022 (company address) + 0023
+>    (configurable_lists). Depende de 15B (evita conflito em
+>    arquivos compartilhados).
+>
 > Outros: hardening produção (Sentry+Axiom wiring, k6 load test) —
 > spec'd como Sprint 16 no backlog.
 >

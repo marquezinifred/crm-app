@@ -1,18 +1,24 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CompanyType } from '@prisma/client';
 import { trpc } from '@/lib/trpc/client';
 import { Field } from '@/components/ui/field';
 import { Input, Select, Textarea } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { useDebouncedValue } from '@/lib/utils/hooks';
+import { isValidCnpj, stripCnpj } from '@/lib/validators/cnpj';
+import { lookupCnpj, type CnpjData, type CnpjLookupResult } from '@/lib/cnpj/lookup';
+import { mergeCnpjAutofill } from '@/lib/cnpj/autofill';
 
 /**
- * CompanyForm — sprint corretivo /companies (fix 404 ghost route).
+ * CompanyForm — sprint corretivo /companies (fix 404 ghost route) +
+ * autofill BrasilAPI por CNPJ.
  *
  * Reusa tRPC procedures companies.create/update existentes.
- * Quando `companyId` é passado, carrega via byId e preenche o form.
- * onSuccess invalida companies.list e chama callback.
+ * Quando `companyId` é passado, carrega via byId e preenche o form
+ * (e desliga o autofill — empresa já existe).
  */
 
 const TYPE_LABEL: Record<CompanyType, string> = {
@@ -54,6 +60,23 @@ const EMPTY: FormState = {
   notes: '',
 };
 
+type LookupStatus =
+  | { kind: 'idle' }
+  | { kind: 'loading' }
+  | { kind: 'ok'; data: CnpjData; preserved: string[] }
+  | { kind: 'inactive'; data: CnpjData; situacao: string }
+  | { kind: 'not-found' }
+  | { kind: 'rate-limited' }
+  | { kind: 'error'; message: string };
+
+const FIELD_LABEL: Record<string, string> = {
+  razaoSocial: 'Razão social',
+  nomeFantasia: 'Nome fantasia',
+  state: 'UF',
+  city: 'Cidade',
+  phone: 'Telefone',
+};
+
 export function CompanyForm({
   companyId,
   onSuccess,
@@ -66,10 +89,15 @@ export function CompanyForm({
   const utils = trpc.useUtils();
   const [form, setForm] = useState<FormState>(EMPTY);
   const [error, setError] = useState<string | null>(null);
+  const [lookup, setLookup] = useState<LookupStatus>({ kind: 'idle' });
+  const lookupAbort = useRef<AbortController | null>(null);
+  const lastLookedUp = useRef<string | null>(null);
+
+  const isEditMode = Boolean(companyId);
 
   const existing = trpc.companies.byId.useQuery(
     { id: companyId ?? '' },
-    { enabled: Boolean(companyId), staleTime: 0 },
+    { enabled: isEditMode, staleTime: 0 },
   );
   const territories = trpc.territories.list.useQuery();
   const segments = trpc.segments.list.useQuery();
@@ -94,6 +122,73 @@ export function CompanyForm({
       });
     }
   }, [existing.data]);
+
+  const debouncedCnpj = useDebouncedValue(form.cnpj, 500);
+  const cnpjDigits = useMemo(() => stripCnpj(debouncedCnpj), [debouncedCnpj]);
+
+  const runLookup = useCallback(
+    async (digits: string, currentForm: FormState) => {
+      lookupAbort.current?.abort();
+      const ctrl = new AbortController();
+      lookupAbort.current = ctrl;
+
+      setLookup({ kind: 'loading' });
+      const result: CnpjLookupResult = await lookupCnpj(digits, { signal: ctrl.signal });
+      if (ctrl.signal.aborted) return;
+
+      if (result.status === 'ok' || result.status === 'inactive') {
+        const { next, preserved } = mergeCnpjAutofill(currentForm, result.data);
+        setForm(next);
+        if (result.status === 'ok') {
+          setLookup({
+            kind: 'ok',
+            data: result.data,
+            preserved: preserved.map((k) => FIELD_LABEL[k] ?? k),
+          });
+        } else {
+          setLookup({ kind: 'inactive', data: result.data, situacao: result.situacao });
+        }
+        return;
+      }
+      if (result.status === 'not-found') return setLookup({ kind: 'not-found' });
+      if (result.status === 'rate-limited') return setLookup({ kind: 'rate-limited' });
+      setLookup({ kind: 'error', message: result.message });
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (isEditMode) return;
+    if (cnpjDigits.length !== 14) {
+      lookupAbort.current?.abort();
+      if (lookup.kind !== 'idle') setLookup({ kind: 'idle' });
+      lastLookedUp.current = null;
+      return;
+    }
+    if (!isValidCnpj(cnpjDigits)) {
+      lookupAbort.current?.abort();
+      setLookup({ kind: 'error', message: 'CNPJ inválido (dígitos verificadores)' });
+      lastLookedUp.current = null;
+      return;
+    }
+    if (lastLookedUp.current === cnpjDigits) return;
+    lastLookedUp.current = cnpjDigits;
+    void runLookup(cnpjDigits, form);
+    // form deliberadamente fora das deps: queremos rodar quando o CNPJ
+    // muda, não a cada keystroke nos outros campos.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cnpjDigits, isEditMode, runLookup]);
+
+  useEffect(() => {
+    return () => lookupAbort.current?.abort();
+  }, []);
+
+  const retryLookup = () => {
+    lastLookedUp.current = null;
+    if (cnpjDigits.length === 14 && isValidCnpj(cnpjDigits)) {
+      void runLookup(cnpjDigits, form);
+    }
+  };
 
   const create = trpc.companies.create.useMutation({
     onSuccess: (created) => {
@@ -159,6 +254,7 @@ export function CompanyForm({
             placeholder="00.000.000/0000-00"
           />
         </Field>
+        {!isEditMode && <LookupStatusLine status={lookup} onRetry={retryLookup} />}
         <Field label="Razão social" required className="md:col-span-2">
           <Input
             required
@@ -262,5 +358,90 @@ export function CompanyForm({
         </Button>
       </div>
     </form>
+  );
+}
+
+function LookupStatusLine({
+  status,
+  onRetry,
+}: {
+  status: LookupStatus;
+  onRetry: () => void;
+}) {
+  if (status.kind === 'idle') return null;
+
+  return (
+    <div className="md:col-span-2 -mt-2" aria-live="polite">
+      {status.kind === 'loading' && (
+        <p className="text-caption text-text-2 inline-flex items-center gap-2">
+          <Spinner /> Buscando dados na Receita Federal…
+        </p>
+      )}
+
+      {status.kind === 'ok' && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="success" dot>Empresa encontrada</Badge>
+          {status.data.cnaeCode && (
+            <Badge variant="primary" title={status.data.cnaeName}>
+              CNAE {status.data.cnaeCode}
+            </Badge>
+          )}
+          {status.preserved.length > 0 && (
+            <p className="text-caption text-text-3 w-full">
+              Mantivemos o que você já tinha digitado em:{' '}
+              <strong>{status.preserved.join(', ')}</strong>.
+            </p>
+          )}
+          {status.data.cnaeName && (
+            <p className="text-caption text-text-3 w-full">{status.data.cnaeName}</p>
+          )}
+        </div>
+      )}
+
+      {status.kind === 'inactive' && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="warning" dot>{status.situacao}</Badge>
+          <p className="text-caption text-warning-text w-full">
+            Esta empresa está {status.situacao.toLowerCase()} na Receita. Confirme
+            antes de cadastrar.
+          </p>
+        </div>
+      )}
+
+      {status.kind === 'not-found' && (
+        <p className="text-caption text-warning-text">
+          CNPJ não encontrado na Receita. Você pode cadastrar manualmente.
+        </p>
+      )}
+
+      {status.kind === 'rate-limited' && (
+        <p className="text-caption text-text-2">
+          Limite de buscas atingido. Aguarde 1 min e tente novamente — você
+          pode preencher manualmente nesse meio tempo.
+        </p>
+      )}
+
+      {status.kind === 'error' && (
+        <p className="text-caption text-danger inline-flex items-center gap-2">
+          Não foi possível buscar ({status.message}).
+          <button
+            type="button"
+            onClick={onRetry}
+            className="underline text-brand-primary-light"
+          >
+            Tentar novamente
+          </button>
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Spinner() {
+  return (
+    <span
+      className="inline-block h-4 w-4 rounded-full border-2 border-text-3 border-t-transparent animate-spin"
+      aria-hidden="true"
+    />
   );
 }

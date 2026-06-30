@@ -128,6 +128,12 @@ via Prisma Studio.
 
 **Esforço:** ~2h. **Status:** mecânico, chip de sustentação resolve.
 
+### ~~P-08. Logout missing no AppShell~~ ✅ FECHADO
+**Resolvido em 2026-06-30** — `<UserButton afterSignOutUrl="/sign-in"/>`
+do Clerk inserido no `Topbar` à direita do `ThemeToggle`. Dropdown
+nativo do Clerk cobre Manage account + Sign out em todas as rotas
+autenticadas.
+
 ---
 
 ## 📅 Sprints planejados (próximas 4–6 semanas)

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { UserButton } from '@clerk/nextjs';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 
 const HIDDEN_ON = [
@@ -76,6 +77,14 @@ export function Topbar({
           </button>
         )}
         <ThemeToggle />
+        <UserButton
+          afterSignOutUrl="/sign-in"
+          appearance={{
+            elements: {
+              avatarBox: 'h-7 w-7',
+            },
+          }}
+        />
       </div>
     </header>
   );

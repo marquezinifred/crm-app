@@ -75,6 +75,22 @@ prontos. Bloqueador: `vars.STAGING_URL` no GitHub Secrets.
 
 **Esforço:** ~3h (quando staging existir).
 
+### P-06. Drilldowns AI por tenant (Sprint 15B residual)
+**Severidade:** Baixa. Routers tRPC `platform.aiOps.byTenant` e
+`platform.aiMarketplace.tenantAccess.*` estão prontos do Sprint 15B
+mas as 2 telas drilldown faltam:
+- `/platform/tenants/[id]/ai` — form pra editar `tenant_ai_limits`,
+  uso vs limite, provider breakdown, histórico, modelos pinados,
+  anomalies do tenant
+- `/platform/tenants/[id]/ai/features` — gerenciamento dos 3
+  estados (DISABLED/INCLUDED/ADDON_ACTIVE) por tenant
+
+Sem essas telas o Platform Owner só vê agregação cross-tenant em
+`/platform/ai-ops` — pra ajustar tenant específico precisa fazer
+via Prisma Studio.
+
+**Esforço:** ~2h. **Status:** mecânico, chip de sustentação resolve.
+
 ---
 
 ## 📅 Sprints planejados (próximas 4–6 semanas)

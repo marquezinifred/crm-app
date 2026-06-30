@@ -1,6 +1,7 @@
 import { prisma } from '@/server/db/client';
 import { masking } from '@/lib/ai/masking';
 import { getAnthropic, MODELS } from '@/lib/ai/claude';
+import { callAiFeature } from '@/lib/ai/feature-gate';
 import { logAiUsage } from './ai-usage.service';
 import { CircuitBreaker } from './ai-circuit-breaker';
 import {
@@ -130,12 +131,16 @@ CONTRATO deve sempre ser 100 (estágio terminal).`;
   let raw = '';
   let success = true;
   try {
-    const client = getAnthropic();
-    const completion = await client.messages.create({
-      model: MODELS.HAIKU,
-      max_tokens: 512,
-      messages: [{ role: 'user', content: masked }],
-    });
+    const completion = await callAiFeature(
+      'conversion-rate-suggestion',
+      { tenantId },
+      async ({ model }) =>
+        getAnthropic().messages.create({
+          model: model || MODELS.HAIKU,
+          max_tokens: 512,
+          messages: [{ role: 'user', content: masked }],
+        }),
+    );
     promptTokens = completion.usage.input_tokens;
     completionTokens = completion.usage.output_tokens;
     raw = completion.content

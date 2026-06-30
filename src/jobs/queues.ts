@@ -18,6 +18,8 @@ export const QUEUE_NAMES = {
   alertsScan: 'alerts-scan',
   emailSend: 'email-send',
   importRun: 'import-run',
+  aiUsageRollup: 'ai-usage-rollup',
+  healthScoreRollup: 'health-score-rollup',
 } as const;
 
 export function makeQueue<T = unknown>(name: string): Queue<T> {

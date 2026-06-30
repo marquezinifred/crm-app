@@ -62,9 +62,17 @@ const envSchema = z.object({
   NEXT_PUBLIC_APP_URL: z.string().url().default('http://localhost:3000'),
   TENANT_FIELD_ENCRYPTION_KEY: z.string().min(32).optional(),
 
-  // Banner de manutenção (Sprint 14.5)
-  // Vazio = banner oculto. Qualquer string não-vazia = visível com aquele texto.
+  // Banner de manutenção (Sprint 14.5) — DEPRECADO em Sprint 15B.
+  // Fallback: se nenhum broadcast ativo, o env ainda é honrado até cliente
+  // adotar broadcasts. Limpar pra string vazia depois do go-live.
   NEXT_PUBLIC_MAINTENANCE_MESSAGE: z.string().default(''),
+
+  // Sprint 15B — câmbio USD→BRL para precificar tokens de IA em R$.
+  // Mantenha conservador (default 5.10) ou recalibre por ambiente.
+  USD_BRL_RATE: z.coerce.number().positive().default(5.1),
+
+  // Margem da Plataforma sobre o custo bruto (0.20 = +20%).
+  AI_PLATFORM_MARGIN: z.coerce.number().min(0).max(2).default(0.20),
 });
 
 const parsed = envSchema.safeParse(process.env);

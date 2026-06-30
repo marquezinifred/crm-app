@@ -1,5 +1,6 @@
 import { masking } from '@/lib/ai/masking';
 import { getAnthropic, MODELS } from '@/lib/ai/claude';
+import { callAiFeature } from '@/lib/ai/feature-gate';
 import { logAiUsage } from './ai-usage.service';
 import { CircuitBreaker } from './ai-circuit-breaker';
 import { AIProvider } from '@prisma/client';
@@ -91,12 +92,17 @@ ${toMasked}
   let raw = '';
   let success = true;
   try {
-    const completion = await getAnthropic().messages.create({
-      model: MODELS.HAIKU,
-      max_tokens: 1024,
-      system: SYSTEM,
-      messages: [{ role: 'user', content: userPrompt }],
-    });
+    const completion = await callAiFeature(
+      'proposal-version-diff',
+      { tenantId: input.tenantId },
+      async ({ model }) =>
+        getAnthropic().messages.create({
+          model: model || MODELS.HAIKU,
+          max_tokens: 1024,
+          system: SYSTEM,
+          messages: [{ role: 'user', content: userPrompt }],
+        }),
+    );
     promptTokens = completion.usage.input_tokens;
     completionTokens = completion.usage.output_tokens;
     raw = completion.content

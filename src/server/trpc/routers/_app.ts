@@ -24,6 +24,7 @@ import { themeRouter } from './theme';
 import { privacyRouter } from './privacy';
 import { billingRouter } from './billing';
 import { platformRouter } from './platform';
+import { broadcastsRouter } from './platform-health-trials-broadcasts';
 
 export const appRouter = router({
   health: publicProcedure.query(() => ({
@@ -76,6 +77,7 @@ export const appRouter = router({
   privacy: privacyRouter,
   billing: billingRouter,
   platform: platformRouter,
+  broadcasts: broadcastsRouter,
 });
 
 export type AppRouter = typeof appRouter;

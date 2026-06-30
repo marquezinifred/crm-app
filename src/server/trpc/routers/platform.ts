@@ -7,6 +7,13 @@ import { runAsPlatform } from '@/server/db/tenant-context';
 import { platformAudit } from '@/server/services/audit-platform.service';
 import { zCnpj, zEmail, zSlug, zUuid } from '@/lib/validators';
 import { Prisma, TenantPlan, SubscriptionStatus } from '@prisma/client';
+import { platformAiOpsRouter } from './platform-ai-ops';
+import { platformAiMarketplaceRouter } from './platform-ai-marketplace';
+import {
+  platformHealthRouter,
+  platformTrialsRouter,
+  platformBroadcastsRouter,
+} from './platform-health-trials-broadcasts';
 
 /**
  * platformRouter — Sprint 15A.
@@ -473,4 +480,11 @@ export const platformRouter = router({
       { name: 'platform_console_enabled', enabled: true, description: 'Console do Platform Owner (esse menu)' },
     ];
   }),
+
+  // Sprint 15B — sub-routers
+  aiOps: platformAiOpsRouter,
+  aiMarketplace: platformAiMarketplaceRouter,
+  health: platformHealthRouter,
+  trials: platformTrialsRouter,
+  broadcasts: platformBroadcastsRouter,
 });

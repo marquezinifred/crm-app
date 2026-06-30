@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Banner } from '@/components/ui/banner';
+import { useHasActiveBroadcasts } from './BroadcastBanners';
 
 const DISMISS_KEY = 'venzo:maintenance-dismissed';
 
@@ -19,6 +20,9 @@ const DISMISS_KEY = 'venzo:maintenance-dismissed';
 export function MaintenanceBanner() {
   const message = (process.env.NEXT_PUBLIC_MAINTENANCE_MESSAGE ?? '').trim();
   const [dismissed, setDismissed] = useState(true);
+  // Sprint 15B: se há broadcasts ativos, o MaintenanceBanner legado
+  // se cala em favor do sistema novo.
+  const hasBroadcasts = useHasActiveBroadcasts();
 
   useEffect(() => {
     if (!message) return;
@@ -28,6 +32,7 @@ export function MaintenanceBanner() {
 
   if (!message) return null;
   if (dismissed) return null;
+  if (hasBroadcasts) return null;
 
   function handleDismiss() {
     const key = `${DISMISS_KEY}:${message}`;

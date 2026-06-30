@@ -7,6 +7,11 @@ import { cn } from '@/lib/utils/cn';
 const ITEMS = [
   { href: '/platform/dashboard', label: 'Visão geral' },
   { href: '/platform/tenants', label: 'Tenants' },
+  { href: '/platform/ai-ops', label: 'AI Ops' },
+  { href: '/platform/ai-marketplace', label: 'AI Marketplace' },
+  { href: '/platform/health', label: 'Health Score' },
+  { href: '/platform/trials', label: 'Trials' },
+  { href: '/platform/broadcasts', label: 'Broadcasts' },
   { href: '/platform/impersonate', label: 'Impersonar' },
   { href: '/platform/audit', label: 'Audit log' },
   { href: '/platform/privacy', label: 'Privacy (LGPD)' },

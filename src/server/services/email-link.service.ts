@@ -2,6 +2,7 @@ import { prisma } from '@/server/db/client';
 import { runAsSystem } from '@/server/db/tenant-context';
 import { masking } from '@/lib/ai/masking';
 import { getAnthropic, MODELS } from '@/lib/ai/claude';
+import { callAiFeature } from '@/lib/ai/feature-gate';
 import { logAiUsage } from './ai-usage.service';
 import { CircuitBreaker } from './ai-circuit-breaker';
 import { ActivityType, AIProvider, IncomingEmailStatus, Prisma } from '@prisma/client';
@@ -76,11 +77,16 @@ Responda SOMENTE com JSON: { "ranking": [{ "id": "uuid", "score": 0-1 }] } no mÃ
   let raw = '';
   let success = true;
   try {
-    const completion = await getAnthropic().messages.create({
-      model: MODELS.HAIKU,
-      max_tokens: 256,
-      messages: [{ role: 'user', content: prompt }],
-    });
+    const completion = await callAiFeature(
+      'email-routing',
+      { tenantId },
+      async ({ model }) =>
+        getAnthropic().messages.create({
+          model: model || MODELS.HAIKU,
+          max_tokens: 256,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+    );
     promptTokens = completion.usage.input_tokens;
     completionTokens = completion.usage.output_tokens;
     raw = completion.content

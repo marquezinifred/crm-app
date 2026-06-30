@@ -11,6 +11,71 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 ## Sprint atual
 
+> **Sprint 15B — AI Operations + Plataforma Estratégica:
+> ✅ CONCLUÍDO em 2026-06-30**
+>
+> 5 áreas entregues: AI Ops Center, AI Marketplace, Tenant Health Score,
+> Trial Pipeline e Broadcast genérico. Spec:
+> `docs/Sprint_15B_AI_Ops_Platform.md`.
+>
+> Entregue:
+>  - ✅ 5 migrations (0017 AI ops, 0018 marketplace + seed de 5 features,
+>    0019 health snapshots, 0020 trial pipeline, 0021 broadcasts)
+>  - ✅ 9 modelos novos no schema + 5 enums novos
+>    (AiAnomalyType, AiFeatureCategory, AiFeatureStatus,
+>    BroadcastVariant, BroadcastTarget)
+>  - ✅ Tenant ganhou colunas trial (trialSource, trialExtendedCount,
+>    trialConversionAt, trialCancellationAt, trialCancellationReason)
+>  - ✅ `src/lib/ai/pricing.ts` — PRICE_TABLE por (provider, model),
+>    `costUsd`, `priceBrl`, `usdToBrlWithMargin` aplica
+>    USD_BRL_RATE × (1 + AI_PLATFORM_MARGIN)
+>  - ✅ `src/lib/ai/usage.ts` — `getCurrentMonthUsage` +
+>    `getTodayRequests` consultando `ai_usage_daily`
+>  - ✅ `src/lib/ai/feature-gate.ts` — `callAiFeature<T>()` resolve
+>    acesso (DISABLED → FeatureNotAvailableError), checa limites
+>    (AiLimitExceededError com kind MONTHLY_TOKENS/MONTHLY_COST/
+>    DAILY_REQUESTS), respeita pinned model. 5 services
+>    refatorados (communication-summary, document-compare,
+>    email-link, semantic-search, conversion-rate-suggestion)
+>  - ✅ `health-score.service.ts` — 8 funções de scoring puras
+>    (logins/opps/features/nps/tickets/trial/evaluations/resources),
+>    `WEIGHTS_BY_PLAN`, `bucketFor` (GREEN ≥70, YELLOW 40-69, RED <40),
+>    `computeHealthScore` async
+>  - ✅ `broadcast.service.ts` — `matchesTargeting` puro
+>    (ALL/BY_PLAN/MANUAL_LIST), `isWithinWindow`,
+>    `activeForUser` filtra dismissals
+>  - ✅ Workers BullMQ novos: `ai-usage-rollup` (00:30 BRT, agrega
+>    `ai_usage_logs` em `ai_usage_daily`, detecta anomalia vs 7d avg
+>    via `anomalyThresholdMultiplier`), `health-score-rollup`
+>    (02:00 BRT, snapshot por tenant em `tenant_health_snapshots`)
+>  - ✅ `platformRouter` estendido com 5 sub-routers: `aiOps`
+>    (summary/byTenant/setLimits/acknowledgeAlert), `aiMarketplace`
+>    (list/setFeature/tenantAccessList/tenantAccessSet),
+>    `health` (today/byTenant), `trials` (list/extend/convertManual),
+>    `broadcasts` (list/create/delete/targetingPreview)
+>  - ✅ `broadcastsRouter` público (não-platform) com
+>    `activeForCurrentUser` + `dismiss` consumido pelo AppShell
+>  - ✅ 5 telas: `/platform/ai-ops` (cards por provider + anomalias
+>    + top 10 tenants), `/platform/ai-marketplace` (catálogo com
+>    contagem de tenants ativos), `/platform/health` (3 buckets
+>    RED/YELLOW/GREEN), `/platform/trials` (lista com botões
+>    Estender/Converter manual), `/platform/broadcasts` (criar +
+>    listar + desligar). `PlatformShell` ganhou 5 itens no nav
+>  - ✅ `BroadcastBanners` no `AppShell` (substitui `MaintenanceBanner`
+>    quando há broadcasts ativos via `useHasActiveBroadcasts`)
+>  - ✅ env: `USD_BRL_RATE` (5.1 default), `AI_PLATFORM_MARGIN` (0.20)
+>  - ✅ Testes: 19 novos (ai-pricing +5, health-score-math +13,
+>    broadcast-targeting +7, feature-gate +4). Total **356/358**
+>    (2 skipped pré-existentes). Type-check zero. Lint zero
+>
+> Pendências operacionais (sem bloqueio):
+>  - Drilldown `/platform/tenants/[id]/ai` e `/ai/features` —
+>    routers `byTenant` + `tenantAccessSet` já prontos, falta a
+>    casca de tela (mecânico ~2h)
+>  - Linkar Sentry/Axiom nos workers (Sprint 16 hardening)
+>
+> 🎉 17 sprints (0–15B) sem débitos abertos.
+
 > **Sprint 15A — Platform Console: ✅ CONCLUÍDO em 2026-06-29**
 >
 > Backend de plataforma + 7 telas em `/platform/*` + seed script.

@@ -40,6 +40,43 @@ enum PlatformRole {
   PLATFORM_SUPPORT
 }
 
+// Sprint 15B — AI Ops
+enum AiAnomalyType {
+  TOKEN_SPIKE
+  REQUEST_SPIKE
+  LIMIT_REACHED
+}
+
+// Sprint 15B — AI Marketplace
+enum AiFeatureCategory {
+  SUMMARIZATION
+  SCORING
+  SEARCH
+  CLASSIFICATION
+  GENERATION
+  EXTRACTION
+}
+
+enum AiFeatureStatus {
+  DISABLED
+  INCLUDED
+  ADDON_ACTIVE
+}
+
+// Sprint 15B — Broadcasts
+enum BroadcastVariant {
+  INFO
+  WARNING
+  DANGER
+  SUCCESS
+}
+
+enum BroadcastTarget {
+  ALL
+  BY_PLAN
+  MANUAL_LIST
+}
+
 enum TenantPlan {
   TRIAL
   STARTER
@@ -364,6 +401,12 @@ model Tenant {
   // Onboarding — Sprint 13
   setupCompletedAt        DateTime?           @map("setup_completed_at")
   tourDismissedAt         DateTime?           @map("tour_dismissed_at")
+  // Trial pipeline — Sprint 15B
+  trialSource             String?             @map("trial_source")
+  trialExtendedCount      Int                 @default(0) @map("trial_extended_count")
+  trialConversionAt       DateTime?           @map("trial_conversion_at")
+  trialCancellationAt     DateTime?           @map("trial_cancellation_at")
+  trialCancellationReason String?             @map("trial_cancellation_reason")
   createdAt               DateTime            @default(now()) @map("created_at")
   updatedAt               DateTime            @updatedAt @map("updated_at")
   deletedAt               DateTime?           @map("deleted_at")
@@ -407,6 +450,12 @@ model Tenant {
   connectionLogs          ConnectionLog[]
   billingEvents           BillingEvent[]
   usageSnapshots          UsageSnapshot[]
+  aiLimits                TenantAiLimits?
+  aiUsageDaily            AiUsageDaily[]
+  aiAnomalyAlerts         AiAnomalyAlert[]
+  aiFeatures              TenantAiFeature[]
+  healthSnapshots         TenantHealthSnapshot[]
+  trialEvents             TrialEvent[]
 
   @@map("tenants")
 }
@@ -1500,4 +1549,183 @@ model UsageSnapshot {
 
   @@index([tenantId, capturedAt])
   @@map("usage_snapshots")
+}
+
+// =====================================================================
+// Sprint 15B — AI Operations Center
+// =====================================================================
+
+model TenantAiLimits {
+  tenantId                   String   @id @map("tenant_id") @db.Uuid
+  monthlyTokenLimit          BigInt?  @map("monthly_token_limit")
+  dailyRequestLimit          Int?     @map("daily_request_limit")
+  pinnedModelHaiku           String?  @map("pinned_model_haiku")
+  pinnedModelSonnet          String?  @map("pinned_model_sonnet")
+  anomalyThresholdMultiplier Decimal  @default(3.0) @map("anomaly_threshold_multiplier") @db.Decimal(5, 2)
+  updatedById                String?  @map("updated_by") @db.Uuid
+  updatedAt                  DateTime @default(now()) @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_ai_limits")
+}
+
+model AiUsageDaily {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  provider     String
+  model        String
+  date         DateTime @db.Date
+  requestCount Int      @default(0) @map("request_count")
+  tokensInput  BigInt   @default(0) @map("tokens_input")
+  tokensOutput BigInt   @default(0) @map("tokens_output")
+  costBrl      Decimal  @default(0) @map("cost_brl") @db.Decimal(12, 4)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, provider, model, date])
+  @@index([tenantId, date(sort: Desc)])
+  @@map("ai_usage_daily")
+}
+
+model AiAnomalyAlert {
+  id               String        @id @default(uuid()) @db.Uuid
+  tenantId         String        @map("tenant_id") @db.Uuid
+  type             AiAnomalyType
+  detectedAt       DateTime      @default(now()) @map("detected_at")
+  details          Json
+  acknowledgedAt   DateTime?     @map("acknowledged_at")
+  acknowledgedById String?       @map("acknowledged_by") @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, detectedAt(sort: Desc)])
+  @@index([acknowledgedAt])
+  @@map("ai_anomaly_alerts")
+}
+
+// =====================================================================
+// Sprint 15B — AI Marketplace
+// =====================================================================
+
+model AiFeature {
+  id                   String            @id @default(uuid()) @db.Uuid
+  code                 String            @unique
+  name                 String
+  description          String            @db.Text
+  category             AiFeatureCategory
+  // JSON: { STARTER: 'disabled', PRO: 'included', ENTERPRISE: 'included' }
+  defaultInclusion     Json              @map("default_inclusion")
+  addonPriceBrlMonthly Decimal?          @map("addon_price_brl_monthly") @db.Decimal(10, 2)
+  addonPriceBrlPerUse  Decimal?          @map("addon_price_brl_per_use") @db.Decimal(10, 4)
+  defaultProvider      String            @map("default_provider")
+  defaultModel         String            @map("default_model")
+  active               Boolean           @default(true)
+  createdAt            DateTime          @default(now()) @map("created_at")
+
+  tenantStates TenantAiFeature[]
+
+  @@map("ai_features")
+}
+
+model TenantAiFeature {
+  tenantId           String          @map("tenant_id") @db.Uuid
+  featureId          String          @map("feature_id") @db.Uuid
+  status             AiFeatureStatus
+  addonActivatedAt   DateTime?       @map("addon_activated_at")
+  addonDeactivatedAt DateTime?       @map("addon_deactivated_at")
+  enabledById        String?         @map("enabled_by") @db.Uuid
+  notes              String?         @db.Text
+
+  tenant  Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  feature AiFeature @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, featureId])
+  @@index([tenantId, status])
+  @@map("tenant_ai_features")
+}
+
+// =====================================================================
+// Sprint 15B — Tenant Health Score
+// =====================================================================
+
+model TenantHealthSnapshot {
+  id                  String   @id @default(uuid()) @db.Uuid
+  tenantId            String   @map("tenant_id") @db.Uuid
+  date                DateTime @db.Date
+  signalLogins        Int?     @map("signal_logins")
+  signalOppsCreated   Int?     @map("signal_opps_created")
+  signalFeaturesUsed  Int?     @map("signal_features_used")
+  signalNps           Int?     @map("signal_nps")
+  signalOpenTickets   Int?     @map("signal_open_tickets")
+  signalTrialProgress Int?     @map("signal_trial_progress")
+  signalEvaluations   Int?     @map("signal_evaluations")
+  signalResourceUsage Int?     @map("signal_resource_usage")
+  healthScore         Int      @map("health_score")
+  bucket              String // GREEN/YELLOW/RED
+  reasons             Json?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, date])
+  @@index([date(sort: Desc)])
+  @@index([bucket])
+  @@map("tenant_health_snapshots")
+}
+
+// =====================================================================
+// Sprint 15B — Trial Pipeline
+// =====================================================================
+
+model TrialEvent {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  eventType String   @map("event_type")
+  createdAt DateTime @default(now()) @map("created_at")
+  metadata  Json?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([eventType])
+  @@map("trial_events")
+}
+
+// =====================================================================
+// Sprint 15B — Broadcasts
+// =====================================================================
+
+model Broadcast {
+  id              String           @id @default(uuid()) @db.Uuid
+  title           String
+  message         String           @db.Text
+  variant         BroadcastVariant @default(INFO)
+  target          BroadcastTarget
+  targetPlans     String[]         @default([]) @map("target_plans")
+  targetTenantIds String[]         @default([]) @map("target_tenant_ids") @db.Uuid
+  startsAt        DateTime         @map("starts_at")
+  endsAt          DateTime?        @map("ends_at")
+  actionLabel     String?          @map("action_label")
+  actionUrl       String?          @map("action_url")
+  dismissible     Boolean          @default(true)
+  active          Boolean          @default(true)
+  createdAt       DateTime         @default(now()) @map("created_at")
+  createdById     String?          @map("created_by") @db.Uuid
+
+  dismissals BroadcastDismissal[]
+
+  @@index([active, startsAt, endsAt])
+  @@map("broadcasts")
+}
+
+model BroadcastDismissal {
+  broadcastId String   @map("broadcast_id") @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  dismissedAt DateTime @default(now()) @map("dismissed_at")
+
+  broadcast Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+
+  @@id([broadcastId, userId])
+  @@index([userId])
+  @@map("broadcast_dismissals")
 }

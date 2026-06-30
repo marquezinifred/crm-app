@@ -3,6 +3,7 @@ import { runAsSystem } from '@/server/db/tenant-context';
 import { isEnabled, searchByVector } from './embeddings.service';
 import { masking } from '@/lib/ai/masking';
 import { getAnthropic, MODELS } from '@/lib/ai/claude';
+import { callAiFeature } from '@/lib/ai/feature-gate';
 import { logAiUsage } from './ai-usage.service';
 import { CircuitBreaker } from './ai-circuit-breaker';
 import { AIProvider } from '@prisma/client';
@@ -203,11 +204,16 @@ Devolva SOMENTE JSON: { "order": [1,3,2,...] } — índices dos resultados em or
     let raw = '';
     let success = true;
     try {
-      const completion = await getAnthropic().messages.create({
-        model: MODELS.HAIKU,
-        max_tokens: 200,
-        messages: [{ role: 'user', content: prompt }],
-      });
+      const completion = await callAiFeature(
+        'semantic-search',
+        { tenantId },
+        async ({ model }) =>
+          getAnthropic().messages.create({
+            model: model || MODELS.HAIKU,
+            max_tokens: 200,
+            messages: [{ role: 'user', content: prompt }],
+          }),
+      );
       promptTokens = completion.usage.input_tokens;
       completionTokens = completion.usage.output_tokens;
       raw = completion.content

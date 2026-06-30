@@ -1,5 +1,6 @@
 import { masking } from '@/lib/ai/masking';
 import { getAnthropic, MODELS } from '@/lib/ai/claude';
+import { callAiFeature } from '@/lib/ai/feature-gate';
 import { logAiUsage } from './ai-usage.service';
 import { CircuitBreaker } from './ai-circuit-breaker';
 import { AIProvider } from '@prisma/client';
@@ -112,13 +113,17 @@ export async function summarizeCommunication(
   let rawResponse = '';
 
   try {
-    const client = getAnthropic();
-    const completion = await client.messages.create({
-      model: MODELS.HAIKU,
-      max_tokens: 1024,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: masked }],
-    });
+    const completion = await callAiFeature(
+      'communication-summary',
+      { tenantId: input.tenantId },
+      async ({ model }) =>
+        getAnthropic().messages.create({
+          model: model || MODELS.HAIKU,
+          max_tokens: 1024,
+          system: SYSTEM_PROMPT,
+          messages: [{ role: 'user', content: masked }],
+        }),
+    );
     promptTokens = completion.usage.input_tokens;
     completionTokens = completion.usage.output_tokens;
     rawResponse = completion.content

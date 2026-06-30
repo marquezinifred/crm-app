@@ -108,8 +108,16 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 >    (substitui MaintenanceBanner com targeting ALL/BY_PLAN/MANUAL).
 >    Pré-requisito de escala. Depende de 15A.
 >
-> Outros: hardening produção (Sentry+Axiom wiring, k6 load test),
-> backlog pós-MVP a consolidar após 15A+15B fechados.
+> Outros: hardening produção (Sentry+Axiom wiring, k6 load test) —
+> spec'd como Sprint 16 no backlog.
+>
+> **Backlog consolidado:** `docs/Backlog_Pos_MVP.md` — 5 pendências
+> de curto prazo (P-01 a P-05, ~2 dias), Sprints 15A/15B/15C/16/17+,
+> roadmap longo prazo, 6 decisões de arquitetura pendentes (framer-motion,
+> Storybook, i18n, mobile native, hospedagem, pricing), 7 débitos
+> técnicos identificados (audit silencioso em outros routers, PWA
+> em dev, MAINTENANCE_WINDOW deprecar pós-15B, Sentry/Axiom stubs,
+> seed scripts produção, RBAC test gap, backup externo Neon).
 
 > **Sprint 14 — Venzo Design System: ✅ CONCLUÍDO em 2026-06-29**
 >

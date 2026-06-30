@@ -1,11 +1,14 @@
 'use client';
 
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Modal } from '@/components/ui/modal';
+import { CompanyForm } from '@/components/companies/CompanyForm';
 import {
   Table,
   THead,
@@ -18,10 +21,12 @@ import {
 } from '@/components/ui/table';
 
 export default function CompaniesPage() {
+  const router = useRouter();
   const { data, isLoading, error } = trpc.companies.list.useQuery({
     page: 1,
     pageSize: 50,
   });
+  const [createOpen, setCreateOpen] = useState(false);
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -30,9 +35,9 @@ export default function CompaniesPage() {
         description="Clientes, parceiros, fornecedores e sua própria empresa."
         meta={data && `${data.total} registro${data.total === 1 ? '' : 's'}`}
         primaryAction={
-          <Link href="/companies/new">
-            <Button variant="primary">+ Nova empresa</Button>
-          </Link>
+          <Button variant="primary" onClick={() => setCreateOpen(true)}>
+            + Nova empresa
+          </Button>
         }
       />
 
@@ -61,22 +66,34 @@ export default function CompaniesPage() {
                   title="Sua base de empresas começa aqui."
                   description="Cadastre a primeira empresa ou importe um CSV."
                   action={
-                    <Link href="/companies/new">
-                      <Button variant="primary">+ Nova empresa</Button>
-                    </Link>
+                    <Button variant="primary" onClick={() => setCreateOpen(true)}>
+                      + Nova empresa
+                    </Button>
                   }
                 />
               </TableEmpty>
             )}
             {data?.rows.map((c) => (
-              <TR key={c.id}>
+              <TR
+                key={c.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => router.push(`/companies/${c.id}`)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    router.push(`/companies/${c.id}`);
+                  }
+                }}
+                className="cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
+              >
                 <TD>
-                  <Link
-                    href={`/companies/${c.id}`}
-                    className="font-medium text-brand-primary-light hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary rounded"
-                  >
-                    {c.razaoSocial}
-                  </Link>
+                  <span className="font-medium text-brand-primary-light">
+                    {c.nomeFantasia ?? c.razaoSocial}
+                  </span>
+                  {c.nomeFantasia && (
+                    <span className="block text-caption text-text-3">{c.razaoSocial}</span>
+                  )}
                 </TD>
                 <TD>
                   <Badge variant="default">{c.type}</Badge>
@@ -90,6 +107,19 @@ export default function CompaniesPage() {
           </TBody>
         )}
       </Table>
+
+      <Modal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        title="Nova empresa"
+        description="Cadastre razão social, CNPJ, território e segmento."
+        size="lg"
+      >
+        <CompanyForm
+          onSuccess={() => setCreateOpen(false)}
+          onCancel={() => setCreateOpen(false)}
+        />
+      </Modal>
     </div>
   );
 }

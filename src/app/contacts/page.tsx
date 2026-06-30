@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { trpc } from '@/lib/trpc/client';
 import { useState, useId } from 'react';
 import {
@@ -50,6 +51,7 @@ const EMPTY: FormState = {
 };
 
 export default function ContactsPage() {
+  const router = useRouter();
   const utils = trpc.useUtils();
   const [search, setSearch] = useState('');
   const [workAreaFilter, setWorkAreaFilter] = useState<'' | WorkArea>('');
@@ -332,8 +334,20 @@ export default function ContactsPage() {
                 </tr>
               )}
               {visibleContacts.map((c) => (
-                <tr key={c.id} className="border-t">
-                  <td className="px-4 py-2">{c.fullName}</td>
+                <tr
+                  key={c.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => router.push(`/contacts/${c.id}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      router.push(`/contacts/${c.id}`);
+                    }
+                  }}
+                  className="border-t cursor-pointer hover:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
+                >
+                  <td className="px-4 py-2 font-medium">{c.fullName}</td>
                   <td className="px-4 py-2 text-text-2">{c.email}</td>
                   <td className="px-4 py-2 text-text-2">{c.position ?? '—'}</td>
                   <td className="px-4 py-2 text-text-2">
@@ -344,7 +358,8 @@ export default function ContactsPage() {
                   </td>
                   <td className="px-4 py-2 text-right">
                     <button
-                      onClick={() =>
+                      onClick={(e) => {
+                        e.stopPropagation();
                         setForm({
                           id: c.id,
                           fullName: c.fullName,
@@ -356,17 +371,18 @@ export default function ContactsPage() {
                           relationshipType: c.relationshipType,
                           companyId: c.companyId ?? '',
                           notes: '',
-                        })
-                      }
-                      className="px-2 py-1 text-xs rounded border hover:bg-page focus-visible:ring-2 focus-visible:ring-brand"
+                        });
+                      }}
+                      className="px-2 py-1 text-xs rounded border hover:bg-page focus-visible:ring-2 focus-visible:ring-brand-primary"
                     >
                       Editar
                     </button>{' '}
                     <button
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         if (confirm(`Remover ${c.fullName}?`)) remove.mutate({ id: c.id });
                       }}
-                      className="px-2 py-1 text-xs rounded border text-danger hover:bg-danger-bg focus-visible:ring-2 focus-visible:ring-rose-500"
+                      className="px-2 py-1 text-xs rounded border text-danger hover:bg-danger-bg focus-visible:ring-2 focus-visible:ring-danger"
                     >
                       Remover
                     </button>

@@ -6,6 +6,12 @@ import { Button } from '@/components/ui/button';
 
 interface Props {
   opportunityId: string;
+  /**
+   * Quando true, o usuário tem edições não salvas no card "Campos do estágio
+   * atual". Bloqueia a chamada de IA com mensagem clara em vez de deixar a
+   * mutation rodar contra dados inconsistentes.
+   */
+  stageHasDirtyChanges?: boolean;
   onConfirmed?: () => void;
 }
 
@@ -22,7 +28,7 @@ interface EditableSummary {
   decisions: string[];
 }
 
-export function CommunicationIntake({ opportunityId, onConfirmed }: Props) {
+export function CommunicationIntake({ opportunityId, stageHasDirtyChanges = false, onConfirmed }: Props) {
   const [rawText, setRawText] = useState('');
   const [summary, setSummary] = useState<EditableSummary | null>(null);
   const [tasks, setTasks] = useState<ProposedTask[]>([]);
@@ -63,6 +69,7 @@ export function CommunicationIntake({ opportunityId, onConfirmed }: Props) {
   });
 
   if (!summary) {
+    const blockedByDirty = stageHasDirtyChanges;
     return (
       <div className="rounded-lg border border-border bg-card p-4">
         <h3 className="mb-2 text-sm font-semibold">Receptor de comunicações</h3>
@@ -79,12 +86,18 @@ export function CommunicationIntake({ opportunityId, onConfirmed }: Props) {
         />
         <Button
           type="button"
-          disabled={rawText.length < 10 || summarize.isLoading}
+          disabled={rawText.length < 10 || summarize.isLoading || blockedByDirty}
+          title={blockedByDirty ? 'Salve a reunião antes de resumir com IA.' : undefined}
           onClick={() => summarize.mutate({ opportunityId, text: rawText })}
         >
           {summarize.isLoading ? 'Processando…' : 'Resumir com IA'}
         </Button>
-        {summarize.error && (
+        {blockedByDirty && (
+          <p className="mt-2 text-sm text-warning-text">
+            Salve a reunião antes de resumir com IA.
+          </p>
+        )}
+        {!blockedByDirty && summarize.error && (
           <p className="mt-2 text-sm text-danger">{summarize.error.message}</p>
         )}
       </div>

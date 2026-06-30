@@ -134,6 +134,19 @@ do Clerk inserido no `Topbar` à direita do `ThemeToggle`. Dropdown
 nativo do Clerk cobre Manage account + Sign out em todas as rotas
 autenticadas.
 
+### ~~P-09. Mensagem "IA indisponível" enganosa~~ ✅ FECHADO
+**Resolvido em 2026-06-30.** Backend separa erros reais por código
+tRPC: `summarize` carrega a oportunidade primeiro e lança
+`NOT_FOUND`/`PRECONDITION_FAILED`; `summarizeCommunication`
+re-lança `FeatureNotAvailableError`/`AiLimitExceededError` (em vez
+de engolir) e a procedure traduz pra `PRECONDITION_FAILED`/
+`TOO_MANY_REQUESTS`. Falhas reais de provider (Anthropic 5xx/
+timeout/circuit aberto) continuam caindo no payload com
+`aiGenerated: false` — UI cai no modo manual. Frontend ganhou
+prop `stageHasDirtyChanges`: bloqueia o botão antes da chamada
+tRPC com mensagem "Salve a reunião antes de resumir com IA."
+3 testes novos cobrindo provider 5xx vs feature gate vs limit.
+
 ---
 
 ## 📅 Sprints planejados (próximas 4–6 semanas)

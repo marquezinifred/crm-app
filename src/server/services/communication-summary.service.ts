@@ -1,6 +1,10 @@
 import { masking } from '@/lib/ai/masking';
 import { getAnthropic, MODELS } from '@/lib/ai/claude';
-import { callAiFeature } from '@/lib/ai/feature-gate';
+import {
+  callAiFeature,
+  AiLimitExceededError,
+  FeatureNotAvailableError,
+} from '@/lib/ai/feature-gate';
 import { logAiUsage } from './ai-usage.service';
 import { CircuitBreaker } from './ai-circuit-breaker';
 import { AIProvider } from '@prisma/client';
@@ -111,6 +115,7 @@ export async function summarizeCommunication(
   let success = true;
   let errorCode: string | null = null;
   let rawResponse = '';
+  let gateError: FeatureNotAvailableError | AiLimitExceededError | null = null;
 
   try {
     const completion = await callAiFeature(
@@ -134,7 +139,14 @@ export async function summarizeCommunication(
   } catch (err) {
     success = false;
     errorCode = err instanceof Error ? err.name : 'unknown';
-    breaker.recordFailure();
+    if (
+      err instanceof FeatureNotAvailableError ||
+      err instanceof AiLimitExceededError
+    ) {
+      gateError = err;
+    } else {
+      breaker.recordFailure();
+    }
   } finally {
     const latencyMs = Date.now() - t0;
     await logAiUsage({
@@ -149,6 +161,10 @@ export async function summarizeCommunication(
       success,
       errorCode,
     });
+  }
+
+  if (gateError) {
+    throw gateError;
   }
 
   if (!success) {

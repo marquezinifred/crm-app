@@ -6,6 +6,10 @@ import { prisma } from '@/server/db/client';
 import { audit } from '@/server/services/audit.service';
 import { summarizeCommunication } from '@/server/services/communication-summary.service';
 import {
+  AiLimitExceededError,
+  FeatureNotAvailableError,
+} from '@/lib/ai/feature-gate';
+import {
   activityCreateInput,
   communicationSummaryInput,
 } from '@/lib/validators/activity';
@@ -58,15 +62,48 @@ export const activitiesRouter = router({
    * Receptor de comunicações: gestor cola texto → IA processa → preview com 4 blocos.
    * NÃO grava a activity ainda — o gestor revisa e chama confirmCommunicationSummary
    * para persistir + criar tarefas.
+   *
+   * Erros separados:
+   *   - NOT_FOUND: oportunidade não existe (ou foi removida)
+   *   - PRECONDITION_FAILED: oportunidade encerrada OU feature de IA não está
+   *     liberada no plano do tenant (mensagem clara em vez de "IA indisponível")
+   *   - TOO_MANY_REQUESTS: limite de tokens/requests do tenant atingido
+   *   - aiGenerated:false no payload: provider real (Anthropic) falhou —
+   *     UI cai pro modo manual e mostra "IA indisponível"
    */
   summarize: canUseAI.input(communicationSummaryInput).mutation(async ({ input, ctx }) => {
-    const summary = await summarizeCommunication({
-      text: input.text,
-      tenantId: ctx.tenantId,
-      userId: ctx.user.id,
-      opportunityId: input.opportunityId,
+    const opp = await prisma.opportunity.findFirst({
+      where: { id: input.opportunityId, deletedAt: null },
+      select: { id: true, status: true },
     });
-    return summary;
+    if (!opp) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Oportunidade não encontrada.',
+      });
+    }
+    if (opp.status !== 'ACTIVE') {
+      throw new TRPCError({
+        code: 'PRECONDITION_FAILED',
+        message: 'Oportunidade encerrada não aceita novos resumos.',
+      });
+    }
+    try {
+      return await summarizeCommunication({
+        text: input.text,
+        tenantId: ctx.tenantId,
+        userId: ctx.user.id,
+        opportunityId: input.opportunityId,
+      });
+    } catch (err) {
+      if (err instanceof FeatureNotAvailableError) {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: err.message });
+      }
+      if (err instanceof AiLimitExceededError) {
+        throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: err.message });
+      }
+      throw err;
+    }
   }),
 
   /**

@@ -152,7 +152,11 @@ export default function OpportunityDetailPage() {
       </section>
 
       <section className="mb-4">
-        <CommunicationIntake opportunityId={opp.id} onConfirmed={() => utils.opportunities.byId.invalidate({ id: opp.id })} />
+        <CommunicationIntake
+          opportunityId={opp.id}
+          stageHasDirtyChanges={Object.keys(editStageFields).length > 0}
+          onConfirmed={() => utils.opportunities.byId.invalidate({ id: opp.id })}
+        />
       </section>
 
       <ActivitiesAndTasks opportunityId={opp.id} />

@@ -1,5 +1,9 @@
 import { PrismaClient, Prisma } from '@prisma/client';
-import { getTenantContext, SYSTEM_TENANT_SENTINEL } from './tenant-context';
+import {
+  getTenantContext,
+  SYSTEM_TENANT_SENTINEL,
+  PLATFORM_TENANT_SENTINEL,
+} from './tenant-context';
 
 // Modelos que NÃO devem receber injeção automática de tenantId
 // (Tenant é raiz; verificação manual fora do extension).
@@ -38,8 +42,14 @@ function createPrismaClient(): PrismaClient {
             return query(args);
           }
 
-          // Sistema: bypass total de injeção (mas RLS ainda aplica via SET ROLE)
-          if (tenantId === SYSTEM_TENANT_SENTINEL) {
+          // Sistema ou Platform Owner: bypass total de injeção de tenantId.
+          // RLS continua aplicando — Platform queries cross-tenant usam
+          // `findMany({ where: { tenantId: <alvo> } })` explícito ou
+          // disable temporário do RLS via SET LOCAL (transações dedicadas).
+          if (
+            tenantId === SYSTEM_TENANT_SENTINEL ||
+            tenantId === PLATFORM_TENANT_SENTINEL
+          ) {
             return query(args);
           }
 

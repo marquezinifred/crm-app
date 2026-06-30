@@ -37,4 +37,4 @@ export function withCapability<R extends Resource>(resource: R, action: ActionOf
   });
 }
 
-export const adminOnlyProcedure = withRoles('SUPER_ADMIN', 'ADMIN');
+export const adminOnlyProcedure = withRoles('ADMIN');

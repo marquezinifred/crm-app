@@ -28,10 +28,6 @@ type ActionOf<R extends Resource> = ActionMap[R][number];
 type Permission = `${Resource}:${string}`;
 
 const ROLE_PERMISSIONS: Record<UserRole, Set<Permission>> = {
-  SUPER_ADMIN: new Set([
-    // Acesso total a tudo — bypass na função hasPermission
-  ]) as Set<Permission>,
-
   ADMIN: new Set<Permission>([
     'tenant:read', 'tenant:update',
     'user:create', 'user:read', 'user:update', 'user:delete',
@@ -55,6 +51,23 @@ const ROLE_PERMISSIONS: Record<UserRole, Set<Permission>> = {
     'contact:read', 'contact:update',
     'opportunity:create', 'opportunity:read', 'opportunity:update', 'opportunity:advance_stage', 'opportunity:cancel',
     'proposal:create', 'proposal:read', 'proposal:update', 'proposal:approve',
+    'contract:create', 'contract:read', 'contract:update',
+    'partner:invite', 'partner:approve_engagement',
+    'ai:use_summary',
+    'audit:read',
+  ]),
+
+  // Diretor de Operações — Sprint 15A: foco em pós-venda, entrega e
+  // handoff. Aprova engajamentos de parceiros operacionais, gerencia
+  // contratos ativos, mas não aprova propostas (comercial/financeiro fazem).
+  DIRETOR_OPERACOES: new Set<Permission>([
+    'tenant:read',
+    'user:read',
+    'catalog:read',
+    'company:read', 'company:update',
+    'contact:read', 'contact:update',
+    'opportunity:read',
+    'proposal:read',
     'contract:create', 'contract:read', 'contract:update',
     'partner:invite', 'partner:approve_engagement',
     'ai:use_summary',
@@ -106,7 +119,6 @@ export function hasPermission<R extends Resource>(
   action: ActionOf<R>,
 ): boolean {
   if (!role) return false;
-  if (role === 'SUPER_ADMIN') return true;
   const perm = `${resource}:${action}` as Permission;
   return ROLE_PERMISSIONS[role].has(perm);
 }

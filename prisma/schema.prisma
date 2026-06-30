@@ -26,13 +26,18 @@ datasource db {
 // ---------------------------------------------------------------------
 
 enum UserRole {
-  SUPER_ADMIN
   ADMIN
   DIRETOR_COMERCIAL
+  DIRETOR_OPERACOES
   DIRETOR_FINANCEIRO
   GESTOR
   ANALISTA
   PARCEIRO
+}
+
+enum PlatformRole {
+  PLATFORM_OWNER
+  PLATFORM_SUPPORT
 }
 
 enum TenantPlan {
@@ -411,22 +416,26 @@ model Tenant {
 // ---------------------------------------------------------------------
 
 model User {
-  id               String    @id @default(uuid()) @db.Uuid
-  tenantId         String    @map("tenant_id") @db.Uuid
-  clerkId          String?   @unique @map("clerk_id")
-  email            String    @db.Citext
-  fullName         String    @map("full_name")
-  role             UserRole  @default(ANALISTA)
-  active           Boolean   @default(true)
-  lastLoginAt      DateTime? @map("last_login_at")
+  id               String        @id @default(uuid()) @db.Uuid
+  // tenantId NULL = usuário da plataforma (Sprint 15A). Tenant users
+  // continuam com tenantId obrigatório — enforce via CHECK constraint.
+  tenantId         String?       @map("tenant_id") @db.Uuid
+  // Quando tenantId = NULL, platformRole obrigatório. CHECK garante XOR.
+  platformRole     PlatformRole? @map("platform_role")
+  clerkId          String?       @unique @map("clerk_id")
+  email            String        @db.Citext
+  fullName         String        @map("full_name")
+  role             UserRole      @default(ANALISTA)
+  active           Boolean       @default(true)
+  lastLoginAt      DateTime?     @map("last_login_at")
   // Para usuários com role=PARCEIRO: aponta para a Company (PARTNER) que ele
   // representa. Resolve visibilidade do perfil parceiro (débito Sprint 2).
-  partnerCompanyId String?   @map("partner_company_id") @db.Uuid
-  createdAt        DateTime  @default(now()) @map("created_at")
-  updatedAt        DateTime  @updatedAt @map("updated_at")
-  deletedAt        DateTime? @map("deleted_at")
+  partnerCompanyId String?       @map("partner_company_id") @db.Uuid
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+  deletedAt        DateTime?     @map("deleted_at")
 
-  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant         Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   partnerCompany Company? @relation("UserPartnerCompany", fields: [partnerCompanyId], references: [id])
 
   ownedOpportunities         Opportunity[]             @relation("OpportunityOwner")
@@ -446,6 +455,7 @@ model User {
   @@unique([tenantId, email])
   @@index([tenantId])
   @@index([tenantId, role])
+  @@index([platformRole])
   @@map("users")
 }
 
@@ -1128,19 +1138,22 @@ model AIUsageLog {
 
 model AuditLog {
   id        String   @id @default(uuid()) @db.Uuid
-  tenantId  String   @map("tenant_id") @db.Uuid
+  // Sprint 15A: tenantId opcional. Ações Platform globais (criar
+  // tenant, ações antes do tenant existir, audit cross-tenant) usam NULL.
+  tenantId  String?  @map("tenant_id") @db.Uuid
   userId    String?  @map("user_id") @db.Uuid
   action    String
   tableName String   @map("table_name")
   recordId  String   @map("record_id") @db.Uuid
   before    Json?
   after     Json?
+  metadata  Json?
   ip        String?
   userAgent String?  @map("user_agent")
   at        DateTime @default(now())
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user   User?  @relation(fields: [userId], references: [id])
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User?   @relation(fields: [userId], references: [id])
 
   @@index([tenantId, at])
   @@index([tenantId, tableName, recordId])

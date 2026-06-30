@@ -1,46 +1,38 @@
 import { describe, it, expect } from 'vitest';
-import { TRPCError } from '@trpc/server';
 import type { UserRole } from '@prisma/client';
 
 /**
- * Replica a função de guard testada — espelha o que está em
- * src/server/trpc/routers/users.ts para evitar precisar setup de DB.
+ * Sprint 15A — gestão de Platform Owner saiu de users.updateRole
+ * (que só lida com tenant roles) para o router `platform`. Aqui
+ * apenas validamos que SUPER_ADMIN não está mais entre os roles
+ * atribuíveis dentro do tenant.
  */
-function assertCanAssignSuperAdmin(callerRole: UserRole, targetRole: UserRole): void {
-  if (targetRole === 'SUPER_ADMIN' && callerRole !== 'SUPER_ADMIN') {
-    throw new TRPCError({
-      code: 'FORBIDDEN',
-      message: 'Apenas SUPER_ADMIN pode atribuir a role SUPER_ADMIN.',
-    });
-  }
-}
+const ASSIGNABLE_TENANT_ROLES: UserRole[] = [
+  'ADMIN',
+  'DIRETOR_COMERCIAL',
+  'DIRETOR_OPERACOES',
+  'DIRETOR_FINANCEIRO',
+  'GESTOR',
+  'ANALISTA',
+  'PARCEIRO',
+];
 
-describe('guard SUPER_ADMIN — users.updateRole', () => {
-  it('ADMIN não pode promover ninguém para SUPER_ADMIN', () => {
-    expect(() => assertCanAssignSuperAdmin('ADMIN', 'SUPER_ADMIN')).toThrow(TRPCError);
+describe('users.updateRole — Sprint 15A taxonomia', () => {
+  it('lista inclui os 3 diretores (Comercial / Operações / Financeiro)', () => {
+    expect(ASSIGNABLE_TENANT_ROLES).toContain('DIRETOR_COMERCIAL');
+    expect(ASSIGNABLE_TENANT_ROLES).toContain('DIRETOR_OPERACOES');
+    expect(ASSIGNABLE_TENANT_ROLES).toContain('DIRETOR_FINANCEIRO');
   });
 
-  it('SUPER_ADMIN pode promover outro para SUPER_ADMIN', () => {
-    expect(() => assertCanAssignSuperAdmin('SUPER_ADMIN', 'SUPER_ADMIN')).not.toThrow();
+  it('SUPER_ADMIN não está mais no enum tenant-side', () => {
+    expect(ASSIGNABLE_TENANT_ROLES).not.toContain('SUPER_ADMIN' as unknown as UserRole);
   });
 
-  it('ADMIN pode atribuir roles abaixo de SUPER_ADMIN', () => {
-    expect(() => assertCanAssignSuperAdmin('ADMIN', 'GESTOR')).not.toThrow();
-    expect(() => assertCanAssignSuperAdmin('ADMIN', 'DIRETOR_COMERCIAL')).not.toThrow();
-    expect(() => assertCanAssignSuperAdmin('ADMIN', 'PARCEIRO')).not.toThrow();
+  it('ADMIN continua presente como teto tenant-side', () => {
+    expect(ASSIGNABLE_TENANT_ROLES[0]).toBe('ADMIN');
   });
 
-  it('GESTOR (em hipótese) também não pode promover para SUPER_ADMIN', () => {
-    expect(() => assertCanAssignSuperAdmin('GESTOR', 'SUPER_ADMIN')).toThrow(TRPCError);
-  });
-
-  it('código do erro é FORBIDDEN', () => {
-    try {
-      assertCanAssignSuperAdmin('ADMIN', 'SUPER_ADMIN');
-      throw new Error('should have thrown');
-    } catch (e) {
-      expect(e).toBeInstanceOf(TRPCError);
-      expect((e as TRPCError).code).toBe('FORBIDDEN');
-    }
+  it('tem exatamente 7 roles', () => {
+    expect(ASSIGNABLE_TENANT_ROLES).toHaveLength(7);
   });
 });

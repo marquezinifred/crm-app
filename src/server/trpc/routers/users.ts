@@ -10,14 +10,17 @@ import type { UserRole } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 
 /**
- * Roles atribuíveis. SUPER_ADMIN está incluído mas o guard server-side
- * em `invite`/`updateRole` exige que o caller também seja SUPER_ADMIN
- * para promover/convidar alguém para SUPER_ADMIN.
+ * Roles atribuíveis dentro de um tenant — Sprint 15A.
+ *
+ * SUPER_ADMIN foi removido do enum: gestão cross-tenant agora vive em
+ * `users.platformRole = PLATFORM_OWNER` (tenantId NULL) e usa o
+ * router `platform` + middleware dedicado. Tenant admins não podem
+ * criar Platform Owners pela UI.
  */
 const ASSIGNABLE_ROLES = [
-  'SUPER_ADMIN',
   'ADMIN',
   'DIRETOR_COMERCIAL',
+  'DIRETOR_OPERACOES',
   'DIRETOR_FINANCEIRO',
   'GESTOR',
   'ANALISTA',
@@ -35,18 +38,6 @@ const updateRoleInput = z.object({
   role: z.enum(ASSIGNABLE_ROLES),
   active: z.boolean().optional(),
 });
-
-function assertCanAssignSuperAdmin(
-  callerRole: UserRole,
-  targetRole: UserRole,
-): void {
-  if (targetRole === 'SUPER_ADMIN' && callerRole !== 'SUPER_ADMIN') {
-    throw new TRPCError({
-      code: 'FORBIDDEN',
-      message: 'Apenas SUPER_ADMIN pode atribuir a role SUPER_ADMIN.',
-    });
-  }
-}
 
 export const usersRouter = router({
   list: protectedProcedure
@@ -99,7 +90,6 @@ export const usersRouter = router({
   // Admin convida via Clerk. O usuário receberá magic link.
   // Quando aceitar, o webhook user.created já vai sincronizar.
   invite: adminOnlyProcedure.input(inviteInput).mutation(async ({ input, ctx }) => {
-    assertCanAssignSuperAdmin(ctx.user.role, input.role);
     // Cria o User local de antemão, ainda sem clerkId, para reservar a role
     const existing = await prisma.user.findFirst({
       where: { email: input.email, deletedAt: null },
@@ -151,18 +141,10 @@ export const usersRouter = router({
     if (input.id === ctx.user.id && input.role !== ctx.user.role) {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'Não é possível alterar a própria role.' });
     }
-    assertCanAssignSuperAdmin(ctx.user.role, input.role);
     const before = await prisma.user.findFirst({
       where: { id: input.id, deletedAt: null },
     });
     if (!before) throw new TRPCError({ code: 'NOT_FOUND' });
-    // Impede rebaixar um SUPER_ADMIN se quem está editando não for SUPER_ADMIN
-    if (before.role === 'SUPER_ADMIN' && ctx.user.role !== 'SUPER_ADMIN') {
-      throw new TRPCError({
-        code: 'FORBIDDEN',
-        message: 'Apenas SUPER_ADMIN pode alterar role de um SUPER_ADMIN.',
-      });
-    }
     const updated = await prisma.user.update({
       where: { id: input.id },
       data: {

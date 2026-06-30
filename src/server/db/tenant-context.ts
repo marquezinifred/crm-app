@@ -35,15 +35,43 @@ export function requireTenantId(): string {
 }
 
 /**
- * Escape hatch — usar apenas em contextos sistêmicos seguros
- * (seed, cron jobs sistêmicos, webhooks autenticados).
- * Toda chamada deve ser justificada por comentário.
+ * Escape hatch sistêmico — usar apenas em seed, cron jobs, webhooks
+ * autenticados ou jobs internos sem identidade humana.
  */
+export const SYSTEM_TENANT_SENTINEL = '__system__';
+
 export function runAsSystem<T>(fn: () => Promise<T>): Promise<T> {
   return storage.run(
-    { tenantId: '__system__', userId: null, role: 'SUPER_ADMIN' },
+    { tenantId: SYSTEM_TENANT_SENTINEL, userId: null, role: 'PLATFORM_OWNER' },
     fn,
   );
 }
 
-export const SYSTEM_TENANT_SENTINEL = '__system__';
+/**
+ * Sprint 15A — contexto Platform Owner.
+ *
+ * Comporta-se como `runAsSystem` (bypassa filtro tenant da Prisma
+ * extension) mas mantém identidade atribuível: queries que gravam
+ * audit_logs com `user_id` recebem o ID do Platform Owner que está
+ * executando. Toda mutação durante impersonação grava esse ID em
+ * `metadata.impersonated_by` (responsabilidade do caller, não do helper).
+ */
+export const PLATFORM_TENANT_SENTINEL = '__platform__';
+
+export function runAsPlatform<T>(
+  platformUserId: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  return storage.run(
+    { tenantId: PLATFORM_TENANT_SENTINEL, userId: platformUserId, role: 'PLATFORM_OWNER' },
+    fn,
+  );
+}
+
+/**
+ * Helper para identificar se o contexto atual é sistêmico ou de plataforma
+ * (Prisma extension bypassa injeção de tenant para os dois).
+ */
+export function isPrivilegedContext(tenantId: string | undefined): boolean {
+  return tenantId === SYSTEM_TENANT_SENTINEL || tenantId === PLATFORM_TENANT_SENTINEL;
+}

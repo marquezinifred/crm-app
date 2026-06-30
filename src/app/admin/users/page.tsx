@@ -7,9 +7,9 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 
 const ROLE_LABEL: Record<UserRole, string> = {
-  SUPER_ADMIN: 'Super Admin',
   ADMIN: 'Admin',
   DIRETOR_COMERCIAL: 'Diretor Comercial',
+  DIRETOR_OPERACOES: 'Diretor de Operações',
   DIRETOR_FINANCEIRO: 'Diretor Financeiro',
   GESTOR: 'Gestor',
   ANALISTA: 'Analista',
@@ -17,9 +17,9 @@ const ROLE_LABEL: Record<UserRole, string> = {
 };
 
 const ALL_ROLES: UserRole[] = [
-  'SUPER_ADMIN',
   'ADMIN',
   'DIRETOR_COMERCIAL',
+  'DIRETOR_OPERACOES',
   'DIRETOR_FINANCEIRO',
   'GESTOR',
   'ANALISTA',
@@ -54,10 +54,9 @@ export default function AdminUsersPage() {
   }>({ email: '', fullName: '', role: 'ANALISTA' });
   const [inviteError, setInviteError] = useState<string | null>(null);
 
-  const isSuperAdmin = me.data?.role === 'SUPER_ADMIN';
-  const assignableRoles = isSuperAdmin
-    ? ALL_ROLES
-    : ALL_ROLES.filter((r) => r !== 'SUPER_ADMIN');
+  // Platform Owner é gerenciado em /platform/admins (Sprint 15A) — não
+  // aparece nesta tela. Aqui todos os roles tenant-side são atribuíveis.
+  const assignableRoles = ALL_ROLES;
 
   const inviteTitleId = useId();
   const tableCaptionId = useId();
@@ -180,8 +179,7 @@ export default function AdminUsersPage() {
               </tr>
             )}
             {list.data?.map((u) => {
-              const canEditThisUser =
-                u.role !== 'SUPER_ADMIN' || isSuperAdmin;
+              const canEditThisUser = true;
               return (
                 <tr key={u.id} className="border-t">
                   <td className="px-4 py-2 font-medium">{u.fullName}</td>
@@ -202,9 +200,7 @@ export default function AdminUsersPage() {
                       }
                       className="border rounded px-2 py-1 text-xs bg-card focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-60"
                     >
-                      {ALL_ROLES.filter(
-                        (r) => r !== 'SUPER_ADMIN' || isSuperAdmin || u.role === 'SUPER_ADMIN',
-                      ).map((r) => (
+                      {ALL_ROLES.map((r) => (
                         <option key={r} value={r}>
                           {ROLE_LABEL[r]}
                         </option>

@@ -38,9 +38,9 @@ function visibility(
   partnerCompanyId: string | null,
 ): Prisma.OpportunityWhereInput {
   if (
-    role === 'SUPER_ADMIN' ||
     role === 'ADMIN' ||
     role === 'DIRETOR_COMERCIAL' ||
+    role === 'DIRETOR_OPERACOES' ||
     role === 'DIRETOR_FINANCEIRO' ||
     role === 'GESTOR'
   ) {

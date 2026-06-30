@@ -16,7 +16,7 @@ import { PartnerEngagementStatus, Prisma } from '@prisma/client';
  */
 
 const canRequest = withCapability('partner', 'invite');
-const canApprove = withRoles('SUPER_ADMIN', 'ADMIN', 'DIRETOR_COMERCIAL', 'GESTOR');
+const canApprove = withRoles('ADMIN', 'DIRETOR_COMERCIAL', 'DIRETOR_OPERACOES', 'GESTOR');
 
 export const partnerEngagementsRouter = router({
   request: canRequest

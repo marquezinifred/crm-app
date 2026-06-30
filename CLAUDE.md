@@ -11,6 +11,66 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 ## Sprint atual
 
+> **Sprint 15A — Platform Console: ✅ CONCLUÍDO em 2026-06-29**
+>
+> Backend de plataforma + 7 telas em `/platform/*` + seed script.
+> `SUPER_ADMIN` saiu do enum tenant-side e virou `PLATFORM_OWNER`
+> em enum separado (`PlatformRole`), coluna `users.platform_role`,
+> com CHECK constraint garantindo XOR `tenantId / platformRole`.
+> Adicionado `DIRETOR_OPERACOES` (3 diretores agora: Comercial /
+> Operações / Financeiro), com permissões focadas em pós-venda
+> (cria/edita contratos mas não aprova propostas).
+>
+> Entregue:
+>  - ✅ Migration `0016_platform_owner` — enum `PlatformRole`,
+>    `users.tenant_id` nullable, `users.platform_role`, CHECK XOR,
+>    índice parcial, `audit_logs.tenant_id` nullable + coluna
+>    `metadata JSONB`, índice por `impersonated_by`
+>  - ✅ Enum `UserRole` enxuto (sem SUPER_ADMIN, com DIRETOR_OPERACOES)
+>  - ✅ `runAsPlatform(userId, fn)` + `PLATFORM_TENANT_SENTINEL` +
+>    `isPrivilegedContext` em `tenant-context.ts`. Prisma extension
+>    reconhece os dois sentinels e bypassa injeção de tenant
+>  - ✅ Middleware Next.js: `/platform/*` exige
+>    `public.platformRole === 'PLATFORM_OWNER'`. Platform Owner
+>    tentando navegar fora cai em `/platform/dashboard` automaticamente
+>  - ✅ tRPC context resolve `platformUser` (tenantId NULL +
+>    platformRole obrigatório); novo `platformProcedure` enforça via
+>    middleware dedicado
+>  - ✅ `platformAudit` service grava `metadata.platform_user_id` e,
+>    em impersonação, `metadata.impersonated_by` +
+>    `impersonation_session_id`
+>  - ✅ `platformRouter` com 12 procedures: `me`, `dashboard`,
+>    `tenantsList`, `tenantById`, `tenantCreate` (com invite Clerk
+>    do primeiro admin), `tenantSuspend`, `tenantUnsuspend`,
+>    `impersonateStart`, `impersonateEnd`, `auditList`, `privacyList`,
+>    `featureFlagsList`
+>  - ✅ 7 telas: `/platform/dashboard` (5 KPI cards + sugestões),
+>    `/platform/tenants` (lista + modal criar), `/platform/tenants/[id]`
+>    (4 tabs: Overview / Members / Billing / Config), `/platform/impersonate`
+>    (fluxo Tenant → User), `/platform/audit` (lista + filtros), `/platform/privacy`
+>    (fila LGPD cross-tenant), `/platform/feature-flags`
+>  - ✅ `PlatformShell` com banner vermelho persistente "Console da
+>    Plataforma" + sidebar dedicada de 6 itens
+>  - ✅ `prisma/seed-platform.ts` idempotente — env
+>    `PLATFORM_OWNER_EMAIL` + opcionais `PLATFORM_OWNER_FULL_NAME` +
+>    `PLATFORM_OWNER_CLERK_ID`
+>  - ✅ rbac.ts: `DIRETOR_OPERACOES` adicionado (gerencia contratos,
+>    aprova engajamento de parceiros, sem aprovar proposta);
+>    `hasPermission()` sem mais bypass por SUPER_ADMIN
+>  - ✅ Testes: 38 novos esperados — entregamos 38+ (platform-rbac +4,
+>    run-as-platform +5, impersonation-audit +3, rbac atualizado +9,
+>    users-role-guard reescrito +4, etc). Total **300/300** passando
+>  - ✅ Lint zero, type-check zero
+>
+> Notas operacionais:
+>  - Geração real de cookie Clerk para impersonação fica para sub-sprint
+>    de staging quando o setup Clerk estiver pronto. O endpoint já
+>    grava audit corretamente; o front recebe `sessionId` para vincular
+>  - Para promover `PLATFORM_SUPPORT` no futuro (lista no enum mas
+>    `enforcePlatform` bloqueia): ajustar policy no middleware tRPC
+>
+> 🎉 16 sprints (0–15A) sem débitos abertos.
+
 > **Fix corretivo — /companies + /contacts ghost routes:
 > ✅ CONCLUÍDO em 2026-06-29**
 >

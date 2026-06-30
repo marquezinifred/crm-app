@@ -35,6 +35,7 @@ import {
   DateType,
   ActivityType,
   ApprovalRuleCriteria,
+  Prisma,
 } from '@prisma/client';
 import { runAsSystem } from '../src/server/db/tenant-context';
 
@@ -188,16 +189,18 @@ async function seedTenant(tenantSpec: (typeof TENANTS)[number]): Promise<void> {
     },
   });
 
-  // Super admin global (apenas no primeiro tenant)
+  // Platform Owner global — apenas no primeiro tenant rodar (Sprint 15A).
+  // Em prod use `prisma/seed-platform.ts` em vez disso.
   if (tenantSpec.slug === 'acme-tech') {
     await prisma.user.create({
       data: {
-        tenantId: tenant.id,
+        tenantId: null,
         clerkId: null,
-        email: 'super@crm.local',
-        fullName: 'Super Admin',
-        role: UserRole.SUPER_ADMIN,
-      },
+        email: 'platform@crm.local',
+        fullName: 'Platform Owner (seed)',
+        role: UserRole.ADMIN,
+        platformRole: 'PLATFORM_OWNER',
+      } as Prisma.UserUncheckedCreateInput,
     });
   }
 

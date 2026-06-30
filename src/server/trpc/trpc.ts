@@ -47,3 +47,26 @@ const mapErrors = t.middleware(async ({ next }) => {
 });
 
 export const protectedProcedure = t.procedure.use(mapErrors).use(enforceAuth);
+
+/**
+ * Sprint 15A — procedure exclusiva Platform Owner.
+ *
+ * Não exige tenant ativo; em vez disso enforça que o caller é um
+ * PLATFORM_OWNER (claim Clerk via middleware). Toda mutação de dados
+ * cross-tenant disparada por essas procedures deve rodar dentro de
+ * `runAsPlatform(ctx.platformUser.id, () => ...)`.
+ */
+const enforcePlatform = t.middleware(({ ctx, next }) => {
+  if (!ctx.platformUser || ctx.platformRole !== 'PLATFORM_OWNER') {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'Acesso restrito a Platform Owners.' });
+  }
+  return next({
+    ctx: {
+      ...ctx,
+      platformUser: ctx.platformUser,
+      platformRole: ctx.platformRole,
+    },
+  });
+});
+
+export const platformProcedure = t.procedure.use(mapErrors).use(enforcePlatform);

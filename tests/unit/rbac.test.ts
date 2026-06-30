@@ -2,10 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { hasPermission, requirePermission, ForbiddenError } from '@/lib/auth/rbac';
 
 describe('RBAC', () => {
-  it('SUPER_ADMIN tem acesso a tudo', () => {
-    expect(hasPermission('SUPER_ADMIN', 'user', 'delete')).toBe(true);
-    expect(hasPermission('SUPER_ADMIN', 'tenant', 'update')).toBe(true);
-    expect(hasPermission('SUPER_ADMIN', 'ai', 'configure')).toBe(true);
+  it('ADMIN tem acesso amplo dentro do tenant', () => {
+    expect(hasPermission('ADMIN', 'user', 'delete')).toBe(true);
+    expect(hasPermission('ADMIN', 'tenant', 'update')).toBe(true);
+    expect(hasPermission('ADMIN', 'ai', 'configure')).toBe(true);
   });
 
   it('ANALISTA não pode deletar empresa', () => {
@@ -29,6 +29,13 @@ describe('RBAC', () => {
 
   it('DIRETOR_COMERCIAL pode aprovar proposta', () => {
     expect(hasPermission('DIRETOR_COMERCIAL', 'proposal', 'approve')).toBe(true);
+  });
+
+  it('DIRETOR_OPERACOES gerencia contratos mas não aprova proposta', () => {
+    expect(hasPermission('DIRETOR_OPERACOES', 'contract', 'create')).toBe(true);
+    expect(hasPermission('DIRETOR_OPERACOES', 'contract', 'update')).toBe(true);
+    expect(hasPermission('DIRETOR_OPERACOES', 'proposal', 'approve')).toBe(false);
+    expect(hasPermission('DIRETOR_OPERACOES', 'partner', 'approve_engagement')).toBe(true);
   });
 
   it('DIRETOR_FINANCEIRO pode aprovar proposta mas não criar oportunidade', () => {

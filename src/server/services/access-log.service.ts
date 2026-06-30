@@ -24,6 +24,8 @@ export async function recordUserAccess(entry: AccessLogEntry): Promise<void> {
       select: { id: true, tenantId: true },
     });
     if (!user) return;
+    // Platform users (tenantId NULL) não geram UserAccessLog — Sprint 15A.
+    if (!user.tenantId) return;
 
     try {
       await prisma.userAccessLog.create({

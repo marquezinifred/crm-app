@@ -166,14 +166,14 @@ export default function NewOpportunityPage() {
         </Field>
 
         {create.error && (
-          <p className="rounded bg-red-50 p-2 text-sm text-red-700">{create.error.message}</p>
+          <p className="rounded bg-red-50 p-2 text-sm text-danger">{create.error.message}</p>
         )}
 
         <div className="flex justify-end gap-2">
           <button
             type="button"
             onClick={() => router.back()}
-            className="rounded border border-neutral-300 px-4 py-2 text-sm"
+            className="rounded border border-border-strong px-4 py-2 text-sm"
           >
             Cancelar
           </button>

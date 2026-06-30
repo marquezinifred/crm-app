@@ -13,7 +13,7 @@ export function PoweredByBadge({ poweredBy }: { poweredBy: PoweredByMode }) {
       className={
         isVisible
           ? 'mt-6 pb-4 text-center text-[14px]'
-          : 'pb-2 pr-3 text-right text-[9px] text-neutral-500'
+          : 'pb-2 pr-3 text-right text-[9px] text-text-2'
       }
       style={isVisible ? { color: 'var(--brand-primary)' } : undefined}
     >

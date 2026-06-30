@@ -23,18 +23,18 @@ export default function EmailInboundConfigPage() {
   return (
     <main className="mx-auto max-w-2xl p-6">
       <h1 className="mb-4 text-2xl font-bold">E-mail Inbound</h1>
-      <p className="mb-4 text-sm text-neutral-600">
+      <p className="mb-4 text-sm text-text-2">
         Endereço único do seu tenant para receber e-mails. Tudo que chegar aqui
         vira atividade vinculada à oportunidade automaticamente (ou fica
         em /inbox para você revisar).
       </p>
 
       {data.fullAddress ? (
-        <section className="mb-6 rounded-lg border border-neutral-200 bg-white p-4">
-          <p className="mb-2 text-xs font-medium uppercase text-neutral-700">
+        <section className="mb-6 rounded-lg border border-border bg-card p-4">
+          <p className="mb-2 text-xs font-medium uppercase text-text-1">
             Endereço ativo
           </p>
-          <code className="block break-all rounded bg-neutral-100 p-3 text-sm">
+          <code className="block break-all rounded bg-hover p-3 text-sm">
             {data.fullAddress}
           </code>
           <div className="mt-3 flex gap-2">
@@ -60,9 +60,9 @@ export default function EmailInboundConfigPage() {
           </div>
         </section>
       ) : (
-        <section className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
-          <p className="mb-2 text-sm text-amber-900">
-            Nenhum endereço configurado. Defina um slug abaixo.
+        <section className="mb-6 rounded-lg border border-warning/30 bg-warning-bg p-4">
+          <p className="mb-2 text-sm text-warning-text">
+            Sem endereço inbound. Defina um slug abaixo para começar a receber e-mails no CRM.
           </p>
           <form
             className="flex gap-2"
@@ -82,21 +82,21 @@ export default function EmailInboundConfigPage() {
             </Button>
           </form>
           {setSlugMut.error && (
-            <p className="mt-2 text-sm text-red-700">{setSlugMut.error.message}</p>
+            <p className="mt-2 text-sm text-danger">{setSlugMut.error.message}</p>
           )}
         </section>
       )}
 
-      <section className="rounded-lg border border-neutral-200 bg-white p-4">
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-700">
+      <section className="rounded-lg border border-border bg-card p-4">
+        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-text-1">
           Como usar
         </h2>
-        <ol className="list-decimal space-y-2 pl-5 text-sm text-neutral-700">
+        <ol className="list-decimal space-y-2 pl-5 text-sm text-text-1">
           <li>Configure este endereço como destino do webhook inbound no seu provedor (Postmark Inbound ou Resend Inbound).</li>
           <li>Encaminhe ou envie e-mails para este endereço — o CRM detecta o tenant pelo slug.</li>
           <li>
             Para garantir vínculo direto a uma oportunidade, inclua{' '}
-            <code className="rounded bg-neutral-100 px-1">#{'<id-da-oportunidade>'}</code> no assunto.
+            <code className="rounded bg-hover px-1">#{'<id-da-oportunidade>'}</code> no assunto.
           </li>
           <li>Sem isso, a IA tenta inferir pelos contatos cadastrados; falhando, o item fica em /inbox.</li>
         </ol>

@@ -2,8 +2,18 @@ import { SignIn } from '@clerk/nextjs';
 
 export default function Page() {
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
-      <SignIn />
+    <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-page">
+      <div className="w-full max-w-md">
+        <header className="text-center mb-6">
+          <div className="text-[28px] font-black text-brand-primary-light tracking-tight">
+            VENZO
+          </div>
+          <p className="text-caption text-text-3 mt-1">
+            CRM B2B
+          </p>
+        </header>
+        <SignIn appearance={{ elements: { card: 'shadow-2xl border border-border' } }} />
+      </div>
     </div>
   );
 }

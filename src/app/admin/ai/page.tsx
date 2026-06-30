@@ -42,8 +42,8 @@ export default function AdminAIPage() {
     <main className="mx-auto max-w-3xl p-6">
       <h1 className="mb-4 text-2xl font-bold">Configuração de IA</h1>
 
-      <section className="mb-6 rounded-lg border border-neutral-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-700">
+      <section className="mb-6 rounded-lg border border-border bg-card p-4">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-1">
           Provedor e modelo
         </h2>
         <form
@@ -93,7 +93,7 @@ export default function AdminAIPage() {
 
           <label className="block">
             <span className="mb-1 block text-sm font-medium">API Key</span>
-            <p className="mb-1 text-xs text-neutral-600">
+            <p className="mb-1 text-xs text-text-2">
               {cfg.data?.hasApiKey
                 ? `Atual: ${cfg.data.apiKeyMasked} — preencha aqui para substituir.`
                 : 'Nenhuma chave configurada — preencha para habilitar IA.'}
@@ -113,11 +113,11 @@ export default function AdminAIPage() {
         </form>
       </section>
 
-      <section className="rounded-lg border border-neutral-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-700">
+      <section className="rounded-lg border border-border bg-card p-4">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-1">
           Consumo do mês corrente
         </h2>
-        {usage.isLoading && <p className="text-sm text-neutral-600">Calculando…</p>}
+        {usage.isLoading && <p className="text-sm text-text-2">Calculando…</p>}
         {usage.data && (
           <>
             <div className="mb-4 grid grid-cols-2 gap-3 text-sm">
@@ -126,7 +126,7 @@ export default function AdminAIPage() {
             </div>
             {usage.data.breakdown.length > 0 ? (
               <table className="w-full text-sm">
-                <thead className="text-left text-xs uppercase text-neutral-500">
+                <thead className="text-left text-xs uppercase text-text-2">
                   <tr>
                     <th className="py-2">Provider</th>
                     <th>Modelo</th>
@@ -136,7 +136,7 @@ export default function AdminAIPage() {
                 </thead>
                 <tbody>
                   {usage.data.breakdown.map((b, i) => (
-                    <tr key={i} className="border-t border-neutral-100">
+                    <tr key={i} className="border-t border-border">
                       <td className="py-2">{b.provider}</td>
                       <td>{b.model}</td>
                       <td className="text-right">{b.tokens.toLocaleString('pt-BR')}</td>
@@ -146,7 +146,7 @@ export default function AdminAIPage() {
                 </tbody>
               </table>
             ) : (
-              <p className="text-sm text-neutral-500">Sem uso de IA neste mês.</p>
+              <p className="text-sm text-text-2">Sem uso de IA neste mês.</p>
             )}
           </>
         )}
@@ -157,8 +157,8 @@ export default function AdminAIPage() {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded border border-neutral-200 p-3">
-      <p className="text-xs text-neutral-600">{label}</p>
+    <div className="rounded border border-border p-3">
+      <p className="text-xs text-text-2">{label}</p>
       <p className="text-lg font-semibold">{value}</p>
     </div>
   );

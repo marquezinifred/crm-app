@@ -61,7 +61,7 @@ export default function ImportsPage() {
     <main className="mx-auto max-w-4xl p-4 md:p-6">
       <h1 className="mb-4 text-2xl font-bold">Importação de dados</h1>
 
-      <section className="mb-6 rounded-lg border border-neutral-200 bg-white p-4">
+      <section className="mb-6 rounded-lg border border-border bg-card p-4">
         <ol className="mb-4 flex gap-1 text-xs">
           {[
             ['upload', '1. Enviar'],
@@ -71,7 +71,7 @@ export default function ImportsPage() {
             <li
               key={k}
               className={`flex-1 rounded px-2 py-1 text-center ${
-                step === k ? 'bg-brand text-white' : 'bg-neutral-100'
+                step === k ? 'bg-brand text-white' : 'bg-hover'
               }`}
             >
               {label}
@@ -103,7 +103,7 @@ export default function ImportsPage() {
               />
             </label>
             {uploadError && (
-              <p className="rounded bg-red-50 p-2 text-sm text-red-700">{uploadError}</p>
+              <p className="rounded bg-red-50 p-2 text-sm text-danger">{uploadError}</p>
             )}
             <Button type="submit" disabled={uploading}>
               {uploading ? 'Enviando…' : 'Continuar'}
@@ -113,7 +113,7 @@ export default function ImportsPage() {
 
         {step === 'map' && uploadResult && fieldsQ.data && (
           <div className="space-y-3">
-            <p className="text-sm text-neutral-600">
+            <p className="text-sm text-text-2">
               {uploadResult.totalRows} linha(s) detectada(s). Mapeie suas colunas para os campos
               do CRM:
             </p>
@@ -122,7 +122,7 @@ export default function ImportsPage() {
                 <label key={field.name} className="flex items-center gap-3 text-sm">
                   <span className="w-48 shrink-0">
                     {field.label}
-                    {field.required && <span className="text-red-600"> *</span>}
+                    {field.required && <span className="text-danger"> *</span>}
                   </span>
                   <select
                     value={mapping[field.name] ?? ''}
@@ -147,7 +147,7 @@ export default function ImportsPage() {
               ))}
             </div>
 
-            <details className="rounded border border-neutral-200 p-2 text-xs">
+            <details className="rounded border border-border p-2 text-xs">
               <summary className="cursor-pointer font-medium">
                 Pré-visualização (10 primeiras linhas)
               </summary>
@@ -156,7 +156,7 @@ export default function ImportsPage() {
                   <thead>
                     <tr>
                       {uploadResult.headers.map((h, i) => (
-                        <th key={i} className="border border-neutral-200 bg-neutral-50 p-1 text-left">
+                        <th key={i} className="border border-border bg-page p-1 text-left">
                           {h || `Col ${i + 1}`}
                         </th>
                       ))}
@@ -166,7 +166,7 @@ export default function ImportsPage() {
                     {uploadResult.preview.map((row, i) => (
                       <tr key={i}>
                         {row.map((v, j) => (
-                          <td key={j} className="border border-neutral-100 p-1">
+                          <td key={j} className="border border-border p-1">
                             {v}
                           </td>
                         ))}
@@ -207,7 +207,7 @@ export default function ImportsPage() {
               </select>
             </label>
             {confirm.error && (
-              <p className="rounded bg-red-50 p-2 text-sm text-red-700">{confirm.error.message}</p>
+              <p className="rounded bg-red-50 p-2 text-sm text-danger">{confirm.error.message}</p>
             )}
             <div className="flex justify-between">
               <Button type="button" variant="outline" onClick={() => setStep('map')}>
@@ -228,12 +228,12 @@ export default function ImportsPage() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-700">
+        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-text-1">
           Histórico
         </h2>
         {list && list.length === 0 && (
-          <p className="rounded border border-dashed border-neutral-300 p-4 text-center text-sm text-neutral-500">
-            Nenhuma importação registrada.
+          <p className="rounded border border-dashed border-border-strong p-4 text-center text-sm text-text-2">
+            Sem importações ainda. Suba seu primeiro CSV ou XLSX.
           </p>
         )}
         <ul className="space-y-2">
@@ -242,13 +242,13 @@ export default function ImportsPage() {
               | { created?: number; updated?: number; skipped?: number; errors?: unknown[] }
               | null;
             return (
-              <li key={j.id} className="rounded border border-neutral-200 bg-white p-3 text-sm">
+              <li key={j.id} className="rounded border border-border bg-card p-3 text-sm">
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <p className="font-medium">
                       {j.entity} · {j.fileName}
                     </p>
-                    <p className="text-xs text-neutral-600">
+                    <p className="text-xs text-text-2">
                       {new Date(j.createdAt).toLocaleString('pt-BR')} ·{' '}
                       {j.processedRows}/{j.totalRows} linhas
                     </p>
@@ -258,12 +258,12 @@ export default function ImportsPage() {
                   </span>
                 </div>
                 {result && (
-                  <p className="mt-1 text-xs text-neutral-700">
+                  <p className="mt-1 text-xs text-text-1">
                     ✓ {result.created ?? 0} criados · ↑ {result.updated ?? 0} atualizados · ⊘{' '}
                     {result.skipped ?? 0} ignorados · ✗ {result.errors?.length ?? 0} erros
                   </p>
                 )}
-                {j.errorMessage && <p className="mt-1 text-xs text-red-700">{j.errorMessage}</p>}
+                {j.errorMessage && <p className="mt-1 text-xs text-danger">{j.errorMessage}</p>}
               </li>
             );
           })}
@@ -274,10 +274,10 @@ export default function ImportsPage() {
 }
 
 const STATUS_COLORS: Record<ImportStatus, string> = {
-  PENDING: 'bg-neutral-100 text-neutral-700',
-  PARSING: 'bg-blue-100 text-blue-800',
-  MAPPED: 'bg-blue-100 text-blue-800',
-  RUNNING: 'bg-amber-100 text-amber-800',
-  DONE: 'bg-emerald-100 text-emerald-800',
+  PENDING: 'bg-hover text-text-1',
+  PARSING: 'bg-info-bg text-info-text',
+  MAPPED: 'bg-info-bg text-info-text',
+  RUNNING: 'bg-warning-bg text-warning-text',
+  DONE: 'bg-success-bg text-success-text',
   FAILED: 'bg-red-100 text-red-800',
 };

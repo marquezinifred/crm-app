@@ -6,10 +6,10 @@ import { Button } from '@/components/ui/button';
 import { brl } from '@/lib/utils/hooks';
 
 const STATUS_COLORS = {
-  PENDING: 'bg-amber-100 text-amber-800',
-  APPROVED: 'bg-emerald-100 text-emerald-800',
+  PENDING: 'bg-warning-bg text-warning-text',
+  APPROVED: 'bg-success-bg text-success-text',
   REJECTED: 'bg-red-100 text-red-800',
-  CHANGES_REQUESTED: 'bg-blue-100 text-blue-800',
+  CHANGES_REQUESTED: 'bg-info-bg text-info-text',
 } as const;
 
 export function ProposalsSection({ opportunityId }: { opportunityId: string }) {
@@ -43,9 +43,9 @@ export function ProposalsSection({ opportunityId }: { opportunityId: string }) {
   if (isLoading) return null;
 
   return (
-    <section className="mb-4 rounded-lg border border-neutral-200 bg-white p-4">
+    <section className="mb-4 rounded-lg border border-border bg-card p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-700">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-text-1">
           Propostas ({data?.length ?? 0})
         </h2>
         <Button type="button" size="sm" variant="outline" onClick={() => setShowCreate(true)}>
@@ -73,12 +73,12 @@ export function ProposalsSection({ opportunityId }: { opportunityId: string }) {
       )}
 
       {data && data.length === 0 && (
-        <p className="text-sm text-neutral-500">Nenhuma proposta. Crie a primeira.</p>
+        <p className="text-sm text-text-2">Nenhuma proposta. Crie a primeira.</p>
       )}
 
       <ul className="space-y-3">
         {data?.map((p) => (
-          <li key={p.id} className="rounded border border-neutral-200 p-3">
+          <li key={p.id} className="rounded border border-border p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
               <h3 className="text-sm font-medium">{p.title}</h3>
               <Button
@@ -93,7 +93,7 @@ export function ProposalsSection({ opportunityId }: { opportunityId: string }) {
 
             {addingTo === p.id && (
               <form
-                className="mb-3 space-y-2 rounded border border-neutral-100 bg-neutral-50 p-3 text-sm"
+                className="mb-3 space-y-2 rounded border border-border bg-page p-3 text-sm"
                 onSubmit={(e) => {
                   e.preventDefault();
                   addVersion.mutate({
@@ -141,7 +141,7 @@ export function ProposalsSection({ opportunityId }: { opportunityId: string }) {
                   {addVersion.isPending ? 'Salvando…' : 'Salvar versão'}
                 </Button>
                 {addVersion.data?.approvals.rulesMatched ? (
-                  <p className="text-xs text-amber-700">
+                  <p className="text-xs text-warning-text">
                     {addVersion.data.approvals.approvalsCreated} aprovação(ões) criada(s)
                     {addVersion.data.approvals.noApproverFor.length > 0 &&
                       ` · ⚠ sem aprovador para: ${addVersion.data.approvals.noApproverFor.join(', ')}`}
@@ -152,19 +152,19 @@ export function ProposalsSection({ opportunityId }: { opportunityId: string }) {
 
             <ul className="space-y-1.5 text-sm">
               {p.versions.map((v) => (
-                <li key={v.id} className="flex items-center justify-between gap-2 border-t border-neutral-100 pt-2">
+                <li key={v.id} className="flex items-center justify-between gap-2 border-t border-border pt-2">
                   <div>
                     <p>
                       <span className="font-medium">v{v.version}</span> · {brl(Number(v.totalValue))}
                       {v.marginPct != null && ` · margem ${Number(v.marginPct)}%`}
                     </p>
-                    <p className="text-xs text-neutral-500">
+                    <p className="text-xs text-text-2">
                       {new Date(v.createdAt).toLocaleDateString('pt-BR')}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-1">
                     {v.approvals.length === 0 ? (
-                      <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600">
+                      <span className="rounded bg-hover px-2 py-0.5 text-xs text-text-2">
                         sem regra aplicável
                       </span>
                     ) : (

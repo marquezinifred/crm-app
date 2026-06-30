@@ -1,0 +1,67 @@
+name: lighthouse
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tailwind.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    if: vars.STAGING_URL != ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Run Lighthouse
+        run: node scripts/lighthouse-audit.mjs
+        env:
+          STAGING_URL: ${{ vars.STAGING_URL }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lighthouse-results
+          path: tests/lighthouse/results.json
+          retention-days: 14
+      - name: Comment PR
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('node:fs');
+            try {
+              const { results } = JSON.parse(
+                fs.readFileSync('tests/lighthouse/results.json', 'utf-8'),
+              );
+              const body =
+                '## 🔦 Lighthouse Results\n\n' +
+                results
+                  .map((r) => {
+                    if (r.error) return `### ${r.route}\n❌ ${r.error}`;
+                    return (
+                      `### ${r.route}\n` +
+                      Object.entries(r.scores).map(([k, v]) => `- ${k}: **${v}**`).join('\n')
+                    );
+                  })
+                  .join('\n\n');
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body,
+              });
+            } catch (e) {
+              core.warning(`Não consegui comentar no PR: ${e.message}`);
+            }

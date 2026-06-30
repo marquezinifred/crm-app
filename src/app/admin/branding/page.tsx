@@ -73,26 +73,26 @@ export default function BrandingPage() {
     <main className="mx-auto max-w-5xl p-4 md:p-6">
       <header className="mb-4">
         <h1 className="text-2xl font-bold">Identidade visual</h1>
-        <p className="text-sm text-neutral-600">
+        <p className="text-sm text-text-2">
           Plano <strong>{plan}</strong>{' '}
           {isGrowth && '— paleta e fonte da lista curada Venzo.'}
           {isEnterprise && '— hex livre, Google Fonts e override WCAG disponíveis.'}
         </p>
         {themeQ.data?.hasActiveOverrides && (
-          <div className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+          <div className="mt-2 rounded border border-warning/40 bg-warning-bg p-2 text-xs text-warning-text">
             ⚠ Tema ativo possui desvios WCAG aprovados via override Enterprise.
           </div>
         )}
       </header>
 
-      <nav className="mb-4 flex gap-1 border-b border-neutral-200 text-sm">
+      <nav className="mb-4 flex gap-1 border-b border-border text-sm">
         {(['paleta', 'tipografia', 'logo', 'historico'] as Tab[]).map((t) => (
           <button
             key={t}
             type="button"
             onClick={() => setTab(t)}
             className={`-mb-px border-b-2 px-3 py-2 capitalize ${
-              tab === t ? 'border-brand text-brand' : 'border-transparent text-neutral-600'
+              tab === t ? 'border-brand text-brand' : 'border-transparent text-text-2'
             }`}
           >
             {t}
@@ -103,23 +103,23 @@ export default function BrandingPage() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
           {tab === 'paleta' && (
-            <section className="rounded-lg border border-neutral-200 bg-white p-4">
-              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-700">
+            <section className="rounded-lg border border-border bg-card p-4">
+              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-1">
                 Cores
               </h2>
               {isGrowth ? (
                 <div className="space-y-2">
-                  <p className="text-xs text-neutral-600">Escolha uma paleta curada:</p>
+                  <p className="text-xs text-text-2">Escolha uma paleta curada:</p>
                   {palettesQ.data?.map((p) => (
                     <button
                       key={p.id}
                       type="button"
                       onClick={() => setDraft({ ...draft, ...p.config })}
-                      className="flex w-full items-center justify-between rounded border border-neutral-200 p-2 text-left text-sm hover:border-brand"
+                      className="flex w-full items-center justify-between rounded border border-border p-2 text-left text-sm hover:border-brand"
                     >
                       <span>
                         <strong>{p.name}</strong>{' '}
-                        <span className="text-xs text-neutral-600">— {p.description}</span>
+                        <span className="text-xs text-text-2">— {p.description}</span>
                       </span>
                       <span className="flex gap-1">
                         {(['primaryColor', 'primaryDark', 'primaryLight', 'accentColor'] as const).map((k) => (
@@ -158,8 +158,8 @@ export default function BrandingPage() {
           )}
 
           {tab === 'tipografia' && (
-            <section className="rounded-lg border border-neutral-200 bg-white p-4">
-              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-700">
+            <section className="rounded-lg border border-border bg-card p-4">
+              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-1">
                 Fonte
               </h2>
               {isGrowth ? (
@@ -170,12 +170,12 @@ export default function BrandingPage() {
                       type="button"
                       onClick={() => setDraft({ ...draft, fontFamily: f.family })}
                       className={`flex w-full items-center justify-between rounded border p-2 text-left text-sm ${
-                        draft.fontFamily === f.family ? 'border-brand' : 'border-neutral-200'
+                        draft.fontFamily === f.family ? 'border-brand' : 'border-border'
                       }`}
                     >
                       <span style={{ fontFamily: `'${f.family}', sans-serif` }}>
                         <strong>{f.family}</strong>{' '}
-                        <span className="text-xs text-neutral-600">— {f.description}</span>
+                        <span className="text-xs text-text-2">— {f.description}</span>
                       </span>
                     </button>
                   ))}
@@ -200,14 +200,14 @@ export default function BrandingPage() {
         </div>
 
         <aside className="space-y-3">
-          <section className="rounded-lg border border-neutral-200 bg-white p-3">
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-700">
+          <section className="rounded-lg border border-border bg-card p-3">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-1">
               WCAG AA
             </h3>
             {!validateQ.data ? (
-              <p className="text-xs text-neutral-500">Verificando…</p>
+              <p className="text-xs text-text-2">Verificando…</p>
             ) : validateQ.data.passed ? (
-              <p className="text-xs text-emerald-700">
+              <p className="text-xs text-success">
                 ✓ {validateQ.data.checks.length} combinações OK
               </p>
             ) : (
@@ -215,7 +215,7 @@ export default function BrandingPage() {
                 {failures.map((f, i) => (
                   <li key={i} className="border-l-2 border-red-400 pl-2">
                     <p className="font-medium">{f.combination}</p>
-                    <p className="text-neutral-600">
+                    <p className="text-text-2">
                       {f.actualRatio} / {f.requiredRatio} · {f.context}
                     </p>
                   </li>
@@ -236,7 +236,7 @@ export default function BrandingPage() {
               {update.isPending ? 'Publicando…' : 'Publicar tema'}
             </Button>
             {update.error && (
-              <p className="rounded bg-red-50 p-2 text-xs text-red-700">{update.error.message}</p>
+              <p className="rounded bg-red-50 p-2 text-xs text-danger">{update.error.message}</p>
             )}
             {isEnterprise && failures.length > 0 && (
               <Button
@@ -254,9 +254,9 @@ export default function BrandingPage() {
 
       {showOverride && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowOverride(false)}>
-          <div className="max-w-lg rounded-lg bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="max-w-lg rounded-lg bg-card p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="mb-2 text-lg font-semibold">Override WCAG AA</h3>
-            <p className="mb-3 text-sm text-neutral-700">
+            <p className="mb-3 text-sm text-text-1">
               Você está publicando um tema que não atende WCAG AA em{' '}
               <strong>{failures.length}</strong> combinação(ões). Sua empresa assume a
               responsabilidade pela conformidade legal (Lei 13.146/2015) e pela
@@ -283,12 +283,12 @@ export default function BrandingPage() {
                 rows={3}
                 className="w-full rounded border px-2 py-1 text-sm"
               />
-              <span className="text-xs text-neutral-500">
+              <span className="text-xs text-text-2">
                 {overrideForm.justification.length}/30
               </span>
             </label>
             {publishOverride.error && (
-              <p className="mb-2 rounded bg-red-50 p-2 text-xs text-red-700">{publishOverride.error.message}</p>
+              <p className="mb-2 rounded bg-red-50 p-2 text-xs text-danger">{publishOverride.error.message}</p>
             )}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setShowOverride(false)}>
@@ -324,14 +324,14 @@ function SuggestionPanel({ hex, apply }: { hex: string; apply: (c: string) => vo
   if (!sug.data) return null;
   if (sug.data.unsupported) {
     return (
-      <section className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+      <section className="rounded-lg border border-warning/30 bg-warning-bg p-3 text-xs text-warning-text">
         Cor incompatível com WCAG AA. Tente outra cor.
       </section>
     );
   }
   return (
-    <section className="rounded-lg border border-neutral-200 bg-white p-3 text-xs">
-      <h3 className="mb-2 font-semibold uppercase tracking-wide text-neutral-700">
+    <section className="rounded-lg border border-border bg-card p-3 text-xs">
+      <h3 className="mb-2 font-semibold uppercase tracking-wide text-text-1">
         Sugestões para primaryColor
       </h3>
       <div className="space-y-2">
@@ -339,26 +339,26 @@ function SuggestionPanel({ hex, apply }: { hex: string; apply: (c: string) => vo
           <button
             type="button"
             onClick={() => apply(sug.data.darker!)}
-            className="flex w-full items-center justify-between rounded border border-neutral-200 p-2 hover:border-brand"
+            className="flex w-full items-center justify-between rounded border border-border p-2 hover:border-brand"
           >
             <span className="flex items-center gap-2">
               <span className="h-5 w-5 rounded" style={{ background: sug.data.darker }} />
               <span className="font-mono">{sug.data.darker}</span>
             </span>
-            <span className="text-neutral-500">escura</span>
+            <span className="text-text-2">escura</span>
           </button>
         )}
         {sug.data.lighter && (
           <button
             type="button"
             onClick={() => apply(sug.data.lighter!)}
-            className="flex w-full items-center justify-between rounded border border-neutral-200 p-2 hover:border-brand"
+            className="flex w-full items-center justify-between rounded border border-border p-2 hover:border-brand"
           >
             <span className="flex items-center gap-2">
               <span className="h-5 w-5 rounded" style={{ background: sug.data.lighter }} />
               <span className="font-mono">{sug.data.lighter}</span>
             </span>
-            <span className="text-neutral-500">clara</span>
+            <span className="text-text-2">clara</span>
           </button>
         )}
       </div>
@@ -368,31 +368,31 @@ function SuggestionPanel({ hex, apply }: { hex: string; apply: (c: string) => vo
 
 function AuditHistory() {
   const history = trpc.theme.auditHistory.useQuery();
-  if (history.isLoading) return <p className="text-sm text-neutral-600">Carregando…</p>;
+  if (history.isLoading) return <p className="text-sm text-text-2">Carregando…</p>;
   if (!history.data || history.data.length === 0) {
     return (
-      <section className="rounded-lg border border-neutral-200 bg-white p-4 text-sm text-neutral-600">
-        Nenhuma publicação registrada ainda.
+      <section className="rounded-lg border border-border bg-card p-4 text-sm text-text-2">
+        Sem publicações de tema ainda.
       </section>
     );
   }
   return (
-    <section className="rounded-lg border border-neutral-200 bg-white p-4">
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-700">
+    <section className="rounded-lg border border-border bg-card p-4">
+      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-1">
         Histórico de publicações
       </h2>
       <ul className="space-y-2 text-sm">
         {history.data.map((h) => {
           const after = (h.after ?? {}) as { validation?: { wcagLevel?: string }; overrideJustification?: string | null };
           return (
-            <li key={h.id} className="rounded border border-neutral-100 p-2">
-              <p className="text-xs text-neutral-600">
+            <li key={h.id} className="rounded border border-border p-2">
+              <p className="text-xs text-text-2">
                 {new Date(h.at).toLocaleString('pt-BR')} ·{' '}
                 {h.actor?.fullName ?? 'desconhecido'} ·{' '}
                 <strong>{after.validation?.wcagLevel ?? 'AA'}</strong>
               </p>
               {after.overrideJustification && (
-                <p className="mt-1 text-xs text-amber-800">
+                <p className="mt-1 text-xs text-warning-text">
                   Override: {after.overrideJustification}
                 </p>
               )}
@@ -413,7 +413,7 @@ function PlanComparisonUpsell() {
     <main className="mx-auto max-w-6xl p-4 md:p-8">
       <header className="mb-6">
         <h1 className="text-3xl font-bold">Identidade visual</h1>
-        <p className="mt-1 text-sm text-neutral-600">
+        <p className="mt-1 text-sm text-text-2">
           Seu plano atual é <strong>Starter</strong>. Faça upgrade para
           personalizar a aparência da plataforma com a marca da sua empresa.
         </p>
@@ -475,14 +475,14 @@ function PlanCard({
   const ring = tone === 'brand' ? 'ring-2 ring-[color:var(--brand-primary)]' : 'border';
   return (
     <article
-      className={`flex flex-col rounded-xl border-neutral-200 bg-white p-5 ${ring}`}
+      className={`flex flex-col rounded-xl border-border bg-card p-5 ${ring}`}
     >
       <div className="mb-3">
         <span
           className={`inline-block rounded-md px-2 py-0.5 text-xs font-semibold ${
             tone === 'brand'
               ? 'bg-[color:var(--brand-primary)]/10 text-[color:var(--brand-primary)]'
-              : 'bg-neutral-100 text-neutral-700'
+              : 'bg-hover text-text-1'
           }`}
         >
           {name}
@@ -490,7 +490,7 @@ function PlanCard({
         </span>
       </div>
       <h3 className="mb-1 text-xl font-bold">{name}</h3>
-      <p className="mb-4 text-sm text-neutral-600">{tagline}</p>
+      <p className="mb-4 text-sm text-text-2">{tagline}</p>
       <ul className="mb-4 space-y-2 text-sm">
         {features.map((f, i) => (
           <li key={i} className="flex items-start gap-2">
@@ -502,13 +502,13 @@ function PlanCard({
             >
               {f.ok ? '✓' : '✗'}
             </span>
-            <span className="text-neutral-800">{f.label}</span>
+            <span className="text-text-1">{f.label}</span>
           </li>
         ))}
       </ul>
       <div className="mt-auto pt-2">
         {current ? (
-          <span className="inline-block rounded-md bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-600">
+          <span className="inline-block rounded-md bg-hover px-3 py-1.5 text-xs font-medium text-text-2">
             Plano atual
           </span>
         ) : (
@@ -621,12 +621,12 @@ function FontCombobox({
         <ul
           id="font-combobox-list"
           role="listbox"
-          className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-md border border-neutral-200 bg-white shadow-lg"
+          className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-md border border-border bg-card shadow-lg"
         >
           {filtered.length === 0 ? (
-            <li className="px-3 py-2 text-sm text-neutral-500">
-              Nenhuma fonte popular bate com &ldquo;{query}&rdquo;. Pressione Enter
-              para usar mesmo assim (Google Fonts carregará dinamicamente).
+            <li className="px-3 py-2 text-sm text-text-2">
+              Sem matches diretos para &ldquo;{query}&rdquo;. Pressione Enter para
+              usar assim mesmo — o Google Fonts carrega dinamicamente.
             </li>
           ) : (
             filtered.map((f, i) => (
@@ -637,13 +637,13 @@ function FontCombobox({
                 onMouseEnter={() => setActiveIndex(i)}
                 onClick={() => select(f.family)}
                 className={`flex cursor-pointer items-center justify-between px-3 py-2 text-sm ${
-                  i === activeIndex ? 'bg-neutral-100' : ''
+                  i === activeIndex ? 'bg-hover' : ''
                 } ${value === f.family ? 'font-semibold' : ''}`}
               >
                 <span style={{ fontFamily: `'${f.family}', sans-serif` }}>
                   {f.family}
                 </span>
-                <span className="ml-2 text-xs uppercase tracking-wide text-neutral-400">
+                <span className="ml-2 text-xs uppercase tracking-wide text-text-3">
                   {categoryLabel[f.category]}
                 </span>
               </li>
@@ -651,7 +651,7 @@ function FontCombobox({
           )}
         </ul>
       )}
-      <p className="mt-2 text-xs text-neutral-500">
+      <p className="mt-2 text-xs text-text-2">
         Lista mostra {POPULAR_GOOGLE_FONTS.length} Google Fonts populares.
         Pode digitar qualquer outra e confirmar com Enter (plano Enterprise).
       </p>
@@ -708,23 +708,23 @@ function LogoPicker({
   }
 
   return (
-    <section className="rounded-lg border border-neutral-200 bg-white p-4">
+    <section className="rounded-lg border border-border bg-card p-4">
       <header className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-700">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-text-1">
           Logo
         </h2>
         <div className="flex gap-1 text-xs">
           <button
             type="button"
             onClick={() => setMode('upload')}
-            className={`rounded px-2 py-1 ${mode === 'upload' ? 'bg-brand text-white' : 'bg-neutral-100 text-neutral-700'}`}
+            className={`rounded px-2 py-1 ${mode === 'upload' ? 'bg-brand text-white' : 'bg-hover text-text-1'}`}
           >
             Upload
           </button>
           <button
             type="button"
             onClick={() => setMode('url')}
-            className={`rounded px-2 py-1 ${mode === 'url' ? 'bg-brand text-white' : 'bg-neutral-100 text-neutral-700'}`}
+            className={`rounded px-2 py-1 ${mode === 'url' ? 'bg-brand text-white' : 'bg-hover text-text-1'}`}
           >
             URL externa
           </button>
@@ -734,7 +734,7 @@ function LogoPicker({
       {mode === 'upload' ? (
         <div>
           <label
-            className="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-600 hover:border-brand hover:bg-neutral-50"
+            className="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-border-strong p-6 text-center text-sm text-text-2 hover:border-brand hover:bg-page"
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
               e.preventDefault();
@@ -752,7 +752,7 @@ function LogoPicker({
               }}
               className="hidden"
             />
-            <span className="mb-1 font-medium text-neutral-700">
+            <span className="mb-1 font-medium text-text-1">
               Clique ou arraste um arquivo
             </span>
             <span className="text-xs">
@@ -771,22 +771,22 @@ function LogoPicker({
       )}
 
       {error && (
-        <p className="mt-2 rounded bg-red-50 p-2 text-xs text-red-700">{error}</p>
+        <p className="mt-2 rounded bg-red-50 p-2 text-xs text-danger">{error}</p>
       )}
 
       {value && (
-        <div className="mt-4 rounded border border-neutral-200 bg-neutral-50 p-3">
-          <div className="mb-2 flex items-center justify-between text-xs text-neutral-600">
+        <div className="mt-4 rounded border border-border bg-page p-3">
+          <div className="mb-2 flex items-center justify-between text-xs text-text-2">
             <span>Preview</span>
             <button
               type="button"
               onClick={clear}
-              className="text-red-600 hover:underline"
+              className="text-danger hover:underline"
             >
               Remover
             </button>
           </div>
-          <div className="flex h-20 items-center justify-center rounded bg-white">
+          <div className="flex h-20 items-center justify-center rounded bg-card">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={value}
@@ -798,7 +798,7 @@ function LogoPicker({
         </div>
       )}
 
-      <p className="mt-3 text-xs text-neutral-500">
+      <p className="mt-3 text-xs text-text-2">
         Upload local funciona em desenvolvimento (salva como data: URL no banco).
         Sprint futuro: integração real com R2/S3 + presigned URL.
       </p>

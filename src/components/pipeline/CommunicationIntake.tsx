@@ -64,9 +64,9 @@ export function CommunicationIntake({ opportunityId, onConfirmed }: Props) {
 
   if (!summary) {
     return (
-      <div className="rounded-lg border border-neutral-200 bg-white p-4">
+      <div className="rounded-lg border border-border bg-card p-4">
         <h3 className="mb-2 text-sm font-semibold">Receptor de comunicações</h3>
-        <p className="mb-3 text-xs text-neutral-600">
+        <p className="mb-3 text-xs text-text-2">
           Cole o e-mail ou WhatsApp aqui. A IA gera um resumo em 4 blocos + sugere
           tarefas. PII é mascarada antes de ir para o provedor.
         </p>
@@ -85,27 +85,27 @@ export function CommunicationIntake({ opportunityId, onConfirmed }: Props) {
           {summarize.isLoading ? 'Processando…' : 'Resumir com IA'}
         </Button>
         {summarize.error && (
-          <p className="mt-2 text-sm text-red-600">{summarize.error.message}</p>
+          <p className="mt-2 text-sm text-danger">{summarize.error.message}</p>
         )}
       </div>
     );
   }
 
   return (
-    <div className="rounded-lg border border-neutral-200 bg-white p-4">
+    <div className="rounded-lg border border-border bg-card p-4">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-semibold">Resumo gerado pela IA</h3>
         <button
           type="button"
           onClick={() => setSummary(null)}
-          className="text-xs text-neutral-600 hover:text-neutral-900"
+          className="text-xs text-text-2 hover:text-text-1"
         >
           ← Voltar para o texto
         </button>
       </div>
 
       {aiFailed && (
-        <p className="mb-3 rounded bg-amber-50 p-2 text-sm text-amber-800">
+        <p className="mb-3 rounded bg-warning-bg p-2 text-sm text-warning-text">
           IA indisponível no momento. Você pode editar manualmente e confirmar.
         </p>
       )}
@@ -127,11 +127,11 @@ export function CommunicationIntake({ opportunityId, onConfirmed }: Props) {
       />
 
       <div className="mt-4">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-700">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-1">
           Próximos passos sugeridos
         </p>
         {tasks.length === 0 ? (
-          <p className="text-xs text-neutral-500">Nenhuma tarefa sugerida.</p>
+          <p className="text-xs text-text-2">Sem tarefas sugeridas pela IA.</p>
         ) : (
           <ul className="space-y-2">
             {tasks.map((t, i) => (
@@ -174,7 +174,7 @@ export function CommunicationIntake({ opportunityId, onConfirmed }: Props) {
                       className="rounded border px-2 py-1"
                     />
                     {t.assigneeHint && (
-                      <span className="text-neutral-500">sugerido: {t.assigneeHint}</span>
+                      <span className="text-text-2">sugerido: {t.assigneeHint}</span>
                     )}
                   </div>
                 </div>
@@ -220,10 +220,10 @@ function BlockList({
 }) {
   return (
     <div className="mb-3">
-      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-700">
+      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-text-1">
         {label}
       </p>
-      {items.length === 0 && <p className="text-xs text-neutral-400">Nenhum item</p>}
+      {items.length === 0 && <p className="text-xs text-text-3">Sem itens.</p>}
       <ul className="space-y-1">
         {items.map((it, i) => (
           <li key={i} className="flex items-center gap-2">
@@ -237,7 +237,7 @@ function BlockList({
             <button
               type="button"
               onClick={() => onChange(items.filter((_, idx) => idx !== i))}
-              className="text-neutral-400 hover:text-red-600"
+              className="text-text-3 hover:text-danger"
               aria-label={`Remover ${label} ${i + 1}`}
             >
               ×
@@ -248,7 +248,7 @@ function BlockList({
       <button
         type="button"
         onClick={() => onChange([...items, ''])}
-        className="mt-1 text-xs text-neutral-600 hover:text-neutral-900"
+        className="mt-1 text-xs text-text-2 hover:text-text-1"
       >
         + adicionar
       </button>

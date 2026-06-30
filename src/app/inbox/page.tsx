@@ -33,16 +33,16 @@ export default function InboxPage() {
     <main className="mx-auto max-w-3xl p-4 md:p-6">
       <header className="mb-4 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Inbox de e-mails</h1>
-        <a href="/admin/email-inbound" className="text-sm text-neutral-600 hover:underline">
+        <a href="/admin/email-inbound" className="text-sm text-text-2 hover:underline">
           Configurar endereço →
         </a>
       </header>
 
-      {isLoading && <p className="text-sm text-neutral-600">Carregando…</p>}
-      {error && <p className="text-sm text-red-600">{error.message}</p>}
+      {isLoading && <p className="text-sm text-text-2">Carregando…</p>}
+      {error && <p className="text-sm text-danger">{error.message}</p>}
 
       {data && data.length === 0 && (
-        <p className="rounded border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-500">
+        <p className="rounded border border-dashed border-border-strong p-6 text-center text-sm text-text-2">
           Sem e-mails pendentes. Envie um para o endereço inbound do seu tenant.
         </p>
       )}
@@ -53,7 +53,7 @@ export default function InboxPage() {
             ((e.rawPayload as { _suggestions?: Suggestion[] } | null)?._suggestions ?? []) as Suggestion[];
           const isOpen = openId === e.id;
           return (
-            <li key={e.id} className="rounded-lg border border-neutral-200 bg-white">
+            <li key={e.id} className="rounded-lg border border-border bg-card">
               <button
                 type="button"
                 onClick={() => setOpenId(isOpen ? null : e.id)}
@@ -61,29 +61,29 @@ export default function InboxPage() {
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{e.subject ?? '(sem assunto)'}</p>
-                  <p className="truncate text-xs text-neutral-600">de {e.fromEmail}</p>
-                  <p className="text-xs text-neutral-500">
+                  <p className="truncate text-xs text-text-2">de {e.fromEmail}</p>
+                  <p className="text-xs text-text-2">
                     {new Date(e.receivedAt).toLocaleString('pt-BR')}
                   </p>
                 </div>
-                <span className="text-xs text-neutral-400">{isOpen ? '▲' : '▼'}</span>
+                <span className="text-xs text-text-3">{isOpen ? '▲' : '▼'}</span>
               </button>
 
               {isOpen && (
-                <div className="border-t border-neutral-100 p-3">
-                  <div className="mb-3 max-h-48 overflow-y-auto rounded bg-neutral-50 p-2 text-xs whitespace-pre-line">
+                <div className="border-t border-border p-3">
+                  <div className="mb-3 max-h-48 overflow-y-auto rounded bg-page p-2 text-xs whitespace-pre-line">
                     {e.bodyText ?? '(corpo vazio)'}
                   </div>
 
                   {suggestions.length > 0 ? (
                     <div className="mb-3">
-                      <p className="mb-1 text-xs font-medium text-neutral-700">Sugestões da IA</p>
+                      <p className="mb-1 text-xs font-medium text-text-1">Sugestões da IA</p>
                       <ul className="space-y-1">
                         {suggestions.map((s) => (
                           <li key={s.opportunityId} className="flex items-center justify-between gap-2 text-sm">
                             <span className="min-w-0 truncate">
                               {s.opportunityTitle}{' '}
-                              <span className="text-xs text-neutral-500">
+                              <span className="text-xs text-text-2">
                                 ({Math.round(s.confidence * 100)}%)
                               </span>
                             </span>
@@ -103,8 +103,8 @@ export default function InboxPage() {
                       </ul>
                     </div>
                   ) : (
-                    <p className="mb-3 text-xs text-neutral-500">
-                      Nenhuma sugestão automática gerada.
+                    <p className="mb-3 text-xs text-text-2">
+                      Sem sugestões automáticas dessa vez.
                     </p>
                   )}
 

@@ -3,6 +3,7 @@
 import { trpc } from '@/lib/trpc/client';
 import { useState } from 'react';
 import type { DataSubjectRequestStatus, DataSubjectRequestType } from '@prisma/client';
+import { PageHeader } from '@/components/layout/PageHeader';
 
 const TYPE_LABEL: Record<DataSubjectRequestType, string> = {
   ACCESS: 'Acesso',
@@ -13,9 +14,9 @@ const TYPE_LABEL: Record<DataSubjectRequestType, string> = {
 };
 
 const STATUS_BADGE: Record<DataSubjectRequestStatus, string> = {
-  PENDING: 'bg-amber-100 text-amber-800',
-  IN_PROGRESS: 'bg-blue-100 text-blue-800',
-  COMPLETED: 'bg-emerald-100 text-emerald-800',
+  PENDING: 'bg-warning-bg text-warning-text',
+  IN_PROGRESS: 'bg-info-bg text-info-text',
+  COMPLETED: 'bg-success-bg text-success-text',
   REJECTED: 'bg-rose-100 text-rose-800',
 };
 
@@ -32,18 +33,16 @@ export default function AdminPrivacyPage() {
   const [reason, setReason] = useState('');
 
   return (
-    <main className="p-6 md:p-10 max-w-6xl mx-auto space-y-6">
-      <header>
-        <h1 className="text-2xl font-semibold">Solicitações LGPD</h1>
-        <p className="text-sm text-neutral-600">
-          SLA ANPD: 15 dias entre submissão e conclusão. Itens em vermelho
-          estão atrasados.
-        </p>
-      </header>
+    <div className="max-w-6xl mx-auto space-y-6">
+      <PageHeader
+        title="Solicitações LGPD"
+        description="SLA ANPD: 15 dias entre submissão e conclusão. Itens em vermelho estão atrasados."
+        meta={all.data && `${all.data.length} solicitaç${all.data.length === 1 ? 'ão' : 'ões'}`}
+      />
 
       {all.isLoading && <p>Carregando...</p>}
       {all.data && all.data.length === 0 && (
-        <p className="text-neutral-500">Nenhuma solicitação.</p>
+        <p className="text-text-2">Sem solicitações LGPD em aberto.</p>
       )}
 
       <div className="space-y-3">
@@ -56,7 +55,7 @@ export default function AdminPrivacyPage() {
             <article
               key={req.id}
               className={`border rounded-md p-4 ${
-                overdue ? 'border-rose-300 bg-rose-50/40' : 'bg-white'
+                overdue ? 'border-danger/40 bg-danger-bg/40' : 'bg-card'
               }`}
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -67,28 +66,28 @@ export default function AdminPrivacyPage() {
                     >
                       {req.status}
                     </span>
-                    <span className="text-xs font-medium text-neutral-700">
+                    <span className="text-xs font-medium text-text-1">
                       {TYPE_LABEL[req.requestType]}
                     </span>
                     {overdue && (
-                      <span className="text-xs text-rose-700 font-semibold">
+                      <span className="text-xs text-danger font-semibold">
                         ATRASADO
                       </span>
                     )}
                   </div>
-                  <div className="mt-1 text-sm text-neutral-900">
+                  <div className="mt-1 text-sm text-text-1">
                     {req.subjectName ?? '—'} ·{' '}
-                    <span className="text-neutral-600">{req.subjectEmail}</span>
+                    <span className="text-text-2">{req.subjectEmail}</span>
                   </div>
-                  <div className="mt-1 text-xs text-neutral-500">
+                  <div className="mt-1 text-xs text-text-2">
                     Recebido {new Date(req.submittedAt).toLocaleDateString('pt-BR')}{' '}
                     · Vence {new Date(req.dueAt).toLocaleDateString('pt-BR')}
                   </div>
                   {req.description && (
-                    <p className="mt-2 text-sm text-neutral-700">{req.description}</p>
+                    <p className="mt-2 text-sm text-text-1">{req.description}</p>
                   )}
                   {req.rejectionReason && (
-                    <p className="mt-2 text-xs text-rose-700">
+                    <p className="mt-2 text-xs text-danger">
                       Motivo da rejeição: {req.rejectionReason}
                     </p>
                   )}
@@ -98,7 +97,7 @@ export default function AdminPrivacyPage() {
                     <button
                       onClick={() => process.mutate({ id: req.id })}
                       disabled={process.isPending}
-                      className="px-3 py-1.5 text-sm rounded-md bg-emerald-600 text-white hover:opacity-90 disabled:opacity-50"
+                      className="px-3 py-1.5 text-sm rounded-md bg-success text-white hover:opacity-90 disabled:opacity-50"
                     >
                       Processar
                     </button>
@@ -107,7 +106,7 @@ export default function AdminPrivacyPage() {
                         setRejecting(req.id);
                         setReason('');
                       }}
-                      className="px-3 py-1.5 text-sm rounded-md border hover:bg-neutral-50"
+                      className="px-3 py-1.5 text-sm rounded-md border hover:bg-page"
                     >
                       Rejeitar
                     </button>
@@ -131,13 +130,13 @@ export default function AdminPrivacyPage() {
                         await reject.mutateAsync({ id: req.id, reason });
                         setRejecting(null);
                       }}
-                      className="px-3 py-1.5 text-sm rounded-md bg-rose-600 text-white hover:opacity-90 disabled:opacity-50"
+                      className="px-3 py-1.5 text-sm rounded-md bg-danger text-white hover:opacity-90 disabled:opacity-50"
                     >
                       Confirmar rejeição
                     </button>
                     <button
                       onClick={() => setRejecting(null)}
-                      className="px-3 py-1.5 text-sm rounded-md border hover:bg-neutral-50"
+                      className="px-3 py-1.5 text-sm rounded-md border hover:bg-page"
                     >
                       Cancelar
                     </button>
@@ -148,6 +147,6 @@ export default function AdminPrivacyPage() {
           );
         })}
       </div>
-    </main>
+    </div>
   );
 }

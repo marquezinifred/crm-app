@@ -49,13 +49,13 @@ export default function ApprovalRulesPage() {
   return (
     <main className="mx-auto max-w-2xl p-6">
       <h1 className="mb-2 text-2xl font-bold">Regras de aprovação</h1>
-      <p className="mb-4 text-sm text-neutral-600">
+      <p className="mb-4 text-sm text-text-2">
         Cada nova versão de proposta passa por estas regras. Aprovações pendentes
         bloqueiam o avanço para Aceite.
       </p>
 
-      <section className="mb-6 rounded-lg border border-neutral-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-700">
+      <section className="mb-6 rounded-lg border border-border bg-card p-4">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-1">
           Nova regra
         </h2>
         <form
@@ -136,21 +136,21 @@ export default function ApprovalRulesPage() {
       </section>
 
       {data && data.length === 0 && (
-        <p className="rounded border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-500">
+        <p className="rounded border border-dashed border-border-strong p-6 text-center text-sm text-text-2">
           Nenhuma regra configurada — propostas avançam sem aprovação.
         </p>
       )}
 
       <ul className="space-y-2">
         {data?.map((r) => (
-          <li key={r.id} className="flex items-center justify-between gap-2 rounded border border-neutral-200 bg-white p-3 text-sm">
+          <li key={r.id} className="flex items-center justify-between gap-2 rounded border border-border bg-card p-3 text-sm">
             <div className="min-w-0">
               <p className="font-medium">{r.name}</p>
-              <p className="text-xs text-neutral-600">
+              <p className="text-xs text-text-2">
                 {CRITERIA_LABELS[r.criteria]}
                 {r.thresholdNumeric != null && ` · threshold ${Number(r.thresholdNumeric)}`}
               </p>
-              <p className="text-xs text-neutral-500">
+              <p className="text-xs text-text-2">
                 aprovadores: {r.approverRoles.join(', ')}
               </p>
             </div>

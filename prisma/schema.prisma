@@ -330,35 +330,38 @@ enum PartnerEngagementStatus {
 // ---------------------------------------------------------------------
 
 model Tenant {
-  id                      String     @id @default(uuid()) @db.Uuid
-  slug                    String     @unique @db.Citext
+  id                      String              @id @default(uuid()) @db.Uuid
+  slug                    String              @unique @db.Citext
   name                    String
-  plan                    TenantPlan @default(TRIAL)
-  centralCrmEmail         String?    @map("central_crm_email")
-  alertLeadDays           Int[]      @default([7, 1]) @map("alert_lead_days")
-  taskOverdueDays         Int        @default(2) @map("task_overdue_days")
-  aiProvider              AIProvider @default(ANTHROPIC) @map("ai_provider")
-  aiModel                 String?    @map("ai_model")
-  aiApiKeyEncrypted       String?    @map("ai_api_key_encrypted")
+  plan                    TenantPlan          @default(TRIAL)
+  centralCrmEmail         String?             @map("central_crm_email")
+  alertLeadDays           Int[]               @default([7, 1]) @map("alert_lead_days")
+  taskOverdueDays         Int                 @default(2) @map("task_overdue_days")
+  aiProvider              AIProvider          @default(ANTHROPIC) @map("ai_provider")
+  aiModel                 String?             @map("ai_model")
+  aiApiKeyEncrypted       String?             @map("ai_api_key_encrypted")
   // Taxas de conversão por estágio (JSON { stage: pct }) — usadas pela
   // projeção de receita. Default: 5/15/30/50/70/85/100 (do funil).
-  conversionRates         Json?      @map("conversion_rates")
+  conversionRates         Json?               @map("conversion_rates")
   // Slug único do tenant para o endereço de e-mail inbound:
   //   crm-<slug>@inbound.<domínio>. Configurável pelo Admin.
-  inboundEmailSlug        String?    @unique @map("inbound_email_slug") @db.Citext
+  inboundEmailSlug        String?             @unique @map("inbound_email_slug") @db.Citext
   // Destinatários do handoff (e-mail) quando contrato vira ACTIVE
-  handoffEmails           String[]   @default([]) @map("handoff_emails")
+  handoffEmails           String[]            @default([]) @map("handoff_emails")
   // Antecedências (em dias) para alertas de renovação contratual
-  contractRenewalLeadDays Int[]      @default([90, 60, 30]) @map("contract_renewal_lead_days")
+  contractRenewalLeadDays Int[]               @default([90, 60, 30]) @map("contract_renewal_lead_days")
   // Billing — Sprint 12
-  stripeCustomerId        String?    @unique @map("stripe_customer_id")
-  stripeSubscriptionId    String?    @unique @map("stripe_subscription_id")
+  stripeCustomerId        String?             @unique @map("stripe_customer_id")
+  stripeSubscriptionId    String?             @unique @map("stripe_subscription_id")
   subscriptionStatus      SubscriptionStatus? @map("subscription_status")
-  currentPeriodEnd        DateTime?  @map("current_period_end")
-  trialEndsAt             DateTime?  @map("trial_ends_at")
-  createdAt               DateTime   @default(now()) @map("created_at")
-  updatedAt               DateTime   @updatedAt @map("updated_at")
-  deletedAt               DateTime?  @map("deleted_at")
+  currentPeriodEnd        DateTime?           @map("current_period_end")
+  trialEndsAt             DateTime?           @map("trial_ends_at")
+  // Onboarding — Sprint 13
+  setupCompletedAt        DateTime?           @map("setup_completed_at")
+  tourDismissedAt         DateTime?           @map("tour_dismissed_at")
+  createdAt               DateTime            @default(now()) @map("created_at")
+  updatedAt               DateTime            @updatedAt @map("updated_at")
+  deletedAt               DateTime?           @map("deleted_at")
 
   users                   User[]
   companies               Company[]
@@ -1447,13 +1450,13 @@ model ConnectionLog {
 // ---------------------------------------------------------------------
 
 model BillingEvent {
-  id              String           @id @default(uuid()) @db.Uuid
-  tenantId        String?          @map("tenant_id") @db.Uuid
-  type            BillingEventType
-  stripeEventId   String           @unique @map("stripe_event_id")
-  payload         Json
-  processedAt     DateTime         @default(now()) @map("processed_at")
-  error           String?
+  id            String           @id @default(uuid()) @db.Uuid
+  tenantId      String?          @map("tenant_id") @db.Uuid
+  type          BillingEventType
+  stripeEventId String           @unique @map("stripe_event_id")
+  payload       Json
+  processedAt   DateTime         @default(now()) @map("processed_at")
+  error         String?
 
   tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
 
@@ -1468,21 +1471,20 @@ model BillingEvent {
 // ---------------------------------------------------------------------
 
 model UsageSnapshot {
-  id              String   @id @default(uuid()) @db.Uuid
-  tenantId        String   @map("tenant_id") @db.Uuid
-  capturedAt      DateTime @default(now()) @map("captured_at")
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @map("tenant_id") @db.Uuid
+  capturedAt       DateTime @default(now()) @map("captured_at")
   // counts
-  userCount       Int      @default(0) @map("user_count")
-  companyCount    Int      @default(0) @map("company_count")
-  contactCount    Int      @default(0) @map("contact_count")
-  opportunityCount Int     @default(0) @map("opportunity_count")
-  storageBytes    BigInt   @default(0) @map("storage_bytes")
-  aiTokensMonth   Int      @default(0) @map("ai_tokens_month")
-  aiCostCentsMonth Int     @default(0) @map("ai_cost_cents_month")
+  userCount        Int      @default(0) @map("user_count")
+  companyCount     Int      @default(0) @map("company_count")
+  contactCount     Int      @default(0) @map("contact_count")
+  opportunityCount Int      @default(0) @map("opportunity_count")
+  storageBytes     BigInt   @default(0) @map("storage_bytes")
+  aiTokensMonth    Int      @default(0) @map("ai_tokens_month")
+  aiCostCentsMonth Int      @default(0) @map("ai_cost_cents_month")
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, capturedAt])
   @@map("usage_snapshots")
 }
-

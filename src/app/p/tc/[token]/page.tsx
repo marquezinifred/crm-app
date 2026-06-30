@@ -17,7 +17,7 @@ export default function PublicTcAcceptPage() {
     return (
       <main className="mx-auto max-w-md p-8 text-center">
         <h1 className="mb-2 text-xl font-bold">Link inválido ou expirado</h1>
-        <p className="text-sm text-neutral-600">
+        <p className="text-sm text-text-2">
           Solicite um novo link ao administrador do CRM.
         </p>
       </main>
@@ -28,7 +28,7 @@ export default function PublicTcAcceptPage() {
     return (
       <main className="mx-auto max-w-md p-8 text-center">
         <h1 className="mb-2 text-xl font-bold">Aceite registrado</h1>
-        <p className="text-sm text-neutral-600">
+        <p className="text-sm text-text-2">
           Obrigado, {form.acceptedByName}. Seu aceite foi registrado para fins de
           rastreabilidade contratual.
         </p>
@@ -39,15 +39,15 @@ export default function PublicTcAcceptPage() {
   return (
     <main className="mx-auto max-w-2xl p-4 md:p-6">
       <header className="mb-4">
-        <p className="text-xs uppercase text-neutral-500">{data.tenantName}</p>
+        <p className="text-xs uppercase text-text-2">{data.tenantName}</p>
         <h1 className="text-2xl font-bold">Termos e Condições</h1>
-        <p className="text-sm text-neutral-600">
+        <p className="text-sm text-text-2">
           Parceiro: <strong>{data.partner.razaoSocial}</strong>
           {data.partner.tcVersion && ` · versão ${data.partner.tcVersion}`}
         </p>
       </header>
 
-      <section className="mb-6 max-h-96 overflow-y-auto rounded-lg border border-neutral-200 bg-white p-4 text-sm whitespace-pre-line">
+      <section className="mb-6 max-h-96 overflow-y-auto rounded-lg border border-border bg-card p-4 text-sm whitespace-pre-line">
         {data.partner.tcText ?? '(Termos não configurados pelo administrador. Contate o CRM antes de prosseguir.)'}
       </section>
 
@@ -86,7 +86,7 @@ export default function PublicTcAcceptPage() {
         </label>
 
         {accept.error && (
-          <p className="rounded bg-red-50 p-2 text-sm text-red-700">{accept.error.message}</p>
+          <p className="rounded bg-red-50 p-2 text-sm text-danger">{accept.error.message}</p>
         )}
 
         <Button type="submit" disabled={accept.isPending || !data.partner.tcText}>

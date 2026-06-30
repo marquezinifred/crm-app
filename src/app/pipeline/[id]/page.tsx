@@ -34,7 +34,7 @@ export default function OpportunityDetailPage() {
   const [editStageFields, setEditStageFields] = useState<Record<string, string>>({});
 
   if (isLoading) return <main className="p-6">Carregando…</main>;
-  if (error) return <main className="p-6 text-red-600">{error.message}</main>;
+  if (error) return <main className="p-6 text-danger">{error.message}</main>;
   if (!opp) return null;
 
   const currentIdx = STAGES.indexOf(opp.stage);
@@ -46,37 +46,37 @@ export default function OpportunityDetailPage() {
       <button
         type="button"
         onClick={() => router.back()}
-        className="mb-3 text-sm text-neutral-600 hover:text-neutral-900"
+        className="mb-3 text-sm text-text-2 hover:text-text-1"
       >
         ← Voltar
       </button>
 
-      <header className="mb-4 rounded-lg border border-neutral-200 bg-white p-4">
+      <header className="mb-4 rounded-lg border border-border bg-card p-4">
         <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-xl font-semibold">{opp.title}</h1>
-            <p className="text-sm text-neutral-600">{opp.clientCompany.razaoSocial}</p>
+            <p className="text-sm text-text-2">{opp.clientCompany.razaoSocial}</p>
           </div>
           <div className="text-right">
             <p className="text-2xl font-semibold">{brl(Number(opp.estimatedValue ?? 0))}</p>
-            <p className="text-xs text-neutral-600">{STAGE_LABELS[opp.stage]} · {opp.status}</p>
+            <p className="text-xs text-text-2">{STAGE_LABELS[opp.stage]} · {opp.status}</p>
           </div>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-neutral-100 pt-3 text-sm">
+        <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border pt-3 text-sm">
           <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-neutral-100 text-xs font-medium">
+            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-hover text-xs font-medium">
               {initials(opp.owner.fullName)}
             </span>
             <span>{opp.owner.fullName}</span>
           </div>
           {opp.partnerCompany && (
-            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
+            <span className="rounded-full bg-info-bg px-2 py-0.5 text-xs text-info-text">
               Parceiro: {opp.partnerCompany.razaoSocial}
             </span>
           )}
           {opp.team.length > 0 && (
-            <span className="text-xs text-neutral-600">+{opp.team.length} no time</span>
+            <span className="text-xs text-text-2">+{opp.team.length} no time</span>
           )}
         </div>
 
@@ -88,7 +88,7 @@ export default function OpportunityDetailPage() {
                 onClick={() =>
                   advance.mutate({ id: opp.id, fromStage: opp.stage, toStage: prev })
                 }
-                className="rounded border border-neutral-300 px-3 py-1.5 text-sm"
+                className="rounded border border-border-strong px-3 py-1.5 text-sm"
               >
                 ← Voltar para {STAGE_LABELS[prev]}
               </button>
@@ -107,7 +107,7 @@ export default function OpportunityDetailPage() {
             <button
               type="button"
               onClick={() => setShowCancel(true)}
-              className="rounded border border-red-300 px-3 py-1.5 text-sm text-red-700"
+              className="rounded border border-red-300 px-3 py-1.5 text-sm text-danger"
             >
               Cancelar oportunidade
             </button>
@@ -115,14 +115,14 @@ export default function OpportunityDetailPage() {
         )}
 
         {advance.error && (
-          <p className="mt-3 rounded bg-amber-50 p-2 text-sm text-amber-800">
+          <p className="mt-3 rounded bg-warning-bg p-2 text-sm text-warning-text">
             {advance.error.message}
           </p>
         )}
       </header>
 
-      <section className="mb-4 rounded-lg border border-neutral-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-700">
+      <section className="mb-4 rounded-lg border border-border bg-card p-4">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-1">
           Campos do estágio atual ({STAGE_LABELS[opp.stage]})
         </h2>
         <StageFields opp={opp} edits={editStageFields} setEdits={setEditStageFields} />
@@ -131,7 +131,7 @@ export default function OpportunityDetailPage() {
             <button
               type="button"
               onClick={() => setEditStageFields({})}
-              className="rounded border border-neutral-300 px-3 py-1.5 text-sm"
+              className="rounded border border-border-strong px-3 py-1.5 text-sm"
             >
               Descartar
             </button>
@@ -161,19 +161,19 @@ export default function OpportunityDetailPage() {
 
       <DocumentsSection opportunityId={opp.id} />
 
-      <section className="rounded-lg border border-neutral-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-700">
+      <section className="rounded-lg border border-border bg-card p-4">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-1">
           Histórico de estágios
         </h2>
         <ol className="space-y-2">
           {opp.stageHistory.map((h) => (
             <li key={h.id} className="text-sm">
-              <span className="text-neutral-500">
+              <span className="text-text-2">
                 {new Date(h.at).toLocaleString('pt-BR')}
               </span>{' '}
               — {h.fromStage ? `${STAGE_LABELS[h.fromStage]} → ` : ''}
               <span className="font-medium">{STAGE_LABELS[h.toStage]}</span>
-              {h.note && <span className="text-neutral-600"> · {h.note}</span>}
+              {h.note && <span className="text-text-2"> · {h.note}</span>}
             </li>
           ))}
         </ol>
@@ -185,7 +185,7 @@ export default function OpportunityDetailPage() {
           onClick={() => setShowCancel(false)}
         >
           <div
-            className="max-w-md rounded-lg bg-white p-5 shadow-xl"
+            className="max-w-md rounded-lg bg-card p-5 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="mb-3 text-base font-semibold">Cancelar oportunidade</h2>
@@ -215,7 +215,7 @@ export default function OpportunityDetailPage() {
               <button
                 type="button"
                 onClick={() => setShowCancel(false)}
-                className="rounded border border-neutral-300 px-3 py-1.5 text-sm"
+                className="rounded border border-border-strong px-3 py-1.5 text-sm"
               >
                 Fechar
               </button>
@@ -355,7 +355,7 @@ function StageFields({
       );
     default:
       return (
-        <p className="text-sm text-neutral-500">
+        <p className="text-sm text-text-2">
           Sem campos específicos para este estágio. Use a barra de ações para avançar ou voltar.
         </p>
       );
@@ -372,16 +372,16 @@ function ActivitiesAndTasks({ opportunityId }: { opportunityId: string }) {
 
   return (
     <>
-      <section className="mb-4 rounded-lg border border-neutral-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-700">
+      <section className="mb-4 rounded-lg border border-border bg-card p-4">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-1">
           Tarefas ({tasks.data?.length ?? 0})
         </h2>
         {tasks.data && tasks.data.length === 0 && (
-          <p className="text-sm text-neutral-500">Sem tarefas vinculadas a esta oportunidade.</p>
+          <p className="text-sm text-text-2">Sem tarefas vinculadas a esta oportunidade.</p>
         )}
         <ul className="space-y-2">
           {tasks.data?.map((t) => (
-            <li key={t.id} className="flex items-center justify-between gap-2 rounded border border-neutral-100 p-2 text-sm">
+            <li key={t.id} className="flex items-center justify-between gap-2 rounded border border-border p-2 text-sm">
               <div className="flex min-w-0 items-center gap-2">
                 <input
                   type="checkbox"
@@ -391,35 +391,35 @@ function ActivitiesAndTasks({ opportunityId }: { opportunityId: string }) {
                   }
                 />
                 <div className="min-w-0">
-                  <p className={t.status === 'DONE' ? 'line-through text-neutral-500' : ''}>{t.title}</p>
-                  <p className="text-xs text-neutral-500">
+                  <p className={t.status === 'DONE' ? 'line-through text-text-2' : ''}>{t.title}</p>
+                  <p className="text-xs text-text-2">
                     {t.assignee?.fullName ?? 'sem responsável'}
                     {t.dueDate && ` · vence ${new Date(t.dueDate).toLocaleDateString('pt-BR')}`}
                   </p>
                 </div>
               </div>
-              <span className="text-xs uppercase text-neutral-500">{t.priority}</span>
+              <span className="text-xs uppercase text-text-2">{t.priority}</span>
             </li>
           ))}
         </ul>
       </section>
 
-      <section className="mb-4 rounded-lg border border-neutral-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-700">
+      <section className="mb-4 rounded-lg border border-border bg-card p-4">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-1">
           Linha do tempo
         </h2>
         {activities.data && activities.data.length === 0 && (
-          <p className="text-sm text-neutral-500">Sem atividades registradas.</p>
+          <p className="text-sm text-text-2">Sem atividades registradas.</p>
         )}
         <ol className="space-y-3">
           {activities.data?.map((a) => (
-            <li key={a.id} className="border-l-2 border-neutral-200 pl-3">
-              <p className="text-xs text-neutral-500">
+            <li key={a.id} className="border-l-2 border-border pl-3">
+              <p className="text-xs text-text-2">
                 {new Date(a.occurredAt).toLocaleString('pt-BR')} · {a.type}
                 {a.author && ` · ${a.author.fullName}`}
               </p>
               {a.title && <p className="text-sm font-medium">{a.title}</p>}
-              <p className="whitespace-pre-line text-sm text-neutral-700">{a.content}</p>
+              <p className="whitespace-pre-line text-sm text-text-1">{a.content}</p>
             </li>
           ))}
         </ol>

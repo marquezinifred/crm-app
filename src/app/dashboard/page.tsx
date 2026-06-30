@@ -5,11 +5,13 @@ import { AlertType, AlertStatus } from '@prisma/client';
 import { urgencyFromDate } from '@/lib/utils/hooks';
 import { cn } from '@/lib/utils/cn';
 import { EnablePushButton } from '@/components/layout/EnablePushButton';
+import { OnboardingChecklist } from '@/components/onboarding/OnboardingChecklist';
+import { Badge } from '@/components/ui/badge';
 
 const urgencyColor = {
-  ok: 'bg-emerald-500',
-  soon: 'bg-amber-500',
-  urgent: 'bg-red-500',
+  ok: 'bg-success',
+  soon: 'bg-warning',
+  urgent: 'bg-danger',
 } as const;
 
 export default function DashboardPage() {
@@ -21,31 +23,41 @@ export default function DashboardPage() {
 
   const relationship = data?.filter((a) => a.type === AlertType.RELATIONSHIP_DATE) ?? [];
   const pipeline = data?.filter((a) => a.type === AlertType.PIPELINE_DATE) ?? [];
+  const firstName = me.data?.fullName?.split(' ')[0] ?? '';
 
   return (
-    <main className="mx-auto max-w-4xl p-4 md:p-6">
-      <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
+    <div className="mx-auto max-w-5xl space-y-6">
+      <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Olá, {me.data?.fullName?.split(' ')[0] ?? ''}</h1>
-          <p className="text-sm text-neutral-600">
-            Central de Alertas — próximos 14 dias
+          <h1 className="text-h1 text-text-1">
+            Bom dia{firstName && `, ${firstName}`}.
+          </h1>
+          <p className="text-body text-text-2 mt-1">
+            {relationship.length + pipeline.length > 0
+              ? `${relationship.length + pipeline.length} compromissos aguardam você nos próximos 14 dias.`
+              : 'Tudo em dia nos próximos 14 dias.'}
           </p>
         </div>
         <EnablePushButton />
       </header>
 
-      {isLoading && <p className="text-sm text-neutral-600">Carregando alertas…</p>}
-      {error && <p className="text-sm text-red-600">{error.message}</p>}
+      <OnboardingChecklist />
 
-      <section className="mb-6">
-        <h2 className="mb-3 flex items-center justify-between text-base font-semibold">
-          <span>Relacionamento</span>
-          <span className="text-xs text-neutral-500">{relationship.length}</span>
-        </h2>
-        {relationship.length === 0 ? (
-          <p className="rounded border border-dashed border-neutral-300 p-4 text-sm text-neutral-500">
-            Sem datas próximas de empresas ou contatos.
-          </p>
+      {error && (
+        <div role="alert" className="rounded border border-danger/30 bg-danger-bg/40 text-danger-text p-3 text-body">
+          Algo saiu errado. {error.message}
+        </div>
+      )}
+
+      <section aria-labelledby="alerts-relationship">
+        <header className="flex items-center justify-between mb-3">
+          <h2 id="alerts-relationship" className="text-h3 text-text-1">Relacionamento</h2>
+          <Badge variant="default">{relationship.length}</Badge>
+        </header>
+        {isLoading ? (
+          <SkeletonList />
+        ) : relationship.length === 0 ? (
+          <EmptyCard>Ninguém com data importante nos próximos 14 dias.</EmptyCard>
         ) : (
           <ul className="space-y-2">
             {relationship.map((a) => (
@@ -55,15 +67,15 @@ export default function DashboardPage() {
         )}
       </section>
 
-      <section>
-        <h2 className="mb-3 flex items-center justify-between text-base font-semibold">
-          <span>Pipeline</span>
-          <span className="text-xs text-neutral-500">{pipeline.length}</span>
-        </h2>
-        {pipeline.length === 0 ? (
-          <p className="rounded border border-dashed border-neutral-300 p-4 text-sm text-neutral-500">
-            Sem marcos próximos no pipeline.
-          </p>
+      <section aria-labelledby="alerts-pipeline">
+        <header className="flex items-center justify-between mb-3">
+          <h2 id="alerts-pipeline" className="text-h3 text-text-1">Pipeline</h2>
+          <Badge variant="default">{pipeline.length}</Badge>
+        </header>
+        {isLoading ? (
+          <SkeletonList />
+        ) : pipeline.length === 0 ? (
+          <EmptyCard>Sem marcos próximos no pipeline.</EmptyCard>
         ) : (
           <ul className="space-y-2">
             {pipeline.map((a) => (
@@ -72,7 +84,25 @@ export default function DashboardPage() {
           </ul>
         )}
       </section>
-    </main>
+    </div>
+  );
+}
+
+function EmptyCard({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded border border-dashed border-border bg-card/40 p-5 text-body text-text-2">
+      {children}
+    </div>
+  );
+}
+
+function SkeletonList() {
+  return (
+    <div className="space-y-2">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="skeleton h-12" />
+      ))}
+    </div>
   );
 }
 
@@ -106,12 +136,12 @@ function AlertRow({
       : `/pipeline/${alert.entityId}`;
 
   return (
-    <li className="flex items-center justify-between gap-3 rounded border border-neutral-200 bg-white p-3">
+    <li className="flex items-center justify-between gap-3 rounded bg-card border border-border p-3 hover:border-border-strong transition-colors">
       <div className="flex min-w-0 items-center gap-3">
         <span className={cn('h-2 w-2 shrink-0 rounded-full', urgencyColor[urgency])} aria-hidden="true" />
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium">{label}</p>
-          <p className="text-xs text-neutral-600">
+          <p className="truncate text-[14px] font-semibold text-text-1">{label}</p>
+          <p className="text-caption text-text-2">
             {new Date(alert.scheduledFor).toLocaleDateString('pt-BR')}
           </p>
         </div>
@@ -119,14 +149,14 @@ function AlertRow({
       <div className="flex shrink-0 gap-2">
         <a
           href={link}
-          className="rounded border border-neutral-300 px-2.5 py-1 text-xs hover:bg-neutral-50"
+          className="rounded border border-border bg-card px-2.5 py-1 text-caption text-text-1 hover:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
         >
           Abrir
         </a>
         <button
           type="button"
           onClick={() => dismiss.mutate({ id: alert.id })}
-          className="rounded px-2.5 py-1 text-xs text-neutral-500 hover:bg-neutral-100"
+          className="rounded px-2.5 py-1 text-caption text-text-2 hover:bg-hover hover:text-text-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
         >
           Dispensar
         </button>

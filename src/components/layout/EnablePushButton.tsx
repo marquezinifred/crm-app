@@ -31,11 +31,11 @@ export function EnablePushButton() {
   if (!config?.enabled || !config.publicKey) return null;
   if (state === 'unsupported') return null;
   if (state === 'subscribed') {
-    return <p className="text-xs text-emerald-700">✓ Notificações ativas neste dispositivo</p>;
+    return <p className="text-xs text-success">✓ Notificações ativas neste dispositivo</p>;
   }
   if (state === 'denied') {
     return (
-      <p className="text-xs text-amber-700">
+      <p className="text-xs text-warning-text">
         Permissão de notificações bloqueada. Ative nas preferências do navegador.
       </p>
     );
@@ -78,7 +78,7 @@ export function EnablePushButton() {
       <Button type="button" variant="outline" size="sm" onClick={enable}>
         🔔 Ativar notificações no celular
       </Button>
-      {error && <p className="mt-1 text-xs text-red-700">{error}</p>}
+      {error && <p className="mt-1 text-xs text-danger">{error}</p>}
     </div>
   );
 }

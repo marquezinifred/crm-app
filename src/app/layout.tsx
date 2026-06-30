@@ -2,10 +2,12 @@ import type { Metadata, Viewport } from 'next';
 import { ClerkProvider } from '@clerk/nextjs';
 import localFont from 'next/font/local';
 import { TrpcProvider } from '@/lib/trpc/provider';
-import { BottomNav } from '@/components/layout/BottomNav';
+import { AppShell } from '@/components/layout/AppShell';
 import { PoweredByBadge } from '@/components/layout/PoweredByBadge';
 import { CookieBanner } from '@/components/legal/CookieBanner';
 import { TrialExpiryBanner } from '@/components/billing/TrialExpiryBanner';
+import { ThemeProvider } from '@/components/theme/ThemeProvider';
+import { ToastProvider } from '@/components/ui/toast';
 import { resolveTenantTheme, buildBrandStyle } from '@/lib/theme/server';
 import { googleFontsUrl } from '@/lib/theme/curated-fonts';
 import './globals.css';
@@ -61,16 +63,20 @@ export default async function RootLayout({
           <link rel="stylesheet" href={fontHref} />
         </head>
         <body
-          className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground pb-16 md:pb-0`}
+          className={`${geistSans.variable} ${geistMono.variable} antialiased bg-page text-text-1 pb-16 md:pb-0`}
           style={{ fontFamily: 'var(--brand-font)' }}
         >
-          <TrpcProvider>
-            <TrialExpiryBanner />
-            {children}
-          </TrpcProvider>
-          <BottomNav />
-          <PoweredByBadge poweredBy={theme.poweredBy} />
-          <CookieBanner />
+          <a href="#main-content" className="skip-link">Pular para conteúdo principal</a>
+          <ThemeProvider>
+            <TrpcProvider>
+              <ToastProvider>
+                <TrialExpiryBanner />
+                <AppShell>{children}</AppShell>
+              </ToastProvider>
+            </TrpcProvider>
+            <PoweredByBadge poweredBy={theme.poweredBy} />
+            <CookieBanner />
+          </ThemeProvider>
         </body>
       </html>
     </ClerkProvider>

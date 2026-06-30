@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
 import { Button } from '@/components/ui/button';
 import { brl } from '@/lib/utils/hooks';
+import { PageHeader } from '@/components/layout/PageHeader';
 
 export default function ApprovalsPage() {
   const utils = trpc.useUtils();
@@ -14,28 +15,29 @@ export default function ApprovalsPage() {
   const [comments, setComments] = useState<Record<string, string>>({});
 
   return (
-    <main className="mx-auto max-w-3xl p-4 md:p-6">
-      <h1 className="mb-1 text-2xl font-bold">Aprovações pendentes</h1>
-      <p className="mb-4 text-sm text-neutral-600">
-        Propostas aguardando sua decisão.
-      </p>
+    <div className="mx-auto max-w-3xl">
+      <PageHeader
+        title="Aprovações"
+        description="Propostas aguardando sua decisão."
+        meta={data && `${data.length} pendente${data.length === 1 ? '' : 's'}`}
+      />
 
-      {isLoading && <p className="text-sm text-neutral-600">Carregando…</p>}
-      {error && <p className="text-sm text-red-600">{error.message}</p>}
+      {isLoading && <p className="text-sm text-text-2">Carregando…</p>}
+      {error && <p className="text-sm text-danger">{error.message}</p>}
       {data && data.length === 0 && (
-        <p className="rounded border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-500">
+        <p className="rounded border border-dashed border-border-strong p-6 text-center text-sm text-text-2">
           Nada pendente para você.
         </p>
       )}
 
       <ul className="space-y-3">
         {data?.map((a) => (
-          <li key={a.id} className="rounded-lg border border-neutral-200 bg-white p-4">
+          <li key={a.id} className="rounded-lg border border-border bg-card p-4">
             <header className="mb-2">
               <h2 className="font-medium">
                 {a.proposalVersion.proposal.opportunity.title}
               </h2>
-              <p className="text-xs text-neutral-600">
+              <p className="text-xs text-text-2">
                 {a.proposalVersion.proposal.opportunity.clientCompany.razaoSocial} ·{' '}
                 {a.proposalVersion.proposal.title} · v{a.proposalVersion.version}
               </p>
@@ -50,7 +52,7 @@ export default function ApprovalsPage() {
               )}
               <a
                 href={`/pipeline/${a.proposalVersion.proposal.opportunity.id}`}
-                className="text-blue-700 hover:underline"
+                className="text-info-text hover:underline"
               >
                 abrir oportunidade →
               </a>
@@ -111,6 +113,6 @@ export default function ApprovalsPage() {
           </li>
         ))}
       </ul>
-    </main>
+    </div>
   );
 }

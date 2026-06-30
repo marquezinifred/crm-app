@@ -61,6 +61,10 @@ const envSchema = z.object({
   // App
   NEXT_PUBLIC_APP_URL: z.string().url().default('http://localhost:3000'),
   TENANT_FIELD_ENCRYPTION_KEY: z.string().min(32).optional(),
+
+  // Banner de manutenção (Sprint 14.5)
+  // Vazio = banner oculto. Qualquer string não-vazia = visível com aquele texto.
+  NEXT_PUBLIC_MAINTENANCE_MESSAGE: z.string().default(''),
 });
 
 const parsed = envSchema.safeParse(process.env);

@@ -1,8 +1,13 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { auth, currentUser } from '@clerk/nextjs/server';
-import { router, publicProcedure } from '@/server/trpc/trpc';
+import { router, publicProcedure, protectedProcedure } from '@/server/trpc/trpc';
 import { provisionFirstTenant, findLocalUserByClerkId } from '@/server/services/onboarding.service';
+import {
+  computeChecklist,
+  dismissTour as dismissTourSvc,
+  markSetupCompleteIfDone,
+} from '@/server/services/onboarding-progress.service';
 import { zCnpj, zEmail, zSlug } from '@/lib/validators';
 
 const createTenantInput = z.object({
@@ -55,4 +60,18 @@ export const onboardingRouter = router({
         ...input,
       });
     }),
+
+  progress: protectedProcedure.query(async ({ ctx }) => {
+    return computeChecklist(ctx.tenantId);
+  }),
+
+  dismissTour: protectedProcedure.mutation(async ({ ctx }) => {
+    await dismissTourSvc(ctx.tenantId);
+    return { ok: true };
+  }),
+
+  markCompleteIfDone: protectedProcedure.mutation(async ({ ctx }) => {
+    await markSetupCompleteIfDone(ctx.tenantId);
+    return { ok: true };
+  }),
 });

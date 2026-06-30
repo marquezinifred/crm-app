@@ -81,17 +81,17 @@ export function CookieBanner() {
 
   return (
     <div
-      className="fixed inset-x-0 bottom-0 z-50 border-t border-neutral-200 bg-white shadow-2xl"
+      className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-card shadow-2xl"
       role="dialog"
       aria-label="Preferências de cookies"
     >
       <div className="mx-auto max-w-5xl p-4 md:p-6 space-y-3">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="flex-1 min-w-[260px]">
-            <h2 className="text-base font-semibold text-neutral-900">
+            <h2 className="text-base font-semibold text-text-1">
               Sua privacidade
             </h2>
-            <p className="text-sm text-neutral-600 mt-1">
+            <p className="text-sm text-text-2 mt-1">
               Usamos cookies para operar o serviço, lembrar preferências e medir
               o desempenho. Você pode aceitar todos ou personalizar. Veja a{' '}
               <a className="underline text-brand" href="/privacy">
@@ -104,7 +104,7 @@ export function CookieBanner() {
             <button
               type="button"
               onClick={() => setShowDetails((s) => !s)}
-              className="px-3 py-2 text-sm border rounded-md hover:bg-neutral-50"
+              className="px-3 py-2 text-sm border rounded-md hover:bg-page"
             >
               Personalizar
             </button>
@@ -113,7 +113,7 @@ export function CookieBanner() {
               onClick={() =>
                 finish({ FUNCTIONAL: false, ANALYTICS: false, MARKETING: false })
               }
-              className="px-3 py-2 text-sm border rounded-md hover:bg-neutral-50"
+              className="px-3 py-2 text-sm border rounded-md hover:bg-page"
             >
               Só essenciais
             </button>
@@ -153,8 +153,8 @@ export function CookieBanner() {
                   }
                 />
                 <div>
-                  <div className="text-sm font-medium text-neutral-900">{label}</div>
-                  <div className="text-xs text-neutral-500 mt-0.5">{hint}</div>
+                  <div className="text-sm font-medium text-text-1">{label}</div>
+                  <div className="text-xs text-text-2 mt-0.5">{hint}</div>
                 </div>
               </label>
             ))}

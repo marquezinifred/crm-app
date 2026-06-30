@@ -15,26 +15,26 @@ export default function AdminPartnersPage() {
     <main className="mx-auto max-w-5xl p-4 md:p-6">
       <header className="mb-4">
         <h1 className="text-2xl font-bold">Parceiros</h1>
-        <p className="text-sm text-neutral-600">
+        <p className="text-sm text-text-2">
           Gestão de empresas parceiras: comissão padrão, T&C, performance.
           Para cadastrar uma nova empresa parceira, vá em{' '}
-          <a href="/companies/new" className="text-blue-700 hover:underline">/companies/new</a>{' '}
+          <a href="/companies/new" className="text-info-text hover:underline">/companies/new</a>{' '}
           e marque tipo = PARTNER.
         </p>
       </header>
 
       {data && data.length === 0 ? (
-        <p className="rounded border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-500">
-          Nenhum parceiro cadastrado.
+        <p className="rounded border border-dashed border-border-strong p-6 text-center text-sm text-text-2">
+          Sem parceiros ainda. Cadastre o primeiro.
         </p>
       ) : (
         <ul className="space-y-3">
           {data?.map((p) => (
-            <li key={p.id} className="rounded-lg border border-neutral-200 bg-white p-4">
+            <li key={p.id} className="rounded-lg border border-border bg-card p-4">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <h2 className="font-medium">{p.razaoSocial}</h2>
-                  <p className="text-xs text-neutral-600">
+                  <p className="text-xs text-text-2">
                     {p.cnpj ?? 'sem CNPJ'} · comissão {p.commissionPct}% ·{' '}
                     {p.partnerActive ? 'ativo' : 'inativo'}
                   </p>
@@ -59,8 +59,8 @@ export default function AdminPartnersPage() {
               {editingId === p.id && <PartnerConfigForm partnerId={p.id} />}
 
               {p.partnerUsers.length > 0 && (
-                <div className="mt-3 border-t border-neutral-100 pt-2">
-                  <p className="mb-1 text-xs font-medium text-neutral-700">Usuários parceiros</p>
+                <div className="mt-3 border-t border-border pt-2">
+                  <p className="mb-1 text-xs font-medium text-text-1">Usuários parceiros</p>
                   <ul className="space-y-0.5 text-xs">
                     {p.partnerUsers.map((u) => (
                       <li key={u.id}>
@@ -94,7 +94,7 @@ function PartnerConfigForm({ partnerId }: { partnerId: string }) {
 
   return (
     <form
-      className="mt-3 space-y-2 border-t border-neutral-100 pt-3"
+      className="mt-3 space-y-2 border-t border-border pt-3"
       onSubmit={(e) => {
         e.preventDefault();
         save.mutate({
@@ -147,8 +147,8 @@ function PartnerConfigForm({ partnerId }: { partnerId: string }) {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded border border-neutral-100 p-2">
-      <p className="text-neutral-600">{label}</p>
+    <div className="rounded border border-border p-2">
+      <p className="text-text-2">{label}</p>
       <p className="font-medium">{value}</p>
     </div>
   );

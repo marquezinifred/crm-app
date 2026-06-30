@@ -7,6 +7,10 @@ const LINKS = [
   { href: '/contracts', label: 'Contratos' },
   { href: '/approvals', label: 'Aprovações' },
   { href: '/imports', label: 'Importação' },
+  { href: '/admin/users', label: 'Admin · Usuários' },
+  { href: '/admin/products', label: 'Admin · Produtos' },
+  { href: '/admin/billing', label: 'Admin · Plano e cobrança' },
+  { href: '/admin/branding', label: 'Admin · Identidade' },
   { href: '/admin/alerts', label: 'Admin · Alertas' },
   { href: '/admin/ai', label: 'Admin · IA' },
   { href: '/admin/conversion-rates', label: 'Admin · Taxas de conversão' },
@@ -15,18 +19,28 @@ const LINKS = [
   { href: '/admin/partners', label: 'Admin · Parceiros' },
   { href: '/admin/templates', label: 'Admin · Templates' },
   { href: '/admin/email-inbound', label: 'Admin · E-mail Inbound' },
+  { href: '/admin/privacy', label: 'Admin · Solicitações LGPD' },
 ];
 
+/**
+ * /more — usado apenas em mobile (<md). No desktop a Sidebar substitui esta
+ * página e o BottomNav que linka pra cá fica oculto via `md:hidden`. Mantemos
+ * o conteúdo acessível por URL direta (deep link / e2e) com um aviso visual
+ * em viewport grande.
+ */
 export default function MorePage() {
   return (
     <main className="mx-auto max-w-3xl p-4 md:p-6">
       <h1 className="mb-4 text-2xl font-bold">Mais</h1>
+      <p className="hidden md:block text-sm text-text-2 mb-4">
+        Esta página é otimizada para mobile. No desktop, use o menu lateral à esquerda.
+      </p>
       <ul className="space-y-1">
         {LINKS.map((l) => (
           <li key={l.href}>
             <Link
               href={l.href}
-              className="block rounded-lg border border-neutral-200 bg-white p-3 text-sm hover:bg-neutral-50"
+              className="block rounded-lg border border-border bg-card p-3 text-sm hover:bg-page focus-visible:ring-2 focus-visible:ring-brand"
             >
               {l.label}
             </Link>

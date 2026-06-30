@@ -1,13 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { Field } from '@/components/ui/field';
+import { Input, Select, Textarea } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 
 /**
- * Página pública /privacy-request — Sprint 11.
- *
- * Permite que qualquer titular submeta solicitação LGPD §18 sem auth.
- * Conta com rate limit no endpoint /api/v1/privacy-request (10/min/ip).
- * SLA ANPD: 15 dias entre submissão e conclusão.
+ * Página pública /privacy-request — Sprint 11 + design Venzo Sprint 14.
  */
 
 const TYPES = [
@@ -46,121 +45,106 @@ export default function PrivacyRequestPage() {
       });
       const data = (await res.json()) as { ok?: boolean; requestId?: string; dueAt?: string; error?: unknown };
       if (!res.ok || !data.ok) {
-        throw new Error(typeof data.error === 'string' ? data.error : 'Falha ao registrar solicitação');
+        throw new Error(typeof data.error === 'string' ? data.error : 'Algo saiu errado ao registrar.');
       }
       setResult({ requestId: data.requestId!, dueAt: data.dueAt! });
       setState('done');
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Erro desconhecido');
+      setErrorMessage(err instanceof Error ? err.message : 'Algo saiu errado. Tente novamente.');
       setState('error');
     }
   }
 
   if (state === 'done' && result) {
     return (
-      <main className="max-w-2xl mx-auto p-6 md:p-10 space-y-4">
-        <h1 className="text-2xl font-semibold">Solicitação registrada</h1>
-        <p className="text-neutral-700">
-          Recebemos sua solicitação. Conforme a LGPD, responderemos em até{' '}
-          <strong>15 dias</strong>.
+      <main className="max-w-2xl mx-auto px-6 py-10 space-y-5">
+        <h1 className="text-h1">Solicitação registrada</h1>
+        <p className="text-body-lg text-text-2">
+          Recebemos seu pedido. Conforme a LGPD, respondemos em até{' '}
+          <strong className="text-text-1">15 dias</strong>.
         </p>
-        <dl className="bg-neutral-50 border rounded-md p-4 text-sm space-y-2">
+        <dl className="bg-card border border-border rounded-md p-4 space-y-3">
           <div>
-            <dt className="text-neutral-500">Protocolo</dt>
-            <dd className="font-mono">{result.requestId}</dd>
+            <dt className="text-caption text-text-3 uppercase tracking-wider">Protocolo</dt>
+            <dd className="text-mono text-brand-primary-light">{result.requestId}</dd>
           </div>
           <div>
-            <dt className="text-neutral-500">Prazo final</dt>
-            <dd>{new Date(result.dueAt).toLocaleDateString('pt-BR')}</dd>
+            <dt className="text-caption text-text-3 uppercase tracking-wider">Prazo final</dt>
+            <dd className="text-body text-text-1">{new Date(result.dueAt).toLocaleDateString('pt-BR')}</dd>
           </div>
         </dl>
-        <p className="text-sm text-neutral-500">
-          Guarde o número de protocolo. Em caso de dúvida, encaminhe para o nosso
-          DPO informando o protocolo.
+        <p className="text-caption text-text-3">
+          Guarde o protocolo. Em caso de dúvida, encaminhe para o DPO informando esse número.
         </p>
       </main>
     );
   }
 
   return (
-    <main className="max-w-2xl mx-auto p-6 md:p-10 space-y-6">
+    <main className="max-w-2xl mx-auto px-6 py-10 space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold">Direitos do titular (LGPD)</h1>
-        <p className="text-neutral-600 mt-1">
+        <h1 className="text-h1">Seus direitos (LGPD)</h1>
+        <p className="text-body-lg text-text-2 mt-2">
           Solicite acesso, correção, eliminação ou portabilidade dos seus dados.
           Respondemos em até 15 dias corridos.
         </p>
       </header>
 
-      <form onSubmit={submit} className="space-y-4">
-        <label className="block">
-          <span className="text-sm font-medium">Empresa (slug do tenant)</span>
-          <input
+      <form onSubmit={submit} className="space-y-4 bg-card border border-border rounded-md p-5" noValidate>
+        <Field label="Empresa (slug do tenant)" required>
+          <Input
             required
             value={tenantSlug}
             onChange={(e) => setTenantSlug(e.target.value)}
-            className="mt-1 w-full border rounded-md px-3 py-2"
             placeholder="ex: pena-commerce"
           />
-        </label>
+        </Field>
 
-        <label className="block">
-          <span className="text-sm font-medium">Tipo de solicitação</span>
-          <select
+        <Field label="Tipo de solicitação" required>
+          <Select
             value={requestType}
             onChange={(e) => setRequestType(e.target.value as typeof TYPES[number]['value'])}
-            className="mt-1 w-full border rounded-md px-3 py-2 bg-white"
           >
             {TYPES.map((t) => (
               <option key={t.value} value={t.value}>
                 {t.label}
               </option>
             ))}
-          </select>
-        </label>
+          </Select>
+        </Field>
 
-        <label className="block">
-          <span className="text-sm font-medium">Seu e-mail</span>
-          <input
+        <Field label="Seu e-mail" required>
+          <Input
             type="email"
             required
             value={subjectEmail}
             onChange={(e) => setSubjectEmail(e.target.value)}
-            className="mt-1 w-full border rounded-md px-3 py-2"
           />
-        </label>
+        </Field>
 
-        <label className="block">
-          <span className="text-sm font-medium">Seu nome (opcional)</span>
-          <input
+        <Field label="Seu nome">
+          <Input
             value={subjectName}
             onChange={(e) => setSubjectName(e.target.value)}
-            className="mt-1 w-full border rounded-md px-3 py-2"
           />
-        </label>
+        </Field>
 
-        <label className="block">
-          <span className="text-sm font-medium">Detalhes (opcional)</span>
-          <textarea
+        <Field label="Detalhes" helper="Descreva o que você precisa (até 2000 caracteres).">
+          <Textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={4}
-            className="mt-1 w-full border rounded-md px-3 py-2"
             maxLength={2000}
           />
-        </label>
+        </Field>
 
         {state === 'error' && (
-          <p className="text-sm text-red-600">{errorMessage}</p>
+          <p role="alert" className="text-caption text-danger">{errorMessage}</p>
         )}
 
-        <button
-          type="submit"
-          disabled={state === 'submitting'}
-          className="px-4 py-2 rounded-md bg-brand text-white hover:opacity-90 disabled:opacity-50"
-        >
+        <Button type="submit" loading={state === 'submitting'} variant="primary">
           {state === 'submitting' ? 'Enviando...' : 'Enviar solicitação'}
-        </button>
+        </Button>
       </form>
     </main>
   );

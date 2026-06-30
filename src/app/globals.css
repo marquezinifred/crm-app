@@ -2,67 +2,176 @@
 @tailwind components;
 @tailwind utilities;
 
+/* =====================================================================
+ * Venzo Design System — Sprint 14
+ *
+ * Tokens em canais HSL separados (--*-h/-s/-l) para compatibilidade com
+ * alpha modifiers do Tailwind (bg-brand-primary/50). Tema alternado via
+ * [data-theme="dark"|"light"] no <html>, gerenciado por next-themes.
+ *
+ * Brand-* permanecem customizáveis por tenant (Sprint 10.5 white-label).
+ * O sistema injeta os canais a partir do theme_config do tenant.
+ * ===================================================================== */
+
 @layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --ring: 222.2 84% 4.9%;
-    --radius: 0.5rem;
+  :root,
+  [data-theme='light'] {
+    /* Brand — defaults Venzo (customizáveis por tenant) */
+    --brand-primary-h: 262;
+    --brand-primary-s: 84%;
+    --brand-primary-l: 58%;
+    --brand-primary-dark-h: 262;
+    --brand-primary-dark-s: 56%;
+    --brand-primary-dark-l: 26%;
+    --brand-primary-mid-h: 263;
+    --brand-primary-mid-s: 70%;
+    --brand-primary-mid-l: 40%;
+    --brand-primary-light-h: 273;
+    --brand-primary-light-s: 92%;
+    --brand-primary-light-l: 75%;
+    --brand-primary-pale-h: 256;
+    --brand-primary-pale-s: 85%;
+    --brand-primary-pale-l: 92%;
+    --brand-accent-h: 36;
+    --brand-accent-s: 91%;
+    --brand-accent-l: 55%;
+
+    /* Semânticas */
+    --success-h: 162; --success-s: 94%; --success-l: 30%;
+    --success-bg-h: 152; --success-bg-s: 81%; --success-bg-l: 86%;
+    --success-text-h: 158; --success-text-s: 91%; --success-text-l: 18%;
+    --danger-h: 0; --danger-s: 72%; --danger-l: 50%;
+    --danger-bg-h: 0; --danger-bg-s: 93%; --danger-bg-l: 94%;
+    --danger-text-h: 0; --danger-text-s: 71%; --danger-text-l: 30%;
+    --warning-h: 32; --warning-s: 94%; --warning-l: 43%;
+    --warning-bg-h: 48; --warning-bg-s: 96%; --warning-bg-l: 89%;
+    --warning-text-h: 31; --warning-text-s: 87%; --warning-text-l: 26%;
+    --info-h: 217; --info-s: 81%; --info-l: 53%;
+    --info-bg-h: 213; --info-bg-s: 94%; --info-bg-l: 86%;
+    --info-text-h: 222; --info-text-s: 65%; --info-text-l: 31%;
+
+    /* Superfícies / neutros — light */
+    --bg-page-h: 220; --bg-page-s: 14%; --bg-page-l: 97%;
+    --bg-card-h: 0; --bg-card-s: 0%; --bg-card-l: 100%;
+    --bg-hover-h: 220; --bg-hover-s: 14%; --bg-hover-l: 95%;
+    --border-h: 220; --border-s: 13%; --border-l: 91%;
+    --border-strong-h: 216; --border-strong-s: 12%; --border-strong-l: 84%;
+    --text-primary-h: 222; --text-primary-s: 47%; --text-primary-l: 11%;
+    --text-secondary-h: 215; --text-secondary-s: 14%; --text-secondary-l: 47%;
+    --text-muted-h: 218; --text-muted-s: 11%; --text-muted-l: 65%;
+
+    /* Espaçamento / radius (Sprint 14.5 — radius bump) */
+    --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+    --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-12: 48px;
+    --radius-sm: 6px; --radius: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 20px; --radius-full: 9999px;
+
+    /* shadcn compat — derivados acima */
+    --background: var(--bg-page-h) var(--bg-page-s) var(--bg-page-l);
+    --foreground: var(--text-primary-h) var(--text-primary-s) var(--text-primary-l);
+    --card: var(--bg-card-h) var(--bg-card-s) var(--bg-card-l);
+    --card-foreground: var(--text-primary-h) var(--text-primary-s) var(--text-primary-l);
+    --muted: var(--bg-hover-h) var(--bg-hover-s) var(--bg-hover-l);
+    --muted-foreground: var(--text-secondary-h) var(--text-secondary-s) var(--text-secondary-l);
+    --border-shad: var(--border-h) var(--border-s) var(--border-l);
+    --input: var(--border-h) var(--border-s) var(--border-l);
+    --ring: var(--brand-primary-h) var(--brand-primary-s) var(--brand-primary-l);
+    --primary-shad: var(--brand-primary-h) var(--brand-primary-s) var(--brand-primary-l);
+    --primary-foreground: 0 0% 100%;
+    --secondary: var(--bg-hover-h) var(--bg-hover-s) var(--bg-hover-l);
+    --secondary-foreground: var(--text-primary-h) var(--text-primary-s) var(--text-primary-l);
+    --destructive: var(--danger-h) var(--danger-s) var(--danger-l);
+    --destructive-foreground: 0 0% 100%;
+    --accent: var(--bg-hover-h) var(--bg-hover-s) var(--bg-hover-l);
+    --accent-foreground: var(--text-primary-h) var(--text-primary-s) var(--text-primary-l);
   }
 
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --ring: 212.7 26.8% 83.9%;
+  [data-theme='dark'] {
+    /* Superfícies / neutros — dark (Venzo deep) */
+    --bg-page-h: 256; --bg-page-s: 31%; --bg-page-l: 9%;
+    --bg-card-h: 256; --bg-card-s: 27%; --bg-card-l: 14%;
+    --bg-hover-h: 256; --bg-hover-s: 26%; --bg-hover-l: 20%;
+    --border-h: 256; --border-s: 26%; --border-l: 23%;
+    --border-strong-h: 256; --border-strong-s: 38%; --border-strong-l: 39%;
+    --text-primary-h: 220; --text-primary-s: 14%; --text-primary-l: 97%;
+    --text-secondary-h: 218; --text-secondary-s: 11%; --text-secondary-l: 65%;
+    --text-muted-h: 215; --text-muted-s: 14%; --text-muted-l: 47%;
+
+    /* Em dark, success/info/warning/danger bg ficam mais saturados mas
+       com luminosidade baixa pra não ofuscar — texto fica claro */
+    --success-bg-h: 158; --success-bg-s: 64%; --success-bg-l: 16%;
+    --success-text-h: 152; --success-text-s: 81%; --success-text-l: 76%;
+    --danger-bg-h: 0; --danger-bg-s: 50%; --danger-bg-l: 22%;
+    --danger-text-h: 0; --danger-text-s: 93%; --danger-text-l: 84%;
+    --warning-bg-h: 31; --warning-bg-s: 60%; --warning-bg-l: 20%;
+    --warning-text-h: 48; --warning-text-s: 96%; --warning-text-l: 79%;
+    --info-bg-h: 222; --info-bg-s: 50%; --info-bg-l: 22%;
+    --info-text-h: 213; --info-text-s: 94%; --info-text-l: 84%;
   }
 
-  * {
-    @apply border-border;
-  }
-
+  * { @apply border-border; }
   body {
     @apply bg-background text-foreground;
     font-feature-settings: 'rlig' 1, 'calt' 1;
+    font-family: var(--font-sans, 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif);
+  }
+
+  /* Foco visível obrigatório em todo elemento interativo (WCAG 2.4.7) */
+  :focus-visible {
+    outline: 2px solid hsl(var(--brand-primary-h) var(--brand-primary-s) var(--brand-primary-l));
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /* prefers-reduced-motion */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
-/* Brand utilities — Sprint 10.5 white-label
-   Mapeiam Tailwind-like classes para CSS vars --brand-* injetadas pelo
-   RootLayout a partir de tenant_settings.theme_config. */
-.bg-brand { background-color: var(--brand-primary); }
-.bg-brand-dark { background-color: var(--brand-primary-dark); }
-.bg-brand-light { background-color: var(--brand-primary-light); }
-.bg-brand-accent { background-color: var(--brand-accent); }
-.text-brand { color: var(--brand-primary); }
-.text-brand-dark { color: var(--brand-primary-dark); }
-.text-brand-accent { color: var(--brand-accent); }
-.border-brand { border-color: var(--brand-primary); }
-.hover\:bg-brand-dark:hover { background-color: var(--brand-primary-dark); }
+/* Brand-aware utilities (legado Sprint 10.5 — mantidas pra compatibilidade
+   das telas que ainda usam .bg-brand antes do refactor). */
+.bg-brand { background-color: hsl(var(--brand-primary-h) var(--brand-primary-s) var(--brand-primary-l)); }
+.bg-brand-dark { background-color: hsl(var(--brand-primary-dark-h) var(--brand-primary-dark-s) var(--brand-primary-dark-l)); }
+.bg-brand-light { background-color: hsl(var(--brand-primary-light-h) var(--brand-primary-light-s) var(--brand-primary-light-l)); }
+.bg-brand-accent { background-color: hsl(var(--brand-accent-h) var(--brand-accent-s) var(--brand-accent-l)); }
+.text-brand { color: hsl(var(--brand-primary-h) var(--brand-primary-s) var(--brand-primary-l)); }
+.text-brand-dark { color: hsl(var(--brand-primary-dark-h) var(--brand-primary-dark-s) var(--brand-primary-dark-l)); }
+.text-brand-accent { color: hsl(var(--brand-accent-h) var(--brand-accent-s) var(--brand-accent-l)); }
+.border-brand { border-color: hsl(var(--brand-primary-h) var(--brand-primary-s) var(--brand-primary-l)); }
+.hover\:bg-brand-dark:hover { background-color: hsl(var(--brand-primary-dark-h) var(--brand-primary-dark-s) var(--brand-primary-dark-l)); }
+
+/* Skeleton shimmer (estados de loading) */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--bg-hover-h) var(--bg-hover-s) var(--bg-hover-l)) 0%,
+    hsl(var(--border-h) var(--border-s) var(--border-l)) 50%,
+    hsl(var(--bg-hover-h) var(--bg-hover-s) var(--bg-hover-l)) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s infinite ease-in-out;
+  border-radius: var(--radius);
+}
+
+/* Skip link */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 8px;
+  background: hsl(var(--brand-primary-h) var(--brand-primary-s) var(--brand-primary-l));
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  z-index: 100;
+  font-weight: 600;
+}
+.skip-link:focus { top: 8px; }

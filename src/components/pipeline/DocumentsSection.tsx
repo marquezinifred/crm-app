@@ -40,13 +40,13 @@ export function DocumentsSection({ opportunityId }: Props) {
   });
 
   return (
-    <section className="mb-4 rounded-lg border border-neutral-200 bg-white p-4">
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-700">
+    <section className="mb-4 rounded-lg border border-border bg-card p-4">
+      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-1">
         Documentos ({data?.length ?? 0})
       </h2>
 
       <details className="mb-3">
-        <summary className="cursor-pointer text-sm font-medium text-neutral-700">
+        <summary className="cursor-pointer text-sm font-medium text-text-1">
           + Anexar documento
         </summary>
         <form
@@ -128,23 +128,23 @@ export function DocumentsSection({ opportunityId }: Props) {
         </form>
       </details>
 
-      {isLoading && <p className="text-sm text-neutral-600">Carregando…</p>}
+      {isLoading && <p className="text-sm text-text-2">Carregando…</p>}
 
       {data && data.length === 0 && (
-        <p className="text-sm text-neutral-500">Nenhum documento anexado.</p>
+        <p className="text-sm text-text-2">Sem documentos. Anexe a primeira proposta ou contrato.</p>
       )}
 
       <ul className="space-y-2">
         {data?.map((d) => (
-          <li key={d.id} className="rounded border border-neutral-100 p-3 text-sm">
+          <li key={d.id} className="rounded border border-border p-3 text-sm">
             <div className="flex items-start justify-between gap-2">
               <div>
                 <p className="font-medium">{d.filename}</p>
-                <p className="text-xs text-neutral-600">
+                <p className="text-xs text-text-2">
                   {CATEGORY_LABELS[d.category]} · {d.versions.length} versão(ões)
                 </p>
               </div>
-              <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700">
+              <span className="rounded bg-hover px-2 py-0.5 text-xs text-text-1">
                 v{d.versions[0]?.version ?? 1}
               </span>
             </div>
@@ -159,7 +159,7 @@ export function DocumentsSection({ opportunityId }: Props) {
                     href={v.storageKey}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-700 hover:underline"
+                    className="text-info-text hover:underline"
                   >
                     abrir ↗
                   </a>

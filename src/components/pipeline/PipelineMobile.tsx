@@ -21,8 +21,8 @@ export function PipelineMobile({ onCardClick, onAdvanceError }: Props) {
     onError: (err, vars) => onAdvanceError?.(err.message, vars.id),
   });
 
-  if (isLoading) return <p className="p-4 text-sm text-neutral-600">Carregando…</p>;
-  if (error) return <p className="p-4 text-sm text-red-600">{error.message}</p>;
+  if (isLoading) return <p className="p-4 text-sm text-text-2">Carregando…</p>;
+  if (error) return <p className="p-4 text-sm text-danger">{error.message}</p>;
   if (!data) return null;
 
   const currentIdx = STAGES.indexOf(active);
@@ -31,7 +31,7 @@ export function PipelineMobile({ onCardClick, onAdvanceError }: Props) {
 
   return (
     <div className="p-4">
-      <div className="mb-3 flex gap-1 overflow-x-auto border-b border-neutral-200 pb-2">
+      <div className="mb-3 flex gap-1 overflow-x-auto border-b border-border pb-2">
         {STAGES.map((s) => (
           <button
             key={s}
@@ -39,8 +39,8 @@ export function PipelineMobile({ onCardClick, onAdvanceError }: Props) {
             onClick={() => setActive(s)}
             className={`whitespace-nowrap rounded px-3 py-1.5 text-xs font-medium ${
               s === active
-                ? 'border border-neutral-400 bg-white'
-                : 'text-neutral-600'
+                ? 'border border-border-strong bg-card'
+                : 'text-text-2'
             }`}
           >
             {STAGE_LABELS[s]} ({data.columns[s].total})
@@ -48,7 +48,7 @@ export function PipelineMobile({ onCardClick, onAdvanceError }: Props) {
         ))}
       </div>
 
-      <p className="mb-3 text-xs text-neutral-600">
+      <p className="mb-3 text-xs text-text-2">
         {col.total} oportunidade{col.total === 1 ? '' : 's'} · {brl(col.sumValue)}
       </p>
 
@@ -72,7 +72,7 @@ export function PipelineMobile({ onCardClick, onAdvanceError }: Props) {
           />
         ))}
         {col.rows.length === 0 && (
-          <p className="rounded border border-dashed border-neutral-300 p-4 text-center text-sm text-neutral-500">
+          <p className="rounded border border-dashed border-border-strong p-4 text-center text-sm text-text-2">
             Sem oportunidades em {STAGE_LABELS[active]}
           </p>
         )}

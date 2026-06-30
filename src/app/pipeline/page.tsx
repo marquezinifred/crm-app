@@ -11,7 +11,7 @@ export default function PipelinePage() {
 
   return (
     <main className="min-h-screen">
-      <header className="border-b border-neutral-200 bg-white px-4 py-3 md:px-6">
+      <header className="border-b border-border bg-card px-4 py-3 md:px-6">
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-semibold">Pipeline</h1>
           <a
@@ -45,20 +45,20 @@ export default function PipelinePage() {
           onClick={() => setAdvanceError(null)}
         >
           <div
-            className="max-w-md rounded-lg bg-white p-5 shadow-xl"
+            className="max-w-md rounded-lg bg-card p-5 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 id="advance-error-title" className="mb-2 text-base font-semibold">
               Não foi possível avançar
             </h2>
-            <p className="mb-4 whitespace-pre-line text-sm text-neutral-700">
+            <p className="mb-4 whitespace-pre-line text-sm text-text-1">
               {advanceError.msg}
             </p>
             <div className="flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setAdvanceError(null)}
-                className="rounded border border-neutral-300 bg-white px-3 py-1.5 text-sm hover:bg-neutral-50"
+                className="rounded border border-border-strong bg-card px-3 py-1.5 text-sm hover:bg-page"
               >
                 Fechar
               </button>

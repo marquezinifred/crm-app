@@ -19,7 +19,7 @@ export function TrialExpiryBanner() {
 
   if (subscriptionStatus === 'PAST_DUE') {
     return (
-      <div className="bg-rose-50 border-b border-rose-200 text-rose-900 text-sm px-4 py-2 flex items-center justify-between gap-3">
+      <div className="bg-danger-bg border-b border-danger/30 text-danger-text text-sm px-4 py-2 flex items-center justify-between gap-3">
         <span>Pagamento pendente. Atualize seu método para evitar suspensão.</span>
         <Link className="underline font-medium" href="/admin/billing">
           Resolver
@@ -37,7 +37,7 @@ export function TrialExpiryBanner() {
     return (
       <div
         className={`${
-          expired ? 'bg-rose-50 border-rose-200 text-rose-900' : 'bg-amber-50 border-amber-200 text-amber-900'
+          expired ? 'bg-danger-bg border-danger/30 text-danger-text' : 'bg-warning-bg border-warning/30 text-warning-text'
         } border-b text-sm px-4 py-2 flex items-center justify-between gap-3`}
       >
         <span>

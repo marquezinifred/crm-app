@@ -30,15 +30,15 @@ export default function ReportsPage() {
         <h1 className="text-2xl font-bold">Relatórios</h1>
         <a
           href="/api/v1/reports/export"
-          className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+          className="rounded border border-border-strong px-3 py-1.5 text-sm hover:bg-page"
         >
           ↓ Exportar Excel
         </a>
       </header>
 
-      <section className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-neutral-200 bg-white p-3">
+      <section className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-3">
         <label className="text-sm">
-          <span className="mb-1 block text-xs text-neutral-600">De</span>
+          <span className="mb-1 block text-xs text-text-2">De</span>
           <input
             type="date"
             value={from}
@@ -47,7 +47,7 @@ export default function ReportsPage() {
           />
         </label>
         <label className="text-sm">
-          <span className="mb-1 block text-xs text-neutral-600">Até</span>
+          <span className="mb-1 block text-xs text-text-2">Até</span>
           <input
             type="date"
             value={to}
@@ -56,7 +56,7 @@ export default function ReportsPage() {
           />
         </label>
         <label className="text-sm">
-          <span className="mb-1 block text-xs text-neutral-600">Responsável</span>
+          <span className="mb-1 block text-xs text-text-2">Responsável</span>
           <select
             value={ownerId}
             onChange={(e) => setOwnerId(e.target.value)}
@@ -83,14 +83,14 @@ export default function ReportsPage() {
         </Button>
       </section>
 
-      <section className="mb-6 rounded-lg border border-neutral-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-700">
+      <section className="mb-6 rounded-lg border border-border bg-card p-4">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-1">
           Funil de pipeline
         </h2>
         {funnel.data ? (
           <FunnelChart data={funnel.data} />
         ) : (
-          <p className="text-sm text-neutral-600">Carregando…</p>
+          <p className="text-sm text-text-2">Carregando…</p>
         )}
       </section>
 
@@ -115,19 +115,19 @@ export default function ReportsPage() {
         />
       </section>
 
-      <section className="mb-6 rounded-lg border border-neutral-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-700">
+      <section className="mb-6 rounded-lg border border-border bg-card p-4">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-1">
           Performance por responsável
         </h2>
         {perf.data && (
           <>
             {perf.data.anonymized && (
-              <p className="mb-2 text-xs text-neutral-500">
+              <p className="mb-2 text-xs text-text-2">
                 Você está vendo apenas a própria linha + média anônima do time.
               </p>
             )}
             <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase text-neutral-500">
+              <thead className="text-left text-xs uppercase text-text-2">
                 <tr>
                   <th className="py-2">Responsável</th>
                   <th className="text-right">Em aberto</th>
@@ -138,7 +138,7 @@ export default function ReportsPage() {
               </thead>
               <tbody>
                 {perf.data.rows.map((r) => (
-                  <tr key={r.ownerId} className="border-t border-neutral-100">
+                  <tr key={r.ownerId} className="border-t border-border">
                     <td className="py-2">{r.ownerName}</td>
                     <td className="text-right">{r.active}</td>
                     <td className="text-right">{r.won}</td>
@@ -146,7 +146,7 @@ export default function ReportsPage() {
                     <td className="text-right">{brl(r.wonValue)}</td>
                   </tr>
                 ))}
-                <tr className="border-t-2 border-neutral-300 font-medium">
+                <tr className="border-t-2 border-border-strong font-medium">
                   <td className="py-2">Média do time</td>
                   <td className="text-right">{perf.data.teamAverage.active}</td>
                   <td className="text-right">{perf.data.teamAverage.won}</td>
@@ -160,15 +160,15 @@ export default function ReportsPage() {
       </section>
 
       {winLoss.data && winLoss.data.byLossReason.length > 0 && (
-        <section className="mb-6 rounded-lg border border-neutral-200 bg-white p-4">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-700">
+        <section className="mb-6 rounded-lg border border-border bg-card p-4">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-1">
             Motivos de perda
           </h2>
           <ul className="space-y-1 text-sm">
             {winLoss.data.byLossReason.map((r) => (
-              <li key={r.reason} className="flex justify-between border-b border-neutral-100 py-1">
+              <li key={r.reason} className="flex justify-between border-b border-border py-1">
                 <span>{r.reason.replace(/_/g, ' ').toLowerCase()}</span>
-                <span className="text-neutral-600">
+                <span className="text-text-2">
                   {r.count} · {brl(r.sumValue)}
                 </span>
               </li>
@@ -178,12 +178,12 @@ export default function ReportsPage() {
       )}
 
       {proj.data && (
-        <section className="rounded-lg border border-neutral-200 bg-white p-4">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-700">
+        <section className="rounded-lg border border-border bg-card p-4">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-1">
             Projeção por estágio
           </h2>
           <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase text-neutral-500">
+            <thead className="text-left text-xs uppercase text-text-2">
               <tr>
                 <th className="py-2">Estágio</th>
                 <th className="text-right">Valor base</th>
@@ -193,7 +193,7 @@ export default function ReportsPage() {
             </thead>
             <tbody>
               {proj.data.byStage.map((s) => (
-                <tr key={s.stage} className="border-t border-neutral-100">
+                <tr key={s.stage} className="border-t border-border">
                   <td className="py-2">{STAGE_LABELS[s.stage]}</td>
                   <td className="text-right">{brl(s.base)}</td>
                   <td className="text-right">{s.rate}%</td>
@@ -210,10 +210,10 @@ export default function ReportsPage() {
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-lg border border-neutral-200 bg-white p-3">
-      <p className="text-xs text-neutral-600">{label}</p>
+    <div className="rounded-lg border border-border bg-card p-3">
+      <p className="text-xs text-text-2">{label}</p>
       <p className="text-xl font-semibold">{value}</p>
-      {hint && <p className="text-xs text-neutral-500">{hint}</p>}
+      {hint && <p className="text-xs text-text-2">{hint}</p>}
     </div>
   );
 }

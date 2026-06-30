@@ -35,19 +35,19 @@ export default function AdminContractsPage() {
           save.mutate({ handoffEmails, contractRenewalLeadDays: renewalDays });
         }}
       >
-        <section className="rounded-lg border border-neutral-200 bg-white p-4">
+        <section className="rounded-lg border border-border bg-card p-4">
           <h2 className="mb-2 text-sm font-semibold">E-mails de handoff</h2>
-          <p className="mb-2 text-xs text-neutral-600">
+          <p className="mb-2 text-xs text-text-2">
             Destinatários quando um contrato vira ATIVO (operações, financeiro).
           </p>
           <div className="mb-2 flex flex-wrap gap-2">
             {handoffEmails.map((e) => (
-              <span key={e} className="flex items-center gap-1 rounded-full bg-neutral-100 px-2 py-0.5 text-xs">
+              <span key={e} className="flex items-center gap-1 rounded-full bg-hover px-2 py-0.5 text-xs">
                 {e}
                 <button
                   type="button"
                   onClick={() => setHandoffEmails(handoffEmails.filter((x) => x !== e))}
-                  className="text-neutral-500 hover:text-red-600"
+                  className="text-text-2 hover:text-danger"
                   aria-label={`Remover ${e}`}
                 >
                   ×
@@ -79,16 +79,16 @@ export default function AdminContractsPage() {
           </div>
         </section>
 
-        <section className="rounded-lg border border-neutral-200 bg-white p-4">
+        <section className="rounded-lg border border-border bg-card p-4">
           <h2 className="mb-2 text-sm font-semibold">Antecedência alertas de renovação (dias)</h2>
           <div className="flex flex-wrap gap-2">
             {renewalDays.map((d, i) => (
-              <span key={i} className="flex items-center gap-1 rounded-full bg-neutral-100 px-2 py-0.5 text-xs">
+              <span key={i} className="flex items-center gap-1 rounded-full bg-hover px-2 py-0.5 text-xs">
                 {d}d
                 <button
                   type="button"
                   onClick={() => setRenewalDays(renewalDays.filter((_, idx) => idx !== i))}
-                  className="text-neutral-500 hover:text-red-600"
+                  className="text-text-2 hover:text-danger"
                   aria-label={`Remover ${d}`}
                 >
                   ×

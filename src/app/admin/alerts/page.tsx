@@ -44,20 +44,20 @@ export default function AdminAlertsPage() {
           <span className="mb-1 block text-sm font-medium">
             Antecedência dos alertas (em dias)
           </span>
-          <p className="mb-2 text-xs text-neutral-600">
+          <p className="mb-2 text-xs text-text-2">
             Lista de dias antes da data para disparar alerta. Padrão: 7 e 1.
           </p>
           <div className="flex flex-wrap gap-2">
             {leadDays.map((n, i) => (
               <span
                 key={i}
-                className="flex items-center gap-1 rounded-full bg-neutral-100 px-3 py-1 text-sm"
+                className="flex items-center gap-1 rounded-full bg-hover px-3 py-1 text-sm"
               >
                 {n}d
                 <button
                   type="button"
                   onClick={() => setLeadDays(leadDays.filter((_, idx) => idx !== i))}
-                  className="text-neutral-500 hover:text-red-600"
+                  className="text-text-2 hover:text-danger"
                   aria-label={`Remover ${n} dias`}
                 >
                   ×
@@ -70,7 +70,7 @@ export default function AdminAlertsPage() {
 
         <label className="block">
           <span className="mb-1 block text-sm font-medium">E-mail da Central de CRM</span>
-          <p className="mb-2 text-xs text-neutral-600">
+          <p className="mb-2 text-xs text-text-2">
             Cada alerta é enviado também para este endereço, em paralelo ao responsável.
           </p>
           <input
@@ -97,7 +97,7 @@ export default function AdminAlertsPage() {
         </label>
 
         {save.error && (
-          <p className="rounded bg-red-50 p-2 text-sm text-red-700">{save.error.message}</p>
+          <p className="rounded bg-red-50 p-2 text-sm text-danger">{save.error.message}</p>
         )}
 
         <Button type="submit" disabled={save.isLoading || leadDays.length === 0}>

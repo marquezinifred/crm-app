@@ -12,8 +12,9 @@ import {
   useDroppable,
 } from '@dnd-kit/core';
 import { trpc } from '@/lib/trpc/client';
-import { brl } from '@/lib/utils/hooks';
+import { formatBRL, formatBRLCompact } from '@/lib/utils/format';
 import { OpportunityCard } from './OpportunityCard';
+import { Badge } from '@/components/ui/badge';
 import { STAGES, STAGE_LABELS, type OpportunityCard as Card } from './types';
 import type { OpportunityStage } from '@prisma/client';
 
@@ -56,13 +57,16 @@ export function PipelineKanban({ onCardClick, onAdvanceError }: Props) {
     });
   }
 
-  if (isLoading) return <p className="p-6 text-sm text-neutral-600">Carregando pipeline…</p>;
-  if (error) return <p className="p-6 text-sm text-red-600">{error.message}</p>;
+  if (isLoading) return <p className="p-6 text-sm text-text-2">Carregando pipeline…</p>;
+  if (error) return <p className="p-6 text-sm text-danger">{error.message}</p>;
   if (!data) return null;
 
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className="grid grid-cols-7 gap-2 overflow-x-auto pb-4">
+      <div
+        className="flex gap-3 overflow-x-auto pb-4 snap-x snap-mandatory scroll-px-4 px-4"
+        style={{ scrollPaddingInline: 'var(--space-4)' }}
+      >
         {STAGES.map((stage) => {
           const col = data.columns[stage];
           return (
@@ -101,19 +105,26 @@ function StageColumn({
   return (
     <div
       ref={setNodeRef}
-      className={`flex min-h-[400px] flex-col rounded-md bg-neutral-50 p-2 ${
-        isOver ? 'ring-2 ring-blue-400' : ''
+      style={{ minWidth: 280, maxWidth: 320, flexShrink: 0, scrollSnapAlign: 'start' }}
+      className={`flex min-h-[400px] flex-col rounded-md bg-card border border-border p-3 transition-shadow ${
+        isOver ? 'ring-2 ring-brand-primary border-brand-primary' : ''
       }`}
     >
-      <header className="mb-2 flex items-baseline justify-between">
-        <span className="text-[11px] font-medium uppercase tracking-wide text-neutral-700">
-          {STAGE_LABELS[stage]}
-        </span>
-        <span className="text-[10px] text-neutral-500">{count}</span>
+      <header className="mb-2">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-label text-text-3">{STAGE_LABELS[stage]}</span>
+          <Badge variant="default">{count}</Badge>
+        </div>
+        <p
+          title={formatBRL(sumValue)}
+          aria-label={`Total: ${formatBRL(sumValue)}`}
+          className="mt-1 font-mono tabular-nums text-[13px] font-bold text-brand-accent"
+        >
+          {formatBRLCompact(sumValue)}
+        </p>
       </header>
-      <p className="mb-2 text-[10px] text-neutral-500">{brl(sumValue)}</p>
 
-      <div className="flex flex-1 flex-col gap-1.5">
+      <div className="flex flex-1 flex-col gap-2">
         {cards.map((c) => (
           <DraggableCard
             key={c.id}
@@ -123,8 +134,8 @@ function StageColumn({
           />
         ))}
         {cards.length === 0 && (
-          <p className="rounded border border-dashed border-neutral-300 p-3 text-center text-[11px] text-neutral-400">
-            Solte aqui
+          <p className="rounded border border-dashed border-border p-4 text-center text-caption text-text-3">
+            Arraste cards aqui.
           </p>
         )}
       </div>

@@ -35,7 +35,7 @@ export default function ConversionRatesPage() {
   return (
     <main className="mx-auto max-w-2xl p-6">
       <h1 className="mb-2 text-2xl font-bold">Taxas de conversão</h1>
-      <p className="mb-4 text-sm text-neutral-600">
+      <p className="mb-4 text-sm text-text-2">
         Percentual esperado de oportunidades que avançam de cada estágio.
         Usado pela projeção de receita no `/reports`.
       </p>
@@ -52,13 +52,13 @@ export default function ConversionRatesPage() {
       </div>
 
       {suggestion && (
-        <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-4">
+        <div className="mb-4 rounded-lg border border-blue-200 bg-info-bg p-4">
           <p className="mb-1 text-xs font-medium uppercase text-blue-900">
             Sugestão ({suggestion.source})
           </p>
           <p className="mb-3 text-sm text-blue-900">{suggestion.rationale}</p>
           <table className="mb-3 w-full text-sm">
-            <thead className="text-left text-xs uppercase text-blue-700">
+            <thead className="text-left text-xs uppercase text-info-text">
               <tr>
                 <th>Estágio</th>
                 <th className="text-right">Atual</th>
@@ -112,7 +112,7 @@ export default function ConversionRatesPage() {
                 className="w-20 rounded border px-2 py-1 text-right"
                 disabled={s === 'CONTRATO'}
               />
-              <span className="text-sm text-neutral-500">%</span>
+              <span className="text-sm text-text-2">%</span>
             </div>
           </label>
         ))}

@@ -48,9 +48,9 @@ export function PolicyAcceptGate() {
 
   return (
     <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg max-w-xl w-full p-6 space-y-4">
+      <div className="bg-card rounded-lg max-w-xl w-full p-6 space-y-4">
         <h2 className="text-lg font-semibold">Atualizamos nossos termos</h2>
-        <p className="text-sm text-neutral-700">
+        <p className="text-sm text-text-1">
           Publicamos novas versões dos documentos abaixo. Para continuar usando a
           plataforma, é necessário ler e aceitar.
         </p>

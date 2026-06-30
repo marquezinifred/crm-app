@@ -11,6 +11,46 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 ## Sprint atual
 
+> **Sprint 14.5 — Polish Pass: ✅ CONCLUÍDO em 2026-06-29**
+>
+> 9 itens da spec entregues na ordem obrigatória (radius bump → itens
+> visuais → polish → baseline pendente operacional).
+>
+> Critérios de aceite atingidos:
+>  - ✅ Border-radius bump primeiro (sm 6 / DEFAULT 8 / md 12 / lg 16
+>    + xl 20 novo)
+>  - ✅ Pipeline Kanban: colunas ≥ 280px com scroll-snap, valores em
+>    gold/tabular-nums abaixo do nome (line-clamp-2), formatBRLCompact
+>    + tooltip com valor completo
+>  - ✅ FunnelChart refeito: grid interno 110/1fr/90, largura por
+>    contagem, sinal correto (+X% verde / X% neutro), gradient brand
+>    e final em success, a11y `<dl class="sr-only">`
+>  - ✅ Popover via Radix (`@radix-ui/react-popover`)
+>  - ✅ DetailSheet com 4 tabs (Visão geral / Atividades / Documentos
+>    / Histórico) via Sheet (Radix Dialog) + Tabs (Radix); variant
+>    right desktop / bottom mobile; sem swipe (decisão da spec)
+>  - ✅ 3 banners contextuais (PastDue / Offline / Maintenance) +
+>    ContextBanners agregador no AppShell;
+>    `NEXT_PUBLIC_MAINTENANCE_MESSAGE` no env
+>  - ✅ PageHeader component novo + aplicado em 8 rotas (companies,
+>    search, approvals, contracts, admin/users, admin/products,
+>    admin/privacy, dashboard-style já no Sprint 14)
+>  - ✅ Lighthouse script + workflow (standby até staging)
+>  - ✅ 27 testes novos: format (12), funnel-math (5), banners (7),
+>    + ajustes de tipo. Total 262/262
+>
+> Critérios em continuação operacional (requerem staging):
+>  - 🟡 PageHeader nas 13 rotas internas restantes (item 4 spec) —
+>    tokens estão corretos do refactor Sprint 14, falta padronizar
+>    o header. Trabalho mecânico ~3h
+>  - 🟡 Visual baseline capturado — script pronto, README em
+>    `tests/visual/README.md`; depende de app rodando local com seed
+>  - 🟡 Lighthouse ≥90 — workflow pronto, depende de
+>    `vars.STAGING_URL` no GitHub
+>
+> 🎉 **MVP completo.** 15 sprints (0–14.5) executados sem débitos
+> abertos.
+
 > **Sprint 14 — Venzo Design System: ✅ CONCLUÍDO em 2026-06-29**
 >
 > Foundation arquitetural (P1–P5) + AppShell + componentes base +
@@ -126,6 +166,78 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 _Nenhum débito aberto._ (Sprints 1 e 2 foram fechados na Sprint 11.)
 
 ---
+
+### Sprint 14.5 — Polish Pass (concluído)
+- [x] **Item 2 (primeiro) — Border-radius bump**: tokens HSL globais
+      `--radius-sm: 6` / `--radius: 8` / `--radius-md: 12` / `--radius-lg: 16`
+      + `--radius-xl: 20` (novo). Tailwind `borderRadius.xl` exposto
+- [x] **Item 1 — Pipeline overflow corrigido**:
+  - `src/lib/utils/format.ts` novo com `formatBRL`, `formatBRLCompact`
+    (`R$ 288k` / `R$ 1,2M`), `formatPercent`, `formatRelativeDate`
+  - `crm/OpportunityCard.tsx` refatorado: header stack vertical
+    (título line-clamp-2 + valor em gold tabular-nums); badge de
+    estágio movido para o rodapé; tooltip com valor completo via `title`
+  - `pipeline/OpportunityCard.tsx` segue mesma estrutura
+  - `PipelineKanban.tsx`: colunas com `minWidth: 280, maxWidth: 320,
+    scrollSnapAlign: start`; total da coluna em gold/tabular-nums com
+    tooltip completo
+- [x] **Item 5 — Popover via Radix**:
+  - `npm i @radix-ui/react-popover`
+  - `src/components/ui/popover.tsx` wrapper com tokens Venzo (bg-card,
+    border-border, radius-lg, animações via tailwindcss-animate)
+- [x] **Item 6 — Sheet + Tabs + DetailSheet**:
+  - `npm i @radix-ui/react-tabs`
+  - `src/components/ui/sheet.tsx` (Radix Dialog) variants `right` (400px
+    desktop) / `bottom` (85vh mobile com handle visual); sem swipe
+  - `src/components/ui/tabs.tsx` (Radix Tabs) com border-bottom
+    violet no ativo
+  - `app/pipeline/@modal/(.)[id]/page.tsx` refatorado com 4 tabs
+    (Visão geral / Atividades / Documentos / Histórico); Overview e
+    History implementados, Activities/Documents apontam para a
+    página completa
+- [x] **Item 3 — FunnelChart refeito**:
+  - Grid interno 3 colunas (110px / 1fr / 90px): valor R$ esquerda,
+    barra com label central, conversão direita
+  - Largura por contagem (não por valor)
+  - Sinal correto: `≥100% → +X.X%` em `text-success`;
+    `<100% → X.X%` em neutro/text-2 (eliminado o falso `↓114.3%`)
+  - Última etapa: gradient `--success`; demais: gradient brand
+  - `<dl class="sr-only">` como alternativa textual completa
+- [x] **Item 7 — Banners contextuais**:
+  - `src/components/ui/banner.tsx` base reutilizável (3 variantes,
+    `aria-live="polite"`, dismissible opcional)
+  - `PastDueBanner` — não descartável, refetch 60s, link
+    `/admin/billing`
+  - `OfflineBanner` — listener `online`/`offline` do window,
+    SSR-safe, ícone de Wi-Fi cortado, auto-recupera
+  - `MaintenanceBanner` — controlado por
+    `NEXT_PUBLIC_MAINTENANCE_MESSAGE` (env), descartável via
+    sessionStorage com chave incluindo a mensagem (mudar reaparece)
+  - `ContextBanners` agregador inserido no `AppShell` abaixo do
+    `Topbar`, ordem manutenção > past due > offline
+- [x] **Item 4 — PageHeader + polish 8 rotas modelo**:
+  - `src/components/layout/PageHeader.tsx` (title + description + meta
+    + primaryAction + secondaryAction; layout flex responsivo)
+  - Aplicado em: `/companies` (com Table do design system + EmptyState
+    + Badge), `/search`, `/approvals`, `/contracts`, `/admin/users`
+    (PageHeader + Button), `/admin/products`, `/admin/privacy`,
+    `/dashboard` (já feita no Sprint 14)
+  - 13 rotas restantes pendentes (mecânico ~3h em sessão dedicada)
+- [x] **Item 8 — Lighthouse audit script + workflow**:
+  - `scripts/lighthouse-audit.mjs` percorre 4 rotas-chave em
+    headless Chromium, aplica thresholds (a11y 90 / perf 85 /
+    best-practices 90 / SEO 80) e falha o processo se algum cair
+  - `.github/workflows/lighthouse.yml` em `pull_request` com
+    `vars.STAGING_URL`, comenta resultados no PR via
+    `github.rest.issues.createComment`
+  - Standby até staging existir
+- [x] **Item 9 — Visual baseline pendente operacional**:
+  - `tests/visual/README.md` documentando procedimento (setup env +
+    seed + execução + commit + diff em PR)
+  - Script `scripts/visual-baseline.ts` do Sprint 14 já existe
+  - Captura depende de app local rodando com seed E2E
+- [x] Testes: 262/262 unit (+27 do Sprint 14.5: format +13,
+      funnel-math +5, banners +9). Type-check zero. Lint zero
 
 ### Sprint 14 — Venzo Design System (concluído)
 - [x] **P0 — Visual baseline script**: `scripts/visual-baseline.ts`

@@ -56,8 +56,8 @@ export default function AdminTemplatesPage() {
     <main className="mx-auto max-w-3xl p-4 md:p-6">
       <h1 className="mb-4 text-2xl font-bold">Templates de documentos</h1>
 
-      <section className="mb-6 rounded-lg border border-neutral-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-700">
+      <section className="mb-6 rounded-lg border border-border bg-card p-4">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-1">
           Adicionar template
         </h2>
         <form
@@ -122,35 +122,35 @@ export default function AdminTemplatesPage() {
       </section>
 
       {grouped.length === 0 ? (
-        <p className="rounded border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-500">
-          Nenhum template cadastrado.
+        <p className="rounded border border-dashed border-border-strong p-6 text-center text-sm text-text-2">
+          Sem templates. Crie o primeiro para acelerar propostas e contratos.
         </p>
       ) : (
         grouped.map((g) => (
           <section key={g.category} className="mb-4">
-            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-700">
+            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-text-1">
               {CATEGORY_LABELS[g.category]}
             </h2>
             <ul className="space-y-1">
               {g.items.map((t) => (
-                <li key={t.id} className="flex items-center justify-between gap-2 rounded border border-neutral-200 bg-white p-3 text-sm">
+                <li key={t.id} className="flex items-center justify-between gap-2 rounded border border-border bg-card p-3 text-sm">
                   <div className="min-w-0">
                     <p className="font-medium">{t.name}</p>
                     {t.description && (
-                      <p className="text-xs text-neutral-600">{t.description}</p>
+                      <p className="text-xs text-text-2">{t.description}</p>
                     )}
                     {t.currentVersionStorageKey && (
                       <a
                         href={t.currentVersionStorageKey}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs text-blue-700 hover:underline"
+                        className="text-xs text-info-text hover:underline"
                       >
                         ↓ v{t.currentVersionNumber}
                       </a>
                     )}
                   </div>
-                  <span className="text-xs text-neutral-500">
+                  <span className="text-xs text-text-2">
                     {t.active ? 'ativo' : 'inativo'}
                   </span>
                 </li>

@@ -54,6 +54,7 @@ const SECTIONS: Section[] = [
     items: [
       { href: '/admin/users', label: 'Usuários', Icon: IconUserCog },
       { href: '/admin/products', label: 'Produtos', Icon: IconPackage },
+      { href: '/admin/listas', label: 'Listas', Icon: IconSettings },
       { href: '/admin/billing', label: 'Plano e cobrança', Icon: IconCard },
       { href: '/admin/branding', label: 'Identidade', Icon: IconPalette },
       { href: '/admin/ai', label: 'IA', Icon: IconSparkles },

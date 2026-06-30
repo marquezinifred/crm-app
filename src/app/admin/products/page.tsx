@@ -4,6 +4,7 @@ import { trpc } from '@/lib/trpc/client';
 import { useId, useState } from 'react';
 import { ProductType } from '@prisma/client';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { useToast } from '@/components/ui/toast';
 
 const TYPE_LABEL: Record<ProductType, string> = {
   ALOCACAO: 'Alocação',
@@ -34,14 +35,16 @@ const EMPTY: FormState = {
 
 export default function AdminProductsPage() {
   const utils = trpc.useUtils();
+  const { toast } = useToast();
   const list = trpc.products.list.useQuery({});
   const [form, setForm] = useState<FormState>(EMPTY);
   const [error, setError] = useState<string | null>(null);
   const formTitleId = useId();
 
   const create = trpc.products.create.useMutation({
-    onSuccess: () => {
+    onSuccess: (p) => {
       utils.products.list.invalidate();
+      toast({ kind: 'success', title: `${p.name} adicionado ao catálogo.` });
       setForm(EMPTY);
       setError(null);
     },
@@ -50,13 +53,17 @@ export default function AdminProductsPage() {
   const update = trpc.products.update.useMutation({
     onSuccess: () => {
       utils.products.list.invalidate();
+      toast({ kind: 'success', title: 'Produto atualizado.' });
       setForm(EMPTY);
       setError(null);
     },
     onError: (e) => setError(e.message),
   });
   const remove = trpc.products.remove.useMutation({
-    onSuccess: () => utils.products.list.invalidate(),
+    onSuccess: () => {
+      utils.products.list.invalidate();
+      toast({ kind: 'success', title: 'Produto desativado.' });
+    },
   });
 
   function submit(e: React.FormEvent) {

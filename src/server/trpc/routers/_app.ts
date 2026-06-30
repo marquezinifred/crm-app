@@ -1,7 +1,13 @@
 import { router, publicProcedure, protectedProcedure } from '@/server/trpc/trpc';
 import { z } from 'zod';
 import { onboardingRouter } from './onboarding';
-import { territoriesRouter, segmentsRouter } from './catalog';
+import {
+  territoriesRouter,
+  segmentsRouter,
+  leadSourcesRouter,
+  industriesRouter,
+  contactRolesRouter,
+} from './catalog';
 import { companiesRouter } from './companies';
 import { contactsRouter } from './contacts';
 import { productsRouter } from './products';
@@ -49,6 +55,9 @@ export const appRouter = router({
   onboarding: onboardingRouter,
   territories: territoriesRouter,
   segments: segmentsRouter,
+  leadSources: leadSourcesRouter,
+  industries: industriesRouter,
+  contactRoles: contactRolesRouter,
   companies: companiesRouter,
   contacts: contactsRouter,
   products: productsRouter,

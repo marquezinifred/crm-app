@@ -7,18 +7,34 @@ import { Field } from '@/components/ui/field';
 import { Input, Select, Textarea } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/components/ui/toast';
 import { useDebouncedValue } from '@/lib/utils/hooks';
 import { isValidCnpj, stripCnpj } from '@/lib/validators/cnpj';
 import { lookupCnpj, type CnpjData, type CnpjLookupResult } from '@/lib/cnpj/lookup';
 import { mergeCnpjAutofill } from '@/lib/cnpj/autofill';
+import { lookupCep } from '@/lib/cep/lookup';
+import { ESTADOS_BR, PAISES, useCidadesByUF } from '@/lib/data/brasil';
+import {
+  formatCNPJ,
+  unformatCNPJ,
+  formatCEP,
+  unformatCEP,
+} from '@/lib/utils/format';
 
 /**
- * CompanyForm — sprint corretivo /companies (fix 404 ghost route) +
- * autofill BrasilAPI por CNPJ.
+ * CompanyForm — Sprint 15C.
  *
- * Reusa tRPC procedures companies.create/update existentes.
- * Quando `companyId` é passado, carrega via byId e preenche o form
- * (e desliga o autofill — empresa já existe).
+ * Mantém: auto-fill BrasilAPI por CNPJ (Sprint 13 corretivo).
+ *
+ * Adiciona:
+ *  - Máscara visual CNPJ + máscara visual CEP
+ *  - Auto-fill BrasilAPI por CEP (preenche logradouro/bairro/UF/cidade
+ *    sem sobrescrever o que o usuário já digitou)
+ *  - País como Select (default Brasil) + UF como Select dos 27 + Cidade
+ *    como Combobox IBGE (cache perpétuo da sessão)
+ *  - Campos novos: cep, logradouro, numero, complemento, bairro
+ *  - Setor configurável (industries)
+ *  - Toast de sucesso com voz Venzo
  */
 
 const TYPE_LABEL: Record<CompanyType, string> = {
@@ -34,6 +50,11 @@ interface FormState {
   nomeFantasia: string;
   cnpj: string;
   country: string;
+  cep: string;
+  logradouro: string;
+  numero: string;
+  complemento: string;
+  bairro: string;
   state: string;
   city: string;
   website: string;
@@ -41,6 +62,7 @@ interface FormState {
   phone: string;
   territoryId: string;
   segmentId: string;
+  industryId: string;
   notes: string;
 }
 
@@ -50,6 +72,11 @@ const EMPTY: FormState = {
   nomeFantasia: '',
   cnpj: '',
   country: 'BR',
+  cep: '',
+  logradouro: '',
+  numero: '',
+  complemento: '',
+  bairro: '',
   state: '',
   city: '',
   website: '',
@@ -57,6 +84,7 @@ const EMPTY: FormState = {
   phone: '',
   territoryId: '',
   segmentId: '',
+  industryId: '',
   notes: '',
 };
 
@@ -87,13 +115,17 @@ export function CompanyForm({
   onCancel?: () => void;
 }) {
   const utils = trpc.useUtils();
+  const { toast } = useToast();
   const [form, setForm] = useState<FormState>(EMPTY);
   const [error, setError] = useState<string | null>(null);
   const [lookup, setLookup] = useState<LookupStatus>({ kind: 'idle' });
   const lookupAbort = useRef<AbortController | null>(null);
   const lastLookedUp = useRef<string | null>(null);
+  const cepAbort = useRef<AbortController | null>(null);
+  const lastCep = useRef<string | null>(null);
 
   const isEditMode = Boolean(companyId);
+  const isBrazil = form.country === 'BR';
 
   const existing = trpc.companies.byId.useQuery(
     { id: companyId ?? '' },
@@ -101,6 +133,8 @@ export function CompanyForm({
   );
   const territories = trpc.territories.list.useQuery();
   const segments = trpc.segments.list.useQuery();
+  const industries = trpc.industries.list.useQuery({ includeInactive: false });
+  const municipios = useCidadesByUF(isBrazil ? form.state : null);
 
   useEffect(() => {
     if (existing.data) {
@@ -111,6 +145,11 @@ export function CompanyForm({
         nomeFantasia: c.nomeFantasia ?? '',
         cnpj: c.cnpj ?? '',
         country: c.country ?? 'BR',
+        cep: c.cep ?? '',
+        logradouro: c.logradouro ?? '',
+        numero: c.numero ?? '',
+        complemento: c.complemento ?? '',
+        bairro: c.bairro ?? '',
         state: c.state ?? '',
         city: c.city ?? '',
         website: c.website ?? '',
@@ -118,6 +157,7 @@ export function CompanyForm({
         phone: c.phone ?? '',
         territoryId: c.territoryId ?? '',
         segmentId: c.segmentId ?? '',
+        industryId: c.industryId ?? '',
         notes: c.notes ?? '',
       });
     }
@@ -174,13 +214,42 @@ export function CompanyForm({
     if (lastLookedUp.current === cnpjDigits) return;
     lastLookedUp.current = cnpjDigits;
     void runLookup(cnpjDigits, form);
-    // form deliberadamente fora das deps: queremos rodar quando o CNPJ
-    // muda, não a cada keystroke nos outros campos.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cnpjDigits, isEditMode, runLookup]);
 
+  // Sprint 15C — CEP auto-fill. Não sobrescreve campos preenchidos.
+  const debouncedCep = useDebouncedValue(form.cep, 500);
   useEffect(() => {
-    return () => lookupAbort.current?.abort();
+    if (!isBrazil) return;
+    const digits = unformatCEP(debouncedCep);
+    if (digits.length !== 8) return;
+    if (lastCep.current === digits) return;
+    lastCep.current = digits;
+
+    cepAbort.current?.abort();
+    const ctrl = new AbortController();
+    cepAbort.current = ctrl;
+
+    void (async () => {
+      const res = await lookupCep(digits, { signal: ctrl.signal });
+      if (ctrl.signal.aborted) return;
+      if (res.status !== 'ok') return;
+      setForm((cur) => ({
+        ...cur,
+        logradouro: cur.logradouro || res.data.street,
+        bairro: cur.bairro || res.data.neighborhood,
+        state: cur.state || res.data.state,
+        city: cur.city || res.data.city,
+      }));
+      toast({ kind: 'info', title: 'Endereço preenchido via CEP.' });
+    })();
+  }, [debouncedCep, isBrazil, toast]);
+
+  useEffect(() => {
+    return () => {
+      lookupAbort.current?.abort();
+      cepAbort.current?.abort();
+    };
   }, []);
 
   const retryLookup = () => {
@@ -193,6 +262,10 @@ export function CompanyForm({
   const create = trpc.companies.create.useMutation({
     onSuccess: (created) => {
       utils.companies.list.invalidate();
+      toast({
+        kind: 'success',
+        title: `${created.razaoSocial} adicionada ao seu portfólio.`,
+      });
       onSuccess?.(created.id);
     },
     onError: (e) => setError(e.message),
@@ -201,6 +274,7 @@ export function CompanyForm({
     onSuccess: () => {
       utils.companies.list.invalidate();
       if (companyId) utils.companies.byId.invalidate({ id: companyId });
+      toast({ kind: 'success', title: `Dados de ${form.razaoSocial} atualizados.` });
       onSuccess?.(companyId!);
     },
     onError: (e) => setError(e.message),
@@ -215,8 +289,13 @@ export function CompanyForm({
       type: form.type,
       razaoSocial: form.razaoSocial.trim(),
       nomeFantasia: form.nomeFantasia.trim() || null,
-      cnpj: form.cnpj.replace(/\D/g, '') || null,
+      cnpj: unformatCNPJ(form.cnpj) || null,
       country: form.country.trim() || 'BR',
+      cep: unformatCEP(form.cep) || null,
+      logradouro: form.logradouro.trim() || null,
+      numero: form.numero.trim() || null,
+      complemento: form.complemento.trim() || null,
+      bairro: form.bairro.trim() || null,
       state: form.state.trim() || null,
       city: form.city.trim() || null,
       website: form.website.trim() || null,
@@ -224,6 +303,7 @@ export function CompanyForm({
       phone: form.phone.trim() || null,
       territoryId: form.territoryId || null,
       segmentId: form.segmentId || null,
+      industryId: form.industryId || null,
       notes: form.notes.trim() || null,
     };
     if (companyId) update.mutate({ id: companyId, ...payload });
@@ -247,11 +327,12 @@ export function CompanyForm({
             ))}
           </Select>
         </Field>
-        <Field label="CNPJ" helper="Apenas dígitos ou no formato 00.000.000/0000-00">
+        <Field label="CNPJ" helper="Auto-fill via Receita Federal.">
           <Input
-            value={form.cnpj}
-            onChange={(e) => setForm((f) => ({ ...f, cnpj: e.target.value }))}
+            value={formatCNPJ(form.cnpj)}
+            onChange={(e) => setForm((f) => ({ ...f, cnpj: unformatCNPJ(e.target.value) }))}
             placeholder="00.000.000/0000-00"
+            maxLength={18}
           />
         </Field>
         {!isEditMode && <LookupStatusLine status={lookup} onRetry={retryLookup} />}
@@ -268,26 +349,131 @@ export function CompanyForm({
             onChange={(e) => setForm((f) => ({ ...f, nomeFantasia: e.target.value }))}
           />
         </Field>
+
+        {/* ─── Endereço ─────────────────────────────────────────── */}
         <Field label="País">
-          <Input
+          <Select
             value={form.country}
-            onChange={(e) => setForm((f) => ({ ...f, country: e.target.value.toUpperCase().slice(0, 2) }))}
-            placeholder="BR"
-          />
+            onChange={(e) =>
+              setForm((f) => ({
+                ...f,
+                country: e.target.value,
+                // Sai do Brasil → limpa cep/UF/cidade que dependem de IBGE
+                ...(e.target.value !== 'BR'
+                  ? { cep: '', state: '', city: '' }
+                  : {}),
+              }))
+            }
+          >
+            {PAISES.map((p) => (
+              <option key={p.code} value={p.code}>{p.nome}</option>
+            ))}
+          </Select>
         </Field>
+        {isBrazil ? (
+          <Field label="CEP" helper="Auto-fill BrasilAPI.">
+            <Input
+              value={formatCEP(form.cep)}
+              onChange={(e) => setForm((f) => ({ ...f, cep: unformatCEP(e.target.value) }))}
+              placeholder="00000-000"
+              maxLength={9}
+              inputMode="numeric"
+            />
+          </Field>
+        ) : (
+          <div />
+        )}
+
+        {isBrazil ? (
+          <>
+            <Field label="Logradouro">
+              <Input
+                value={form.logradouro}
+                onChange={(e) => setForm((f) => ({ ...f, logradouro: e.target.value }))}
+              />
+            </Field>
+            <Field label="Número">
+              <Input
+                value={form.numero}
+                onChange={(e) => setForm((f) => ({ ...f, numero: e.target.value }))}
+                placeholder="123"
+                maxLength={20}
+              />
+            </Field>
+            <Field label="Complemento">
+              <Input
+                value={form.complemento}
+                onChange={(e) => setForm((f) => ({ ...f, complemento: e.target.value }))}
+                placeholder="Sala 5"
+              />
+            </Field>
+            <Field label="Bairro">
+              <Input
+                value={form.bairro}
+                onChange={(e) => setForm((f) => ({ ...f, bairro: e.target.value }))}
+              />
+            </Field>
+          </>
+        ) : null}
+
         <Field label="UF">
-          <Input
-            value={form.state}
-            onChange={(e) => setForm((f) => ({ ...f, state: e.target.value }))}
-            placeholder="SP"
-          />
+          {isBrazil ? (
+            <Select
+              value={form.state}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, state: e.target.value, city: '' }))
+              }
+            >
+              <option value="">—</option>
+              {ESTADOS_BR.map((s) => (
+                <option key={s.uf} value={s.uf}>
+                  {s.uf} — {s.nome}
+                </option>
+              ))}
+            </Select>
+          ) : (
+            <Input
+              value={form.state}
+              onChange={(e) => setForm((f) => ({ ...f, state: e.target.value }))}
+              placeholder="Estado/Província"
+            />
+          )}
         </Field>
-        <Field label="Cidade" className="md:col-span-2">
-          <Input
-            value={form.city}
-            onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
-          />
+        <Field
+          label="Cidade"
+          helper={
+            isBrazil && form.state && municipios.isLoading
+              ? 'Carregando municípios IBGE…'
+              : undefined
+          }
+        >
+          {isBrazil && form.state ? (
+            <>
+              <Input
+                value={form.city}
+                onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
+                list="company-form-cidades"
+                placeholder={
+                  municipios.data?.length
+                    ? `Digite ou escolha (${municipios.data.length} municípios)`
+                    : undefined
+                }
+              />
+              <datalist id="company-form-cidades">
+                {municipios.data?.map((m) => (
+                  <option key={m.id} value={m.nome} />
+                ))}
+              </datalist>
+            </>
+          ) : (
+            <Input
+              value={form.city}
+              onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
+            />
+          )}
         </Field>
+
+        {/* ─── Classificação ─────────────────────────────────────── */}
         <Field label="Território">
           <Select
             value={form.territoryId}
@@ -310,6 +496,18 @@ export function CompanyForm({
             ))}
           </Select>
         </Field>
+        <Field label="Setor (indústria)" className="md:col-span-2">
+          <Select
+            value={form.industryId}
+            onChange={(e) => setForm((f) => ({ ...f, industryId: e.target.value }))}
+          >
+            <option value="">—</option>
+            {industries.data?.map((i) => (
+              <option key={i.id} value={i.id}>{i.name}</option>
+            ))}
+          </Select>
+        </Field>
+
         <Field label="E-mail">
           <Input
             type="email"
@@ -347,7 +545,7 @@ export function CompanyForm({
         </p>
       )}
 
-      <div className="flex justify-end gap-2 pt-2">
+      <div className="flex justify-end gap-2 pt-2 sticky bottom-0 bg-card -mx-6 px-6 py-3 border-t border-border">
         {onCancel && (
           <Button type="button" variant="ghost" onClick={onCancel}>
             Cancelar

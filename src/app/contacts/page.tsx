@@ -8,6 +8,8 @@ import {
   ContactSeniority,
   WorkArea,
 } from '@prisma/client';
+import { useToast } from '@/components/ui/toast';
+import { QuickCreateTrigger } from '@/components/ui/quick-create-trigger';
 
 const RT_LABEL: Record<ContactRelationshipType, string> = {
   COLABORADOR: 'Colaborador',
@@ -53,6 +55,7 @@ const EMPTY: FormState = {
 export default function ContactsPage() {
   const router = useRouter();
   const utils = trpc.useUtils();
+  const { toast } = useToast();
   const [search, setSearch] = useState('');
   const [workAreaFilter, setWorkAreaFilter] = useState<'' | WorkArea>('');
   const [rtFilter, setRtFilter] = useState<'' | ContactRelationshipType>('');
@@ -64,23 +67,28 @@ export default function ContactsPage() {
   const companies = trpc.companies.list.useQuery({ pageSize: 100 });
 
   const create = trpc.contacts.create.useMutation({
-    onSuccess: () => {
+    onSuccess: (c) => {
       utils.contacts.list.invalidate();
+      toast({ kind: 'success', title: `${c.fullName} adicionado como contato.` });
       setForm(EMPTY);
       setErrors({});
     },
     onError: (e) => setErrors({ form: e.message }),
   });
   const update = trpc.contacts.update.useMutation({
-    onSuccess: () => {
+    onSuccess: (c) => {
       utils.contacts.list.invalidate();
+      toast({ kind: 'success', title: `Dados de ${c.fullName} atualizados.` });
       setForm(EMPTY);
       setErrors({});
     },
     onError: (e) => setErrors({ form: e.message }),
   });
   const remove = trpc.contacts.remove.useMutation({
-    onSuccess: () => utils.contacts.list.invalidate(),
+    onSuccess: () => {
+      utils.contacts.list.invalidate();
+      toast({ kind: 'success', title: 'Contato desativado.' });
+    },
   });
 
   const visibleContacts = (contacts.data?.rows ?? []).filter((c) => {
@@ -158,18 +166,28 @@ export default function ContactsPage() {
             />
           </Field>
           <Field label="Empresa">
-            <select
-              value={form.companyId}
-              onChange={(e) => setForm((f) => ({ ...f, companyId: e.target.value }))}
-              className="input"
-            >
-              <option value="">— Sem empresa —</option>
-              {companies.data?.rows.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nomeFantasia ?? c.razaoSocial}
-                </option>
-              ))}
-            </select>
+            <div className="flex items-center gap-2">
+              <select
+                value={form.companyId}
+                onChange={(e) => setForm((f) => ({ ...f, companyId: e.target.value }))}
+                className="input flex-1"
+              >
+                <option value="">— Sem empresa —</option>
+                {companies.data?.rows.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nomeFantasia ?? c.razaoSocial}
+                  </option>
+                ))}
+              </select>
+              <QuickCreateTrigger
+                entity="company"
+                triggerLabel="+ Nova"
+                onCreated={(id) => {
+                  setForm((f) => ({ ...f, companyId: id }));
+                  utils.companies.list.invalidate();
+                }}
+              />
+            </div>
           </Field>
           <Field label="Área de atuação">
             <select

@@ -11,6 +11,79 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 ## Sprint atual
 
+> **Sprint 15C — Usabilidade: Forms, Listas Configuráveis e
+> QuickCreate: ✅ CONCLUÍDO em 2026-06-30**
+>
+> Spec: `docs/Sprint_15C_Usabilidade_Forms.md`. Auditoria do Passo 0
+> salva em `docs/auditoria_forms_15C.md` (scroll quebrado deu zero —
+> Modal Sprint 14.5 já trata; voz Venzo deu zero — Sprint 14.5 limpou
+> tudo; CNPJ auto-fill já entregue no fix /companies).
+>
+> Entregue:
+>  - ✅ Migration `0022_company_address` — campos endereço completo:
+>    cep, logradouro, numero, complemento, bairro + index
+>    `(tenant_id, cep) WHERE cep IS NOT NULL`
+>  - ✅ Migration `0023_configurable_lists` — 3 tabelas novas
+>    (`lead_sources`, `industries`, `contact_roles`) com position
+>    + isActive + soft delete + RLS + UNIQUE (tenant, name) WHERE
+>    deleted_at IS NULL. FKs opcionais em opportunities.lead_source_id,
+>    companies.industry_id, contacts.contact_role_id. Mantém o enum
+>    `OpportunitySource` e o campo `position` em Contact como fallback
+>  - ✅ `src/lib/cep/lookup.ts` — BrasilAPI v2 com mesmo padrão do
+>    CNPJ (5 estados: ok/not-found/rate-limited/error + AbortController)
+>  - ✅ `src/lib/utils/format.ts` ganhou `formatCNPJ`/`unformatCNPJ`/
+>    `formatCEP`/`unformatCEP` — máscaras progressivas que mantêm
+>    estado canônico em dígitos
+>  - ✅ `src/lib/data/brasil.ts` — `ESTADOS_BR` (27 UFs) + `PAISES`
+>    (25 países) + `useCidadesByUF` (IBGE Localidades, cache
+>    perpétuo via TanStack v4 `staleTime: Infinity` + `cacheTime: Infinity`)
+>  - ✅ `catalog.ts` estendido com `leadSourcesRouter` +
+>    `industriesRouter` + `contactRolesRouter`. Cada um expõe
+>    list (com filtro `includeInactive`)/create/update/remove (soft +
+>    bloqueia se em uso com mensagem que sugere desativar)/reorder
+>    (transação que escreve position por índice). Registrados em
+>    `_app.ts` como `leadSources`, `industries`, `contactRoles`
+>  - ✅ `quick-create-trigger.tsx` — componente reutilizável com 3
+>    dialogs (company/contact/product). Cada dialog usa as APIs de
+>    criação existentes e dispara toast Venzo. Contato suporta
+>    QuickCreate recursivo de empresa (1 nível, com breadcrumb
+>    "Novo contato › Nova empresa")
+>  - ✅ `CompanyForm.tsx` refatorado: máscara visual CNPJ + CEP +
+>    auto-fill BrasilAPI por CEP (não sobrescreve campos preenchidos),
+>    País como Select (default BR), UF como Select estático dos 27,
+>    Cidade como Input + datalist IBGE, campos novos
+>    (cep/logradouro/numero/complemento/bairro) + Setor (industries) +
+>    toast de sucesso + footer sticky bottom-0
+>  - ✅ `/admin/listas` — página unificada com 5 tabs (Territórios,
+>    Segmentos, Origens, Setores, Cargos). Reorder via
+>    `@dnd-kit/sortable` com handle visível, toggle Switch ativo/
+>    inativo, edição inline do nome via clique, exclusão com
+>    `AlertDialog`. Adicionado no Sidebar admin
+>  - ✅ `src/components/ui/alert-dialog.tsx` — wrapper sobre `Modal`
+>    com tom danger/primary. Substitui `confirm()` nativo
+>  - ✅ `src/lib/hooks/use-dirty-confirm.ts` + `use-auto-focus.ts` —
+>    helpers prontos para forms com unsaved-changes
+>  - ✅ `Modal` ganhou `max-h-[90vh] overflow-y-auto` por padrão
+>    (consertando proativamente formulários altos)
+>  - ✅ Aplicado cross-form: `/pipeline/new` (toast + QuickCreate
+>    Empresa + select Origem detalhada se há lead_sources),
+>    `/contacts` (toast em create/update/remove + QuickCreate Empresa
+>    inline), `/admin/products` (toast). `platform/*` mantido sem
+>    alterações (escopo Sprint 15A separado)
+>  - ✅ Testes: 32 novos. format-masks +9, cep-lookup +6,
+>    brasil-data +5, dirty-confirm +4, quick-create-shape +2,
+>    configurable-lists +8 (soft delete em uso + reorder). Total
+>    **388/390** (2 skipped pré-existentes). Type-check zero. Lint zero
+>
+> Pendências operacionais (sem bloqueio):
+>  - Seed dos valores default das 3 listas novas em tenants existentes:
+>    fazer via migration de dados ou script `db:seed --listas`
+>    (não obrigatório — UI permite criar à vontade)
+>  - Drilldown `/platform/tenants/[id]/ai` (Sprint 15B) ainda pendente
+>    (~2h de tela mecânica)
+>
+> 🎉 18 sprints (0–15C) sem débitos abertos.
+
 > **Sprint 15B — AI Operations + Plataforma Estratégica:
 > ✅ CONCLUÍDO em 2026-06-30**
 >
@@ -234,17 +307,35 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 >    Pré-requisito de escala. Depende de 15A.
 >
 > 3. **Sprint 15C — Usabilidade: Forms, Listas Configuráveis e
->    QuickCreate** — ~7 dias. Spec: `docs/Sprint_15C_Usabilidade_Forms.md`.
->    QuickCreate Pattern reutilizável (criar empresa/contato/produto
->    inline sem perder contexto do form pai), correções no form de
->    empresa (scroll quebrado, toasts ausentes, País/Estado/Cidade
->    IBGE), CEP auto-fill + máscaras visuais CNPJ/CEP, 3 tabelas
->    novas configuráveis (lead_sources, industries, contact_roles)
->    com UI unificada em /admin/listas, hardening UX
->    (auto-focus, dirty state warning, loading buttons), aplicação
->    cross-forms. Migrations 0022 (company address) + 0023
->    (configurable_lists). Depende de 15B (evita conflito em
->    arquivos compartilhados).
+>    QuickCreate** — ✅ CONCLUÍDO 2026-06-30. Migrations 0022 + 0023.
+>    QuickCreate Pattern + Empresa form + CNPJ/CEP máscaras + 3
+>    tabelas configuráveis + UX hardening cross-forms.
+>
+> 4. **Sprint 15D — Inbound Marketing Pipeline** — ~6 dias. Spec:
+>    `docs/Sprint_15D_Inbound_Marketing.md`. Entrada automática de
+>    prospects via email dedicado + webhook custom genérico; parser
+>    híbrido (regex prioritário com matchers Typeform/RD/key-value/
+>    HTML + IA Haiku fallback via callAiFeature); worker cria
+>    Opportunity em estágio PROSPECT sem owner, com is_inbound=true
+>    e lead_source_id=INBOUND; nova role temporária GESTOR_INBOUND
+>    (será migrada como permission no 15E); fila /inbox/prospects
+>    onde Gestor de Inbound aloca vendedor; tela /reports/inbound-
+>    vs-outbound com funil comparativo + conversion rate + cycle
+>    time. Migration 0024. Depende de 15C (lead_sources table)
+>    entregue.
+>
+> 5. **Sprint 15E — RBAC Granular (Permissões Configuráveis)** —
+>    ~7 dias. Spec: `docs/Sprint_15E_RBAC_Granular.md`. Refactor
+>    estrutural — roles continuam como perfis padrão mas admin pode
+>    conceder/revogar permissions individuais por user. Catálogo
+>    `permissions-catalog.ts` (~50 permissions categorizadas).
+>    Backfill automático do GESTOR_INBOUND (Sprint 15D) → ADMIN +
+>    3 permissions. Cache em users.cached_permissions com
+>    invalidation nas mutations. UI /admin/users/[id]/permissions
+>    com 3 estados visuais. ~30 procedures migradas de `withRoles`
+>    pra `withPermission`. approval_rules aceita approver_roles OU
+>    approver_permission. Migration 0025. Depende de 15D entregue
+>    como caso de uso âncora.
 >
 > Outros: hardening produção (Sentry+Axiom wiring, k6 load test) —
 > spec'd como Sprint 16 no backlog.

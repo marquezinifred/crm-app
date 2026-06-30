@@ -4,13 +4,22 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { trpc } from '@/lib/trpc/client';
 import { OpportunitySource } from '@prisma/client';
+import { PageHeader } from '@/components/layout/PageHeader';
+import { Field } from '@/components/ui/field';
+import { Input, Select, Textarea } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/toast';
+import { QuickCreateTrigger } from '@/components/ui/quick-create-trigger';
 
 export default function NewOpportunityPage() {
   const router = useRouter();
+  const utils = trpc.useUtils();
+  const { toast } = useToast();
   const me = trpc.users.me.useQuery();
   const companies = trpc.companies.list.useQuery({ type: 'CLIENT', page: 1, pageSize: 100 });
   const partners = trpc.companies.list.useQuery({ type: 'PARTNER', page: 1, pageSize: 100 });
   const users = trpc.users.list.useQuery({ active: true });
+  const leadSources = trpc.leadSources.list.useQuery();
 
   const [form, setForm] = useState<{
     title: string;
@@ -18,6 +27,7 @@ export default function NewOpportunityPage() {
     ownerId: string;
     source: OpportunitySource;
     sourceDetail: string;
+    leadSourceId: string;
     estimatedValue: string;
     expectedCloseDate: string;
     description: string;
@@ -28,6 +38,7 @@ export default function NewOpportunityPage() {
     ownerId: '',
     source: OpportunitySource.INDICACAO,
     sourceDetail: '',
+    leadSourceId: '',
     estimatedValue: '',
     expectedCloseDate: '',
     description: '',
@@ -35,12 +46,21 @@ export default function NewOpportunityPage() {
   });
 
   const create = trpc.opportunities.create.useMutation({
-    onSuccess: (opp) => router.push(`/pipeline/${opp.id}`),
+    onSuccess: (opp) => {
+      toast({
+        kind: 'success',
+        title: `Oportunidade ${opp.title} criada no pipeline.`,
+      });
+      router.push(`/pipeline/${opp.id}`);
+    },
   });
 
   return (
-    <main className="mx-auto max-w-2xl p-6">
-      <h1 className="mb-4 text-2xl font-bold">Nova oportunidade</h1>
+    <main className="mx-auto max-w-3xl p-6 space-y-6">
+      <PageHeader
+        title="Nova oportunidade"
+        description="Cadastre o essencial agora — você completa os campos por estágio depois."
+      />
 
       <form
         className="space-y-4"
@@ -53,43 +73,54 @@ export default function NewOpportunityPage() {
             source: form.source,
             sourceDetail: form.sourceDetail || undefined,
             estimatedValue: form.estimatedValue ? Number(form.estimatedValue) : undefined,
-            expectedCloseDate: form.expectedCloseDate ? new Date(form.expectedCloseDate) : undefined,
+            expectedCloseDate: form.expectedCloseDate
+              ? new Date(form.expectedCloseDate)
+              : undefined,
             description: form.description || undefined,
             partnerCompanyId: form.partnerCompanyId || undefined,
           });
         }}
       >
-        <Field label="Título *">
-          <input
+        <Field label="Título" required>
+          <Input
             required
             value={form.title}
             onChange={(e) => setForm({ ...form, title: e.target.value })}
-            className="w-full rounded border px-3 py-2"
+            placeholder="Ex: Renovação anual ACME"
           />
         </Field>
 
-        <Field label="Empresa cliente *">
-          <select
-            required
-            value={form.clientCompanyId}
-            onChange={(e) => setForm({ ...form, clientCompanyId: e.target.value })}
-            className="w-full rounded border px-3 py-2"
-          >
-            <option value="">Selecione…</option>
-            {companies.data?.rows.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nomeFantasia ?? c.razaoSocial}
-              </option>
-            ))}
-          </select>
+        <Field label="Empresa cliente" required>
+          <div className="flex items-center gap-2">
+            <Select
+              required
+              value={form.clientCompanyId}
+              onChange={(e) => setForm({ ...form, clientCompanyId: e.target.value })}
+              className="flex-1"
+            >
+              <option value="">Selecione…</option>
+              {companies.data?.rows.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nomeFantasia ?? c.razaoSocial}
+                </option>
+              ))}
+            </Select>
+            <QuickCreateTrigger
+              entity="company"
+              triggerLabel="+ Nova empresa"
+              onCreated={(id) => {
+                setForm((cur) => ({ ...cur, clientCompanyId: id }));
+                utils.companies.list.invalidate();
+              }}
+            />
+          </div>
         </Field>
 
-        <Field label="Responsável interno *">
-          <select
+        <Field label="Responsável interno" required>
+          <Select
             required
             value={form.ownerId}
             onChange={(e) => setForm({ ...form, ownerId: e.target.value })}
-            className="w-full rounded border px-3 py-2"
           >
             <option value="">Selecione…</option>
             {users.data
@@ -99,31 +130,46 @@ export default function NewOpportunityPage() {
                   {u.fullName} ({u.role})
                 </option>
               ))}
-          </select>
+          </Select>
         </Field>
 
-        <Field label="Origem *">
-          <select
+        <Field label="Origem" required>
+          <Select
             value={form.source}
             onChange={(e) =>
               setForm({ ...form, source: e.target.value as OpportunitySource })
             }
-            className="w-full rounded border px-3 py-2"
           >
             {Object.values(OpportunitySource).map((s) => (
               <option key={s} value={s}>
                 {s.replace(/_/g, ' ').toLowerCase()}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
+
+        {leadSources.data && leadSources.data.length > 0 && (
+          <Field
+            label="Origem detalhada"
+            helper="Configurável em /admin/listas › Origens."
+          >
+            <Select
+              value={form.leadSourceId}
+              onChange={(e) => setForm({ ...form, leadSourceId: e.target.value })}
+            >
+              <option value="">—</option>
+              {leadSources.data.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </Select>
+          </Field>
+        )}
 
         {form.source === 'PARCEIRO' && (
           <Field label="Parceiro indicado">
-            <select
+            <Select
               value={form.partnerCompanyId}
               onChange={(e) => setForm({ ...form, partnerCompanyId: e.target.value })}
-              className="w-full rounded border px-3 py-2"
             >
               <option value="">Selecione…</option>
               {partners.data?.rows.map((c) => (
@@ -131,70 +177,52 @@ export default function NewOpportunityPage() {
                   {c.nomeFantasia ?? c.razaoSocial}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
         )}
 
         <div className="grid grid-cols-2 gap-4">
           <Field label="Valor estimado (R$)">
-            <input
+            <Input
               type="number"
               min="0"
               step="100"
               value={form.estimatedValue}
               onChange={(e) => setForm({ ...form, estimatedValue: e.target.value })}
-              className="w-full rounded border px-3 py-2"
             />
           </Field>
           <Field label="Data prevista de fechamento">
-            <input
+            <Input
               type="date"
               value={form.expectedCloseDate}
               onChange={(e) => setForm({ ...form, expectedCloseDate: e.target.value })}
-              className="w-full rounded border px-3 py-2"
             />
           </Field>
         </div>
 
         <Field label="Descrição">
-          <textarea
+          <Textarea
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
             rows={3}
-            className="w-full rounded border px-3 py-2"
           />
         </Field>
 
         {create.error && (
-          <p className="rounded bg-red-50 p-2 text-sm text-danger">{create.error.message}</p>
+          <p role="alert" className="text-caption text-danger">
+            {create.error.message}
+          </p>
         )}
 
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="rounded border border-border-strong px-4 py-2 text-sm"
-          >
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="ghost" onClick={() => router.back()}>
             Cancelar
-          </button>
-          <button
-            type="submit"
-            disabled={create.isLoading}
-            className="rounded bg-brand px-4 py-2 text-sm font-medium text-white"
-          >
-            {create.isLoading ? 'Criando…' : 'Criar oportunidade'}
-          </button>
+          </Button>
+          <Button type="submit" variant="primary" loading={create.isLoading}>
+            Criar oportunidade
+          </Button>
         </div>
       </form>
     </main>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-sm font-medium">{label}</span>
-      {children}
-    </label>
   );
 }

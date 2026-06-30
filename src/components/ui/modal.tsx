@@ -80,7 +80,13 @@ export function Modal({
         aria-labelledby={titleId}
         aria-describedby={description ? descId : undefined}
         onClick={(e) => e.stopPropagation()}
-        className={cn('bg-card border border-border rounded-lg w-full p-6 shadow-2xl', maxW)}
+        className={cn(
+          'bg-card border border-border rounded-lg w-full p-6 shadow-2xl',
+          // Sprint 15C — modais altos passam a rolar internamente em vez
+          // de escapar a viewport e esconder o footer com Salvar.
+          'max-h-[90vh] overflow-y-auto',
+          maxW,
+        )}
       >
         <header className="flex items-start justify-between gap-3 mb-4">
           <div className="min-w-0">

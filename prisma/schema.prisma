@@ -436,6 +436,9 @@ model Tenant {
   embeddings              Embedding[]
   territories             Territory[]
   segments                Segment[]
+  leadSources             LeadSource[]
+  industries              Industry[]
+  contactRoles            ContactRole[]
   userAccessLogs          UserAccessLog[]
   opportunityStageHistory OpportunityStageHistory[]
   approvalRules           ApprovalRule[]
@@ -567,6 +570,70 @@ model Segment {
 }
 
 // ---------------------------------------------------------------------
+// Sprint 15C — Listas configuráveis pelo admin
+// (Territory + Segment já existem acima; estas 3 são novas)
+// ---------------------------------------------------------------------
+
+model LeadSource {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  name      String
+  position  Int       @default(0)
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at")
+
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  opportunities Opportunity[]
+
+  @@index([tenantId, isActive, position])
+  @@map("lead_sources")
+}
+
+model Industry {
+  id         String    @id @default(uuid()) @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  name       String
+  cnaePrefix String?   @map("cnae_prefix")
+  position   Int       @default(0)
+  isActive   Boolean   @default(true) @map("is_active")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  createdBy  String?   @map("created_by") @db.Uuid
+  updatedBy  String?   @map("updated_by") @db.Uuid
+  deletedAt  DateTime? @map("deleted_at")
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  companies Company[]
+
+  @@index([tenantId, isActive, position])
+  @@map("industries")
+}
+
+model ContactRole {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  name      String
+  weight    Int       @default(1)
+  position  Int       @default(0)
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at")
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contacts Contact[]
+
+  @@index([tenantId, isActive, position])
+  @@map("contact_roles")
+}
+
+// ---------------------------------------------------------------------
 // Company
 // ---------------------------------------------------------------------
 
@@ -582,8 +649,15 @@ model Company {
   country       String      @default("BR")
   state         String?
   city          String?
+  // Sprint 15C — endereço completo
+  cep           String?
+  logradouro    String?
+  numero        String?
+  complemento   String?
+  bairro        String?
   territoryId   String?     @map("territory_id") @db.Uuid
   segmentId     String?     @map("segment_id") @db.Uuid
+  industryId    String?     @map("industry_id") @db.Uuid
   email         String?     @db.Citext
   phone         String?
   website       String?
@@ -600,6 +674,7 @@ model Company {
   deletedAt     DateTime?   @map("deleted_at")
 
   tenant        Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  industry      Industry?             @relation(fields: [industryId], references: [id])
   contacts      Contact[]
   opportunities Opportunity[]         @relation("OpportunityClient")
   asPartnerIn   Opportunity[]         @relation("OpportunityPartner")
@@ -612,6 +687,7 @@ model Company {
   @@index([tenantId, type])
   @@index([tenantId, territoryId])
   @@index([tenantId, segmentId])
+  @@index([tenantId, industryId])
   @@map("companies")
 }
 
@@ -644,14 +720,19 @@ model Contact {
   updatedBy        String?                 @map("updated_by") @db.Uuid
   deletedAt        DateTime?               @map("deleted_at")
 
-  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  company Company? @relation(fields: [companyId], references: [id])
+  // Sprint 15C — papel configurável (decisor, influenciador, etc)
+  contactRoleId String? @map("contact_role_id") @db.Uuid
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company     Company?     @relation(fields: [companyId], references: [id])
+  contactRole ContactRole? @relation(fields: [contactRoleId], references: [id])
 
   opportunitiesAsClientContact Opportunity[] @relation("OpportunityClientContact")
 
   @@unique([tenantId, email])
   @@index([tenantId, companyId])
   @@index([tenantId, approvalStatus])
+  @@index([tenantId, contactRoleId])
   @@map("contacts")
 }
 
@@ -728,6 +809,8 @@ model Opportunity {
   actualCloseDate       DateTime?              @map("actual_close_date") @db.Date
   source                OpportunitySource?
   sourceDetail          String?                @map("source_detail")
+  // Sprint 15C — origem configurável (substitui/complementa o enum acima)
+  leadSourceId          String?                @map("lead_source_id") @db.Uuid
   cancellationReason    String?                @map("cancellation_reason") @db.Text
   lossReason            OpportunityLossReason? @map("loss_reason")
   description           String?                @db.Text
@@ -759,11 +842,12 @@ model Opportunity {
   updatedBy String?   @map("updated_by") @db.Uuid
   deletedAt DateTime? @map("deleted_at")
 
-  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  clientCompany  Company  @relation("OpportunityClient", fields: [clientCompanyId], references: [id])
-  clientContact  Contact? @relation("OpportunityClientContact", fields: [clientContactId], references: [id])
-  partnerCompany Company? @relation("OpportunityPartner", fields: [partnerCompanyId], references: [id])
-  owner          User     @relation("OpportunityOwner", fields: [ownerId], references: [id])
+  tenant         Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clientCompany  Company     @relation("OpportunityClient", fields: [clientCompanyId], references: [id])
+  clientContact  Contact?    @relation("OpportunityClientContact", fields: [clientContactId], references: [id])
+  partnerCompany Company?    @relation("OpportunityPartner", fields: [partnerCompanyId], references: [id])
+  owner          User        @relation("OpportunityOwner", fields: [ownerId], references: [id])
+  leadSource     LeadSource? @relation(fields: [leadSourceId], references: [id])
 
   team               OpportunityTeam[]
   activities         Activity[]
@@ -777,6 +861,7 @@ model Opportunity {
   @@index([tenantId, ownerId])
   @@index([tenantId, clientCompanyId])
   @@index([tenantId, partnerCompanyId])
+  @@index([tenantId, leadSourceId])
   @@map("opportunities")
 }
 

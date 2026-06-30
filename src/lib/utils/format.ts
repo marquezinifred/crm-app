@@ -49,3 +49,32 @@ export function formatRelativeDate(d: Date): string {
   if (days < 0) return `há ${-days}d`;
   return `em ${days}d`;
 }
+
+// ─── Máscaras CNPJ / CEP (Sprint 15C) ─────────────────────────────
+// Mantêm o estado canônico (apenas dígitos) e expõem só a string
+// formatada na UI. Usar `unformatX` antes de validar/persistir.
+
+export function formatCNPJ(value: string): string {
+  const d = value.replace(/\D/g, '').slice(0, 14);
+  if (d.length <= 2) return d;
+  if (d.length <= 5) return `${d.slice(0, 2)}.${d.slice(2)}`;
+  if (d.length <= 8) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5)}`;
+  if (d.length <= 12) {
+    return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8)}`;
+  }
+  return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
+}
+
+export function unformatCNPJ(value: string): string {
+  return value.replace(/\D/g, '');
+}
+
+export function formatCEP(value: string): string {
+  const d = value.replace(/\D/g, '').slice(0, 8);
+  if (d.length <= 5) return d;
+  return `${d.slice(0, 5)}-${d.slice(5)}`;
+}
+
+export function unformatCEP(value: string): string {
+  return value.replace(/\D/g, '');
+}

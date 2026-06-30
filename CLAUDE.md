@@ -524,7 +524,24 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 ## Débitos técnicos com dependência cruzada (registrados para sprints futuros)
 
-_Nenhum débito aberto._ (Sprints 1 e 2 foram fechados na Sprint 11.)
+**Débitos abertos (atualizado 2026-06-30):**
+
+| ID | Origem | Pendência | Resolve em |
+|----|--------|-----------|-----------|
+| P-02 | Sprint 14.5 | PageHeader em 13 rotas `/admin/*` restantes (~3h, mecânico) | auditar se Sprint 15C fechou parcialmente |
+| P-03 | Sprint 14.5 | Visual baseline `scripts/visual-baseline.ts` (script pronto, ~1.5h) | depende app local + seed E2E |
+| P-04 | Sprint 9 | Audit silencioso em `companies/contracts/proposals/approval-rules/partners/documents/imports` — falta `tenantIdOverride` (~2h) | spread em sprints futuros |
+| P-05 | Sprint 14.5 | Lighthouse audit ≥ 90 (script + workflow prontos) | depende `vars.STAGING_URL` no GitHub |
+| P-06 | Sprint 15B | Drilldowns `/platform/tenants/[id]/ai` e `/ai/features` — routers prontos (~2h UI) | chip de sustentação |
+| P-07 | Sprint 15A | Memory `migration-pitfalls.md` salvo: 5 padrões recorrentes em migrações Postgres | ✅ documental, salvo em 2026-06-30 |
+
+Detalhes em `docs/Backlog_Pos_MVP.md`. Débitos antigos (Sprints 1 e 2)
+foram fechados na Sprint 11.
+
+**Débitos zerados em 2026-06-30:**
+- P-01 Fix `/companies/new` + `/contacts/new` 404 — commit `54dab90`
+- Sprint 15A débito UNIQUE(clerk_id) — commit `62ea353` (migration 0026 + dual identity)
+- Platform Owner setup completo (JWT template + public_metadata + seed)
 
 ---
 

@@ -13,16 +13,12 @@ Mantido em sincronia com `CLAUDE.md` e memory `MEMORY.md`.
 
 ## 🔥 Pendências de curto prazo (próximas 2 semanas)
 
-### P-01. Fix `/companies` + `/contacts` CRUD 404
-**Severidade:** Alta. Botão "Nova empresa" / "Novo contato" dá 404
-hoje. Spec pronta como prompt entregue ao Fred em
-2026-06-30; aguardando disparo na paterna.
-
-- `/companies/new` (rota não existe) → modal inline
-- `/companies/[id]` (rota não existe) → DetailSheet intercepting
-- `/contacts/new` + `/contacts/[id]` (mesmo problema)
-
-**Esforço:** ~3–4h. **Status:** prompt entregue, paterna livre.
+### ~~P-01. Fix `/companies` + `/contacts` CRUD 404~~ ✅ FECHADO
+**Resolvido em 2026-06-30 pelo commit `54dab90`.** Modal inline
+para criar/editar empresa e contato; DetailSheet via intercepting
+routes pro detalhe. CompanyForm também ganhou auto-fill via
+CNPJ no chip `ff8cf85`. Sprint 15C reforçou com máscara visual
++ CEP auto-fill (commit `fa84be6`).
 
 ### P-02. PageHeader em 13 rotas /admin restantes
 **Severidade:** Média. Cosmético — 🟡 do Sprint 14.5 item 4.
@@ -39,7 +35,8 @@ Rotas: `/admin/ai`, `/admin/alerts`, `/admin/approval-rules`,
 leve), `/admin/billing` (verificação leve).
 
 **Esforço:** ~3h. **Status:** spec em
-`Sprint_14_5_Polish.md` item 4.
+`Sprint_14_5_Polish.md` item 4. Não verificado se Sprint 15C
+fechou parcialmente — auditoria recomendada.
 
 ### P-03. Visual baseline capturado
 **Severidade:** Baixa. 🟡 do Sprint 14.5 item 9. Script
@@ -67,13 +64,53 @@ Callers que ainda dependem de AsyncLocalStorage perfeito:
 **Fix:** passar `tenantIdOverride: ctx.tenantId` em cada `audit({...})`
 desses arquivos.
 
-**Esforço:** ~2h (grep + sed mecânico + spot check).
+**Esforço:** ~2h (grep + sed mecânico + spot check). **Status:** débito
+aberto; não verificado se Sprint 15A/15B passaram nesses arquivos
+com fix incidental.
 
 ### P-05. Lighthouse audit em CI
 **Severidade:** Média. 🟡 do Sprint 14.5 item 8. Script + workflow
 prontos. Bloqueador: `vars.STAGING_URL` no GitHub Secrets.
 
 **Esforço:** ~3h (quando staging existir).
+
+### P-06. Drilldowns AI por tenant (Sprint 15B residual)
+**Severidade:** Baixa. Routers tRPC `platform.aiOps.byTenant` e
+`platform.aiMarketplace.tenantAccess.*` estão prontos do Sprint 15B
+mas as 2 telas drilldown faltam:
+- `/platform/tenants/[id]/ai` — form pra editar `tenant_ai_limits`,
+  uso vs limite, provider breakdown, histórico, modelos pinados,
+  anomalies do tenant
+- `/platform/tenants/[id]/ai/features` — gerenciamento dos 3
+  estados (DISABLED/INCLUDED/ADDON_ACTIVE) por tenant
+
+### ~~Platform Owner setup~~ ✅ FECHADO
+**Resolvido em 2026-06-30** após migration `0026_clerk_id_per_scope`:
+- JWT Template Clerk inclui `platformRole`
+- Public metadata do user Fred tem `platformRole: PLATFORM_OWNER`
+- Seed `prisma/seed-platform.ts` rodado; criou 2ª row do mesmo
+  Clerk ID com `tenantId=NULL, platformRole=PLATFORM_OWNER`
+- Dual identity validada (1 row tenant marquezini + 1 row Platform)
+
+### P-07. Migration pitfalls — lições aprendidas
+**Severidade:** Documental. Bug do `UNIQUE(clerk_id)` na migration
+0016 (Sprint 15A) e bug do cast `_UserRole_old → _UserRole` direto
+sem rota via `text[]` (descoberto durante deploy do 0016 também)
+mostraram 2 padrões recorrentes em migrações de enum + arrays no
+Postgres. Salvar memory `migration-pitfalls.md` com:
+
+- Sempre fazer cast `enum_old[] → text[] → enum_new[]` (rota
+  intermediária)
+- Sanitizar VALORES inválidos no array ANTES do cast
+- `NULLS NOT DISTINCT` em UNIQUE index falha se seed populou NULLs
+  duplicados; preferir partial `WHERE col IS NOT NULL` pra colunas
+  opcionais
+- CHECK constraints em users do tipo XOR (tenant_id IS NOT NULL XOR
+  platform_role IS NOT NULL) precisam de UNIQUE composta, não
+  global
+
+**Esforço:** ~30min (escrever memory). Recomendado pra evitar 4ª
+ocorrência do mesmo padrão.
 
 ### P-06. Drilldowns AI por tenant (Sprint 15B residual)
 **Severidade:** Baixa. Routers tRPC `platform.aiOps.byTenant` e

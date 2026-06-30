@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { trpc } from '@/lib/trpc/client';
 import { brl, initials } from '@/lib/utils/hooks';
 import { STAGES, STAGE_LABELS } from '@/components/pipeline/types';
+import { STAGE_INTENT_LABEL } from '@/lib/constants/pipeline-stages';
 import { CommunicationIntake } from '@/components/pipeline/CommunicationIntake';
 import { DocumentsSection } from '@/components/pipeline/DocumentsSection';
 import { ProposalsSection } from '@/components/pipeline/ProposalsSection';
@@ -122,9 +123,12 @@ export default function OpportunityDetailPage() {
       </header>
 
       <section className="mb-4 rounded-lg border border-border bg-card p-4">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-1">
-          Campos do estágio atual ({STAGE_LABELS[opp.stage]})
+        <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-text-1">
+          {STAGE_INTENT_LABEL[opp.stage]}
         </h2>
+        <p className="mb-3 text-xs text-text-3">
+          Estágio: {STAGE_LABELS[opp.stage]}
+        </p>
         <StageFields opp={opp} edits={editStageFields} setEdits={setEditStageFields} />
         {Object.keys(editStageFields).length > 0 && (
           <div className="mt-3 flex justify-end gap-2">

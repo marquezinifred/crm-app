@@ -11,6 +11,59 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 ## Sprint atual
 
+> **Fix corretivo — 3 UX gaps de uso manual (P-08/P-09/P-10):
+> ✅ CONCLUÍDO em 2026-06-30**
+>
+> Bug bash em sessão real revelou 3 atritos que dão impressão de bug
+> em vez de feature em andamento. Todos atacados num único chip pra
+> evitar context-switch.
+>
+> Entregue:
+>  - ✅ **P-08 — Logout no AppShell**
+>    (`src/components/layout/Topbar.tsx`):
+>    `<UserButton afterSignOutUrl="/sign-in" />` do Clerk inserido
+>    no canto superior direito da topbar (ao lado do ThemeToggle).
+>    Avatar 28×28 via `appearance.elements.avatarBox` pra casar com
+>    o size do toggle. Disponível em todas as rotas autenticadas;
+>    rotas `HIDDEN_ON` (sign-in/onboarding/políticas) continuam sem
+>    topbar como antes
+>  - ✅ **P-09 — Mensagem de erro IA realista**
+>    (`src/server/services/communication-summary.service.ts` +
+>    `src/server/trpc/routers/activities.ts` +
+>    `src/components/pipeline/CommunicationIntake.tsx`):
+>    - Backend: `summarizeCommunication` distingue
+>      `FeatureNotAvailableError`/`AiLimitExceededError` (re-throw)
+>      de falhas reais de provider (mantém o caminho
+>      `aiGenerated: false` pra Claude 5xx/timeout). Procedure
+>      `activities.summarize` carrega a oportunidade primeiro e
+>      lança `NOT_FOUND` ou `PRECONDITION_FAILED` quando status
+>      não é ACTIVE; traduz erros de feature gate pra
+>      `PRECONDITION_FAILED` (mensagem clara em vez de "IA
+>      indisponível") e limite para `TOO_MANY_REQUESTS`
+>    - Frontend: `CommunicationIntake` aceita prop
+>      `stageHasDirtyChanges`; quando true, botão fica desabilitado
+>      com `title` + alerta inline "Salve a reunião antes de
+>      resumir com IA." (intercepta antes de chamar tRPC).
+>      `/pipeline/[id]` passa
+>      `Object.keys(editStageFields).length > 0` como prop
+>  - ✅ **P-10 — Rótulos semânticos de estágio**
+>    (`src/lib/constants/pipeline-stages.ts` novo +
+>    `src/app/pipeline/[id]/page.tsx`):
+>    Mapa `STAGE_INTENT_LABEL` para os 7 valores reais do enum
+>    `OpportunityStage` (Captação de origem / Agendamento de
+>    reunião / Briefing e qualificação / Apresentação da proposta
+>    / Negociação final / Aceite do cliente / Contrato ativo).
+>    Título do card mudou de "CAMPOS DO ESTÁGIO ATUAL (LEAD)"
+>    pra "Agendamento de reunião" com sub-rótulo discreto
+>    "Estágio: Lead". `STAGE_LABELS` antigo continua sendo a fonte
+>    da verdade para chips, breadcrumbs e headers de coluna do
+>    kanban — os dois mapas são intencionalmente separados
+>  - ✅ Testes: 6 novos (communication-summary-errors +3,
+>    pipeline-stage-intent +3). Total **394/396** (2 skipped
+>    pré-existentes). Type-check zero. Lint zero
+>
+> 🎉 Débitos P-08/P-09/P-10 do `Backlog_Pos_MVP.md` fechados.
+
 > **Fix corretivo — Migration 0026 `clerk_id_per_scope`:
 > ✅ CONCLUÍDO em 2026-06-30**
 >

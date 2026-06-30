@@ -147,6 +147,17 @@ prop `stageHasDirtyChanges`: bloqueia o botão antes da chamada
 tRPC com mensagem "Salve a reunião antes de resumir com IA."
 3 testes novos cobrindo provider 5xx vs feature gate vs limit.
 
+### ~~P-10. Rename "CAMPOS DO ESTÁGIO ATUAL (LEAD)"~~ ✅ FECHADO
+**Resolvido em 2026-06-30.** Novo `src/lib/constants/pipeline-stages.ts`
+com `STAGE_INTENT_LABEL` para os 7 valores do enum
+`OpportunityStage`. Título do card no `/pipeline/[id]` mudou de
+"CAMPOS DO ESTÁGIO ATUAL (X)" pra rótulo semântico
+("Agendamento de reunião" em LEAD, "Briefing e qualificação" em
+OPORTUNIDADE etc.) com sub-rótulo discreto "Estágio: X". Outras
+telas (kanban column, breadcrumb, conversion-rates) seguem usando
+`STAGE_LABELS` curto; os dois mapas são intencionalmente
+separados. 3 testes novos validando cobertura completa do enum.
+
 ---
 
 ## 📅 Sprints planejados (próximas 4–6 semanas)

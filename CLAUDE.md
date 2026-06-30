@@ -11,6 +11,42 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 ## Sprint atual
 
+> **Fix corretivo — /companies + /contacts ghost routes:
+> ✅ CONCLUÍDO em 2026-06-29**
+>
+> Fecha 404 em `/companies/new` (botão "+ Nova empresa") e
+> `/companies/[id]` (clique numa linha). Aplica os 2 padrões já
+> estabelecidos: Modal inline (Sprint 13) para criar/editar e
+> DetailSheet via intercepting routes (Sprint 14) para detalhe.
+> Mesmo padrão replicado em `/contacts`.
+>
+> Entregue:
+>  - ✅ `CompanyForm` (`src/components/companies/CompanyForm.tsx`)
+>    com Field/Input/Select do design system, carrega via
+>    `companies.byId` se editingId, usa `companies.create/update`
+>    existentes
+>  - ✅ `/companies/page.tsx` — botão Nova empresa abre `Modal`;
+>    linha da tabela é `role="button"` que navega para
+>    `/companies/[id]`
+>  - ✅ `/companies/layout.tsx` com slot `{modal}`
+>  - ✅ `/companies/@modal/default.tsx` retorna null
+>  - ✅ `/companies/@modal/(.)[id]/page.tsx` renderiza `Sheet` com
+>    `CompanyDetailContent`
+>  - ✅ `/companies/[id]/page.tsx` full-page fallback (deep link, F5)
+>  - ✅ `CompanyDetailContent` reusado pelos dois — 3 tabs
+>    (Visão geral / Contatos / Histórico), botão Editar abre Modal,
+>    Desativar abre confirm Modal (soft delete via `companies.remove`)
+>  - ✅ `/contacts` — mesmas peças: `ContactDetailContent`,
+>    `/contacts/layout.tsx`, `/contacts/@modal/default.tsx`,
+>    `/contacts/@modal/(.)[id]/page.tsx`, `/contacts/[id]/page.tsx`.
+>    Form inline pré-existente (Sprint 13) mantido; linha da tabela
+>    agora vira `role="button"` → DetailSheet
+>  - ✅ Testes: 26 novos (company-form Zod +9, contact-form Zod +5,
+>    intercepting-routes existência +12). Total 288/288
+>  - ✅ Type-check zero. Lint zero
+>
+> 🎉 **MVP completo.** Fix corretivo aplicado sobre Sprint 14.5.
+
 > **Sprint 14.5 — Polish Pass: ✅ CONCLUÍDO em 2026-06-29**
 >
 > 9 itens da spec entregues na ordem obrigatória (radius bump → itens
@@ -50,6 +86,30 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 >
 > 🎉 **MVP completo.** 15 sprints (0–14.5) executados sem débitos
 > abertos.
+>
+> Próximos sprints planejados:
+>
+> 1. **Sprint 15A — Platform Console (Super Admin Operacional)** —
+>    5–7 dias. Spec: `docs/Sprint_15A_Platform_Console.md`. Reno­
+>    meação `SUPER_ADMIN` → `PLATFORM_OWNER` em enum separado
+>    `PlatformRole`, `users.tenantId` nullable, runAsPlatform()
+>    estendido, `/platform/*` shell + 7 telas (dashboard, tenants
+>    CRUD, impersonação com audit trail, audit cross-tenant, privacy
+>    cross-tenant, feature-flags). Pré-requisito de operação.
+>
+> 2. **Sprint 15B — AI Operations + Plataforma Estratégica** —
+>    4–5 dias. Spec: `docs/Sprint_15B_AI_Ops_Platform.md`. AI Ops
+>    Center (limits por tenant, anomaly detection, model pinning,
+>    custo R$), AI Marketplace (catálogo `ai_features` +
+>    `tenant_ai_features` 3 estados, callAiFeature gate), Tenant
+>    Health Score (worker diário, 8 sinais, buckets RED/YELLOW/GREEN,
+>    régua de incentivo), Trial Pipeline (`/platform/trials` com
+>    extensão manual + source attribution), Broadcast genérico
+>    (substitui MaintenanceBanner com targeting ALL/BY_PLAN/MANUAL).
+>    Pré-requisito de escala. Depende de 15A.
+>
+> Outros: hardening produção (Sentry+Axiom wiring, k6 load test),
+> backlog pós-MVP a consolidar após 15A+15B fechados.
 
 > **Sprint 14 — Venzo Design System: ✅ CONCLUÍDO em 2026-06-29**
 >

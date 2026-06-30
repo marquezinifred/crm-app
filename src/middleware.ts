@@ -62,6 +62,26 @@ export function apiAuthError(
   return withHeaders(res);
 }
 
+/**
+ * Dual identity (Sprint 15A fix — P-11): quando o JWT carrega
+ * `platformRole=PLATFORM_OWNER`, injetar os headers Platform em
+ * PARALELO aos headers tenant. Sem isso, `platformProcedure` no
+ * tRPC devolve FORBIDDEN para usuários que têm as duas facetas
+ * (admin de tenant + Platform Owner com mesmo clerk_id).
+ *
+ * No-op quando `platformRole` é null. Idempotente.
+ */
+export function injectPlatformHeadersIfOwner(
+  headers: Headers,
+  userId: string,
+  platformRole: string | null,
+): void {
+  if (platformRole === 'PLATFORM_OWNER') {
+    headers.set('x-platform-user-clerk-id', userId);
+    headers.set('x-platform-role', 'PLATFORM_OWNER');
+  }
+}
+
 export default authMiddleware({
   publicRoutes: PUBLIC_PATHS,
   afterAuth(auth, req) {
@@ -147,6 +167,7 @@ export default authMiddleware({
       if (req.nextUrl.pathname.startsWith('/api/')) {
         const requestHeaders = new Headers(req.headers);
         requestHeaders.set('x-user-clerk-id', auth.userId);
+        injectPlatformHeadersIfOwner(requestHeaders, auth.userId, platformRole);
         return withHeaders(NextResponse.next({ request: { headers: requestHeaders } }));
       }
       const url = req.nextUrl.clone();
@@ -160,6 +181,7 @@ export default authMiddleware({
     if (sessionClaims?.public?.role) {
       requestHeaders.set('x-user-role', sessionClaims.public.role);
     }
+    injectPlatformHeadersIfOwner(requestHeaders, auth.userId, platformRole);
 
     // Propaga IP real do dispositivo (Sprint 1 débito): mantém
     // x-forwarded-for original (que pode vir de Cloudflare WAF) e

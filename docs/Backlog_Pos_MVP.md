@@ -92,6 +92,28 @@ mas as 2 telas drilldown faltam:
   Clerk ID com `tenantId=NULL, platformRole=PLATFORM_OWNER`
 - Dual identity validada (1 row tenant marquezini + 1 row Platform)
 
+### ~~P-11. Middleware não injetava headers Platform em dual identity~~ ✅ FECHADO
+**Resolvido em 2026-06-30 pelo commit `7d60192`.** Sintoma: usuário Fred com dual identity
+(admin tenant marquezini + Platform Owner, mesmo `clerk_id`) abria
+`/platform/dashboard` e via mensagem vermelha "Acesso restrito a
+Platform Owners." Causa: `src/middleware.ts` no branch final (com
+tenantId) injetava só `x-tenant-id`/`x-user-clerk-id`/`x-user-role`,
+omitindo `x-platform-user-clerk-id`/`x-platform-role` mesmo quando
+`platformRole=PLATFORM_OWNER` estava no JWT. `platformProcedure`
+no tRPC enxergava `ctx.platformUser=null` → FORBIDDEN.
+
+**Fix:** helper local `injectPlatformHeadersIfOwner(headers,
+userId, platformRole)` chamado em paralelo aos headers tenant nos
+2 branches relevantes (API sem tenant + branch final com tenant).
+Idempotente, no-op quando `platformRole` é null. Tenant pure
+(seeds acme/beta/gamma) não recebe headers Platform.
+
+4 testes unitários novos em `tests/unit/middleware-auth.test.ts`
+cobrindo: inject quando PLATFORM_OWNER, no-op quando null, no-op
+em string inválida (ex: futuro `PLATFORM_SUPPORT`), e coexistência
+com headers tenant existentes. Total 372 passing (368 baseline +
+4 novos), zero regressão.
+
 ### P-07. Migration pitfalls — lições aprendidas
 **Severidade:** Documental. Bug do `UNIQUE(clerk_id)` na migration
 0016 (Sprint 15A) e bug do cast `_UserRole_old → _UserRole` direto

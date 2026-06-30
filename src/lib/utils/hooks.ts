@@ -2,6 +2,20 @@
 
 import { useEffect, useState } from 'react';
 
+/**
+ * Atrasa a atualização de `value` por `delayMs` milissegundos.
+ * Cada novo valor cancela o timer anterior; útil para debounce de
+ * inputs antes de disparar fetches.
+ */
+export function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const handle = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(handle);
+  }, [value, delayMs]);
+  return debounced;
+}
+
 export function useIsMobile(breakpoint = 768): boolean {
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {

@@ -11,6 +11,70 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 ## Sprint atual
 
+> **Fix corretivo — Migration 0026 `clerk_id_per_scope`:
+> ✅ CONCLUÍDO em 2026-06-30**
+>
+> Fecha débito da Sprint 15A: `UNIQUE(clerk_id)` global em `users`
+> impedia a MESMA pessoa real (mesmo Clerk ID) ter as duas identidades
+> em paralelo — Admin de tenant **e** Platform Owner. O CHECK XOR
+> de 0016 já separava corretamente os papéis dentro de uma row; só
+> faltava destravar 2 rows com mesmo `clerk_id`.
+>
+> Sintoma original: `npx tsx prisma/seed-platform.ts` com
+> `PLATFORM_OWNER_CLERK_ID` igual ao de um admin existente falhava
+> com `Unique constraint failed on the fields: ('clerk_id')`.
+>
+> Iteração: a primeira versão da migration usava `NULLS NOT DISTINCT`
+> (Postgres 15+). Deploy falhou em banco com seed:
+> `Key (clerk_id, tenant_id)=(null, ...) is duplicated` porque seeds
+> têm ~30 users com `clerk_id NULL` (10 × 3 tenants) e
+> `NULLS NOT DISTINCT` os trata como duplicatas entre si. Substituído
+> por **partial unique index** `WHERE clerk_id IS NOT NULL`.
+>
+> Entregue:
+>  - ✅ Migration `0026_clerk_id_per_scope` — `DROP INDEX
+>    users_clerk_id_key` + `CREATE UNIQUE INDEX users_clerk_id_tenant_id_key
+>    ON users (clerk_id, tenant_id) WHERE clerk_id IS NOT NULL`.
+>    COMMENT ON INDEX documenta a regra. Seeds sem `clerk_id`
+>    preservados; unicidade só vale pra logins Clerk reais (Admin
+>    de tenant + Platform Owner)
+>  - ✅ `schema.prisma`: trocado `@unique` simples do `clerkId` por
+>    `@@unique([clerkId, tenantId], name: "clerk_id_per_scope",
+>    map: "users_clerk_id_tenant_id_key")` com comentário explicando
+>    que constraint real é PARTIAL (Prisma não tem sintaxe para
+>    partial unique — migration SQL é a fonte da verdade). Prisma
+>    `validate` + `generate` passam limpos
+>  - ✅ 5 call sites ajustados (`findUnique` → `findFirst`/`updateMany`):
+>    - `clerk-sync.service.ts` — webhook user.updated propaga
+>      email/fullName a TODAS as facetas (`updateMany`); criação só
+>      ocorre se nenhuma row pré-existe
+>    - `clerk-sync.service.ts` deactivate — desativa TODAS as facetas
+>      via `updateMany`
+>    - `access-log.service.ts` — busca faceta tenant (filtro
+>      `tenantId: { not: null }`) porque UserAccessLog é por-tenant
+>    - `onboarding.service.ts findLocalUserByClerkId` —
+>      `findFirst` com `orderBy tenantId asc nulls last` (prioriza
+>      faceta tenant)
+>    - `/api/v1/reports/export` e `/api/v1/imports/upload` —
+>      `findFirst` filtra `(clerkId, tenantId)` do contexto atual
+>  - ✅ Verificação no DB (esperado pós-aplicação):
+>    - SELECT count(*) ... WHERE clerk_id IS NULL GROUP BY tenant_id
+>      → seeds preservados (count > 1 ok)
+>    - INSERT duplicado `(clerkId, tenantId)` mesmo tenant → ERROR
+>    - INSERT Platform Owner com mesmo clerkId → sucesso
+>    - INSERT 2º Platform Owner mesmo clerkId → ERROR
+>      (partial cobre pois clerk_id IS NOT NULL nos 2)
+>  - ✅ Testes: 388/390 mantidos (2 skipped pré-existentes). Lint
+>    zero. Type-check zero. `grep "findUnique.*clerkId" src/` zero
+>
+> Compatibilidade:
+>  - Routers `/platform/*`: comportamento idêntico
+>  - Middleware `/platform/*`: continua decidindo contexto pelo
+>    `public.platformRole` do JWT — não precisou mudar
+>  - CHECK XOR da migration 0016 preservada
+>
+> 🎉 Débitos Sprint 15A zerados.
+
 > **Sprint 15C — Usabilidade: Forms, Listas Configuráveis e
 > QuickCreate: ✅ CONCLUÍDO em 2026-06-30**
 >

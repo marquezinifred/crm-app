@@ -40,8 +40,10 @@ export async function POST(req: NextRequest) {
   }
 
   return runWithTenant({ tenantId, userId, role }, async () => {
+    // Sprint 15A débito (migration 0026): filtra também por tenantId — em
+    // dual identity, o upload é sempre no contexto de UM tenant.
     const me = await prisma.user.findFirst({
-      where: { clerkId: userId, deletedAt: null },
+      where: { clerkId: userId, tenantId, deletedAt: null },
       select: { id: true },
     });
     if (!me) return NextResponse.json({ error: 'user local não encontrado' }, { status: 404 });

@@ -90,9 +90,14 @@ export async function provisionFirstTenant(input: OnboardingInput): Promise<Onbo
  * para decidir se mostra o formulário ou redireciona para o app.
  */
 export async function findLocalUserByClerkId(clerkId: string) {
+  // Sprint 15A débito (migration 0026): UNIQUE(clerk_id) virou composto.
+  // Onboarding pergunta "essa pessoa já tem identidade no app?" — qualquer
+  // row tenant serve. Se só tem identidade Platform (tenantId NULL),
+  // ainda precisa onboardar tenant — ordenamos tenant rows primeiro.
   return runAsSystem(() =>
-    prisma.user.findUnique({
+    prisma.user.findFirst({
       where: { clerkId },
+      orderBy: [{ tenantId: { sort: 'asc', nulls: 'last' } }],
       select: { id: true, tenantId: true, role: true, active: true },
     }),
   );

@@ -27,8 +27,11 @@ export async function GET(req: NextRequest) {
   if (!tenantId) return NextResponse.json({ error: 'tenant não definido' }, { status: 403 });
 
   return runWithTenant({ tenantId, userId, role }, async () => {
-    const me = await prisma.user.findUnique({
-      where: { clerkId: userId },
+    // Sprint 15A débito (migration 0026): UNIQUE(clerk_id) virou composto.
+    // O endpoint roda no contexto de UM tenant — filtramos por (clerkId,
+    // tenantId) pra pegar a faceta certa.
+    const me = await prisma.user.findFirst({
+      where: { clerkId: userId, tenantId },
       select: { id: true, role: true },
     });
     if (!me) return NextResponse.json({ error: 'user não encontrado' }, { status: 404 });

@@ -19,12 +19,15 @@ export interface AccessLogEntry {
  */
 export async function recordUserAccess(entry: AccessLogEntry): Promise<void> {
   await runAsSystem(async () => {
-    const user = await prisma.user.findUnique({
-      where: { clerkId: entry.clerkUserId },
+    // Sprint 15A débito (migration 0026): mesma pessoa pode ter facetas
+    // tenant + Platform. UserAccessLog é por-tenant, então buscamos
+    // a faceta com tenantId não-null. Sem faceta tenant → não loga
+    // (Platform-only mantém o comportamento original de não gerar log).
+    const user = await prisma.user.findFirst({
+      where: { clerkId: entry.clerkUserId, tenantId: { not: null } },
       select: { id: true, tenantId: true },
     });
     if (!user) return;
-    // Platform users (tenantId NULL) não geram UserAccessLog — Sprint 15A.
     if (!user.tenantId) return;
 
     try {

@@ -49,14 +49,14 @@ export async function syncUserFromClerk(payload: ClerkUserPayload): Promise<void
     primaryEmail.split('@')[0]!;
 
   await runAsSystem(async () => {
-    const existing = await prisma.user.findUnique({ where: { clerkId: payload.id } });
-    if (existing) {
-      await prisma.user.update({
-        where: { id: existing.id },
-        data: { email: primaryEmail, fullName, active: true },
-      });
-      return;
-    }
+    // Sprint 15A débito (migration 0026): mesma pessoa pode ter rows
+    // em múltiplos tenants + 1 como Platform Owner. Propagamos
+    // email/fullName a TODAS as identidades dela.
+    const updated = await prisma.user.updateMany({
+      where: { clerkId: payload.id },
+      data: { email: primaryEmail, fullName, active: true },
+    });
+    if (updated.count > 0) return;
 
     const tenantId = payload.public_metadata?.tenantId;
     const role = payload.public_metadata?.role;
@@ -81,10 +81,10 @@ export async function syncUserFromClerk(payload: ClerkUserPayload): Promise<void
 
 export async function deactivateUserFromClerk(clerkId: string): Promise<void> {
   await runAsSystem(async () => {
-    const existing = await prisma.user.findUnique({ where: { clerkId } });
-    if (!existing) return;
-    await prisma.user.update({
-      where: { id: existing.id },
+    // Sprint 15A débito (migration 0026): desativa TODAS as facetas
+    // (tenant admin + Platform Owner) quando o Clerk deleta o user.
+    await prisma.user.updateMany({
+      where: { clerkId, deletedAt: null },
       data: { active: false, deletedAt: new Date() },
     });
   });

@@ -474,7 +474,10 @@ model User {
   tenantId         String?       @map("tenant_id") @db.Uuid
   // Quando tenantId = NULL, platformRole obrigatório. CHECK garante XOR.
   platformRole     PlatformRole? @map("platform_role")
-  clerkId          String?       @unique @map("clerk_id")
+  // Sprint 15A débito (migration 0026): UNIQUE composto + NULLS NOT
+  // DISTINCT no SQL. Mesma pessoa pode ter rows distintas como
+  // Admin de tenants + 1 row como Platform Owner (tenantId NULL).
+  clerkId          String?       @map("clerk_id")
   email            String        @db.Citext
   fullName         String        @map("full_name")
   role             UserRole      @default(ANALISTA)
@@ -505,6 +508,16 @@ model User {
   auditLogs                  AuditLog[]
 
   @@unique([tenantId, email])
+  // Sprint 15A débito — migration 0026: UNIQUE composto. A constraint
+  // REAL no banco é PARTIAL (WHERE clerk_id IS NOT NULL) — users de
+  // seed/teste sem clerkId podem existir em N rows por tenant sem
+  // violar. Mesma pessoa (clerkId setado) tem 1 row por tenant + 1
+  // como Platform Owner (tenantId NULL). O Prisma não suporta partial
+  // unique nativamente, então a migration SQL é a fonte da verdade;
+  // o @@unique aqui é declarativo. findUnique composto NÃO casa
+  // com clerkId NULL (Prisma trata NULL como distinto) — usar
+  // findFirst({ where: { clerkId } }) quando clerkId não é conhecido.
+  @@unique([clerkId, tenantId], name: "clerk_id_per_scope", map: "users_clerk_id_tenant_id_key")
   @@index([tenantId])
   @@index([tenantId, role])
   @@index([platformRole])

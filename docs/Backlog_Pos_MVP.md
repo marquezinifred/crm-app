@@ -93,7 +93,7 @@ mas as 2 telas drilldown faltam:
 - Dual identity validada (1 row tenant marquezini + 1 row Platform)
 
 ### ~~P-11. Middleware não injetava headers Platform em dual identity~~ ✅ FECHADO
-**Resolvido em 2026-06-30.** Sintoma: usuário Fred com dual identity
+**Resolvido em 2026-06-30 pelo commit `7d60192`.** Sintoma: usuário Fred com dual identity
 (admin tenant marquezini + Platform Owner, mesmo `clerk_id`) abria
 `/platform/dashboard` e via mensagem vermelha "Acesso restrito a
 Platform Owners." Causa: `src/middleware.ts` no branch final (com

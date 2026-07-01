@@ -32,6 +32,7 @@ const SECTIONS: Section[] = [
       { href: '/contacts', label: 'Contatos', Icon: IconUsers },
       { href: '/companies', label: 'Empresas', Icon: IconBuilding },
       { href: '/inbox', label: 'Inbox', Icon: IconMail },
+      { href: '/inbox/prospects', label: 'Fila inbound', Icon: IconInbox },
       { href: '/search', label: 'Buscar', Icon: IconSearch },
     ],
   },
@@ -218,6 +219,7 @@ function IconFunnel(p: { className?: string }) { return <I {...p}><path d="M4 5h
 function IconUsers(p: { className?: string }) { return <I {...p}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></I>; }
 function IconBuilding(p: { className?: string }) { return <I {...p}><path d="M3 21V7l9-4 9 4v14"/><path d="M9 21V12h6v9"/></I>; }
 function IconMail(p: { className?: string }) { return <I {...p}><path d="M4 6h16v12H4z"/><path d="M4 6l8 7 8-7"/></I>; }
+function IconInbox(p: { className?: string }) { return <I {...p}><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></I>; }
 function IconSearch(p: { className?: string }) { return <I {...p}><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></I>; }
 function IconCheck(p: { className?: string }) { return <I {...p}><path d="M5 13l4 4L19 7"/></I>; }
 function IconWriting(p: { className?: string }) { return <I {...p}><path d="M14 4l6 6-10 10H4v-6z"/></I>; }

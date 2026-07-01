@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { trpc, type RouterOutputs } from '@/lib/trpc/client';
+import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 import { brl } from '@/lib/utils/hooks';
 import {
@@ -40,15 +41,15 @@ export default function AdminPartnersPage() {
 
   return (
     <main className="mx-auto max-w-5xl p-4 md:p-6">
-      <header className="mb-4">
-        <h1 className="text-2xl font-bold">Parceiros</h1>
-        <p className="text-sm text-text-2">
-          Gestão de empresas parceiras: comissão padrão, T&C, performance.
-          Para cadastrar uma nova empresa parceira, vá em{' '}
-          <a href="/companies/new" className="text-info-text hover:underline">/companies/new</a>{' '}
-          e marque tipo = PARTNER.
-        </p>
-      </header>
+      <PageHeader
+        title="Parceiros"
+        description="Cadastro e comissão por vínculo — comissão padrão, T&C e performance por parceiro."
+      />
+      <p className="-mt-4 mb-4 text-caption text-text-2">
+        Para cadastrar uma nova empresa parceira, vá em{' '}
+        <a href="/companies/new" className="text-info-text hover:underline">/companies/new</a>{' '}
+        e marque tipo = PARTNER.
+      </p>
 
       {rows.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">

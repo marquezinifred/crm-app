@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
+import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 
 export default function AdminContractsPage() {
@@ -26,7 +27,10 @@ export default function AdminContractsPage() {
 
   return (
     <main className="mx-auto max-w-2xl p-6">
-      <h1 className="mb-4 text-2xl font-bold">Configuração de Contratos</h1>
+      <PageHeader
+        title="Contratos"
+        description="E-mails de handoff e lead times de renovação."
+      />
 
       <form
         className="space-y-4"

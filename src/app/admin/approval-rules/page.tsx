@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
+import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 import { ApprovalRuleCriteria } from '@prisma/client';
 
@@ -48,11 +49,10 @@ export default function ApprovalRulesPage() {
 
   return (
     <main className="mx-auto max-w-2xl p-6">
-      <h1 className="mb-2 text-2xl font-bold">Regras de aprovação</h1>
-      <p className="mb-4 text-sm text-text-2">
-        Cada nova versão de proposta passa por estas regras. Aprovações pendentes
-        bloqueiam o avanço para Aceite.
-      </p>
+      <PageHeader
+        title="Regras de aprovação"
+        description="Cada nova versão de proposta passa por estas regras. Aprovações pendentes bloqueiam o avanço para Aceite."
+      />
 
       <section className="mb-6 rounded-lg border border-border bg-card p-4">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-1">

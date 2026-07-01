@@ -20,23 +20,42 @@ routes pro detalhe. CompanyForm também ganhou auto-fill via
 CNPJ no chip `ff8cf85`. Sprint 15C reforçou com máscara visual
 + CEP auto-fill (commit `fa84be6`).
 
-### P-02. PageHeader em 13 rotas /admin restantes
-**Severidade:** Média. Cosmético — 🟡 do Sprint 14.5 item 4.
-Refactor mecânico aplicando padrão consistente:
+### ~~P-02. PageHeader em 13 rotas /admin restantes~~ ✅ FECHADO
+**Resolvido em 2026-06-30.** Refactor mecânico das 13 rotas
+`/admin/*` pra usar `<PageHeader title description />` do design
+system em vez de `<h1>` ad-hoc.
 
-```tsx
-<PageHeader title="X" description="Y" primaryAction={<Button>+ Novo</Button>} />
-```
-
-Rotas: `/admin/ai`, `/admin/alerts`, `/admin/approval-rules`,
+**Aplicado em 10 rotas (h1 → PageHeader):** `/admin/ai`,
+`/admin/alerts`, `/admin/approval-rules`, `/admin/billing`,
+`/admin/branding` (duas ocorrências — main + PlanComparisonUpsell),
 `/admin/contracts`, `/admin/conversion-rates`, `/admin/email-inbound`,
-`/admin/partners`, `/admin/privacy`, `/admin/products`,
-`/admin/templates`, `/admin/users`, `/admin/branding` (verificação
-leve), `/admin/billing` (verificação leve).
+`/admin/partners`, `/admin/templates`.
 
-**Esforço:** ~3h. **Status:** spec em
-`Sprint_14_5_Polish.md` item 4. Não verificado se Sprint 15C
-fechou parcialmente — auditoria recomendada.
+**Já estavam corretas (skip):** `/admin/listas`, `/admin/privacy`,
+`/admin/products`, `/admin/users` — entregues por Sprint 15C ou
+antes com PageHeader canônico.
+
+**Detalhes:**
+- Títulos e descrições seguem tabela sugerida no chip, com pequenos
+  ajustes onde o contexto pedia (ex: `approval-rules` preservou
+  descrição contextual "Cada nova versão de proposta passa por
+  estas regras…" mais informativa que a genérica)
+- `/admin/branding`: descrição da PageHeader concatena o plano
+  dinamicamente (Growth/Enterprise). Banner de override WCAG
+  preservado como div separado abaixo do header (com `-mt-2`
+  compensando o `mb-6` do PageHeader)
+- `/admin/partners`: link `/companies/new` movido pra parágrafo
+  helper abaixo (description do PageHeader só aceita string)
+- Zero `<h1>` residual nas 13 rotas (grep confirmado)
+
+**Verificação:** 525 passing (baseline 525), type-check zero,
+lint zero. Manual: dev server e as 13 rotas foram inspecionadas
+visualmente — layout consistente com `/admin/users` referência.
+
+**Débito adjacente identificado:** ~13 rotas fora de `/admin/*` (
+`/platform/*` sidebar, `/reports`, `/pipeline`, `/companies`,
+`/contacts`, etc.) podem ter o mesmo padrão. Auditoria separada.
+Registrado como P-26.
 
 ### P-03. Visual baseline capturado
 **Severidade:** Baixa. 🟡 do Sprint 14.5 item 9. Script
@@ -421,6 +440,31 @@ INSERT direto no banco.
 - Monitorar 3-5 dias `ai_usage_logs` (usedFallback, configured_provider)
 - Expandir pra 2-3 early adopters Enterprise
 - 30 dias sem regressão → flag global `true` em produção
+
+### P-26. PageHeader em rotas fora de `/admin` e `/platform`
+**Severidade:** Baixa. Cosmético. Identificado ao fechar P-02.
+Enquanto `/admin/*` (13 rotas) e `/platform/*` (11 rotas) estão
+100% no padrão `<PageHeader />`, ainda há rotas internas com
+`<h1>` ad-hoc:
+
+- `/pipeline` (kanban)
+- `/pipeline/[id]` (detalhe da oportunidade)
+- `/inbox`
+- `/contacts`
+- `/imports`
+- `/more`
+- `/reports`
+
+`/dashboard` usa `<h1 text-h1>` polido no Sprint 14 (saudação
+"Bom dia, X.") — mantém-se por design, sem PageHeader.
+
+Rotas públicas (`/`, `/sign-in`, `/sign-up`, `/onboarding`,
+`/privacy`, `/terms`, `/privacy-request`) têm layout dedicado e
+NÃO devem usar `PageHeader` (que assume AppShell).
+
+**Esforço:** ~2h. Mesmo padrão do P-02: troca `<h1>` + opcional
+descrição por `<PageHeader />`. Sem preferência de ordem — pode
+fazer em batch único.
 
 ### ~~P-22. Convite de usuário sem indicação do tenant de destino~~ ✅ FECHADO
 **Resolvido em 2026-06-30 pelo commit `a1affec`.** Novo router

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
+import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 import { STAGES, STAGE_LABELS } from '@/components/pipeline/types';
 import type { OpportunityStage } from '@prisma/client';
@@ -34,11 +35,10 @@ export default function ConversionRatesPage() {
 
   return (
     <main className="mx-auto max-w-2xl p-6">
-      <h1 className="mb-2 text-2xl font-bold">Taxas de conversão</h1>
-      <p className="mb-4 text-sm text-text-2">
-        Percentual esperado de oportunidades que avançam de cada estágio.
-        Usado pela projeção de receita no `/reports`.
-      </p>
+      <PageHeader
+        title="Taxas de conversão"
+        description="Percentual esperado de oportunidades que avançam de cada estágio. Alimenta a projeção de receita em /reports."
+      />
 
       <div className="mb-4 flex gap-2">
         <Button

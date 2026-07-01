@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
+import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 import type { ThemeConfig } from '@/lib/theme/types';
 import { VENZO_DEFAULTS } from '@/lib/theme/types';
@@ -71,19 +72,19 @@ export default function BrandingPage() {
 
   return (
     <main className="mx-auto max-w-5xl p-4 md:p-6">
-      <header className="mb-4">
-        <h1 className="text-2xl font-bold">Identidade visual</h1>
-        <p className="text-sm text-text-2">
-          Plano <strong>{plan}</strong>{' '}
-          {isGrowth && '— paleta e fonte da lista curada Venzo.'}
-          {isEnterprise && '— hex livre, Google Fonts e override WCAG disponíveis.'}
-        </p>
-        {themeQ.data?.hasActiveOverrides && (
-          <div className="mt-2 rounded border border-warning/40 bg-warning-bg p-2 text-xs text-warning-text">
-            ⚠ Tema ativo possui desvios WCAG aprovados via override Enterprise.
-          </div>
-        )}
-      </header>
+      <PageHeader
+        title="Identidade"
+        description={`Cor, fonte, logo e Powered by Venzo. Plano ${plan}${
+          isGrowth ? ' — paleta e fonte da lista curada Venzo.' : ''
+        }${
+          isEnterprise ? ' — hex livre, Google Fonts e override WCAG disponíveis.' : ''
+        }`}
+      />
+      {themeQ.data?.hasActiveOverrides && (
+        <div className="-mt-2 mb-4 rounded border border-warning/40 bg-warning-bg p-2 text-xs text-warning-text">
+          ⚠ Tema ativo possui desvios WCAG aprovados via override Enterprise.
+        </div>
+      )}
 
       <nav className="mb-4 flex gap-1 border-b border-border text-sm">
         {(['paleta', 'tipografia', 'logo', 'historico'] as Tab[]).map((t) => (
@@ -411,13 +412,10 @@ function AuditHistory() {
 function PlanComparisonUpsell() {
   return (
     <main className="mx-auto max-w-6xl p-4 md:p-8">
-      <header className="mb-6">
-        <h1 className="text-3xl font-bold">Identidade visual</h1>
-        <p className="mt-1 text-sm text-text-2">
-          Seu plano atual é <strong>Starter</strong>. Faça upgrade para
-          personalizar a aparência da plataforma com a marca da sua empresa.
-        </p>
-      </header>
+      <PageHeader
+        title="Identidade"
+        description="Seu plano atual é Starter. Faça upgrade para personalizar a aparência da plataforma com a marca da sua empresa."
+      />
 
       <section className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3">
         <PlanCard

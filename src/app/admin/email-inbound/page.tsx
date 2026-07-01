@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
+import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 
 export default function EmailInboundConfigPage() {
@@ -22,12 +23,10 @@ export default function EmailInboundConfigPage() {
 
   return (
     <main className="mx-auto max-w-2xl p-6">
-      <h1 className="mb-4 text-2xl font-bold">E-mail Inbound</h1>
-      <p className="mb-4 text-sm text-text-2">
-        Endereço único do seu tenant para receber e-mails. Tudo que chegar aqui
-        vira atividade vinculada à oportunidade automaticamente (ou fica
-        em /inbox para você revisar).
-      </p>
+      <PageHeader
+        title="E-mail inbound"
+        description="Endereço único do seu tenant para receber e-mails. Tudo que chegar aqui vira atividade vinculada à oportunidade automaticamente (ou fica em /inbox para você revisar)."
+      />
 
       {data.fullAddress ? (
         <section className="mb-6 rounded-lg border border-border bg-card p-4">

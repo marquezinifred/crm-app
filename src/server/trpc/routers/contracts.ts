@@ -67,6 +67,7 @@ export const contractsRouter = router({
       after: created,
       ip: ctx.ip,
       userAgent: ctx.userAgent,
+      tenantIdOverride: ctx.tenantId,
     });
     return created;
   }),
@@ -87,6 +88,7 @@ export const contractsRouter = router({
       after: updated,
       ip: ctx.ip,
       userAgent: ctx.userAgent,
+      tenantIdOverride: ctx.tenantId,
     });
     // Handoff automático ao virar ACTIVE
     if (before.status !== 'ACTIVE' && updated.status === 'ACTIVE') {
@@ -117,6 +119,7 @@ export const contractsRouter = router({
         after: created,
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return created;
     }),
@@ -143,6 +146,7 @@ export const contractsRouter = router({
         after: updated,
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return updated;
     }),

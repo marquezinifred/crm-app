@@ -89,6 +89,7 @@ export const aiConfigRouter = router({
         },
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return { ok: true };
     }),

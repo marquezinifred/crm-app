@@ -133,6 +133,7 @@ export const usersRouter = router({
       after: local,
       ip: ctx.ip,
       userAgent: ctx.userAgent,
+      tenantIdOverride: ctx.tenantId,
     });
     return { id: local.id, email: local.email };
   }),
@@ -166,6 +167,7 @@ export const usersRouter = router({
       after: updated,
       ip: ctx.ip,
       userAgent: ctx.userAgent,
+      tenantIdOverride: ctx.tenantId,
     });
     return updated;
   }),
@@ -191,6 +193,7 @@ export const usersRouter = router({
         before,
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return { ok: true };
     }),

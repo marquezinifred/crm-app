@@ -65,6 +65,7 @@ export const proposalsRouter = router({
         after: created,
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return created;
     }),
@@ -123,6 +124,7 @@ export const proposalsRouter = router({
         },
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return {
         versionId: version.id,
@@ -249,6 +251,7 @@ export const approvalsRouter = router({
         after: updated,
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return updated;
     }),

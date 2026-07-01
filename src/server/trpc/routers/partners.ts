@@ -113,6 +113,7 @@ export const partnersRouter = router({
         after: input,
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return { ok: true };
     }),
@@ -134,6 +135,7 @@ export const partnersRouter = router({
         after: { partnerCompanyId: input.partnerCompanyId },
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return { ok: true };
     }),
@@ -168,6 +170,7 @@ export const partnersRouter = router({
         after: { partnerCompanyId: input.partnerCompanyId, version: input.tcVersion },
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return { ok: true, acceptanceId: acceptance.id };
     }),

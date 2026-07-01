@@ -47,6 +47,7 @@ export const productsRouter = router({
       after: p,
       ip: ctx.ip,
       userAgent: ctx.userAgent,
+      tenantIdOverride: ctx.tenantId,
     });
     return p;
   }),
@@ -67,6 +68,7 @@ export const productsRouter = router({
       after: updated,
       ip: ctx.ip,
       userAgent: ctx.userAgent,
+      tenantIdOverride: ctx.tenantId,
     });
     return updated;
   }),
@@ -89,6 +91,7 @@ export const productsRouter = router({
         before,
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return { ok: true };
     }),

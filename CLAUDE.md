@@ -743,7 +743,6 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 |----|--------|-----------|-----------|
 | P-02 | Sprint 14.5 | PageHeader em 13 rotas `/admin/*` restantes (~3h, mecânico) | auditar se Sprint 15C fechou parcialmente |
 | P-03 | Sprint 14.5 | Visual baseline `scripts/visual-baseline.ts` (script pronto, ~1.5h) | depende app local + seed E2E |
-| P-04 | Sprint 9 | Audit silencioso em `companies/contracts/proposals/approval-rules/partners/documents/imports` — falta `tenantIdOverride` (~2h) | spread em sprints futuros |
 | P-05 | Sprint 14.5 | Lighthouse audit ≥ 90 (script + workflow prontos) | depende `vars.STAGING_URL` no GitHub |
 | P-06 | Sprint 15B | Drilldowns `/platform/tenants/[id]/ai` e `/ai/features` — routers prontos (~2h UI) | chip de sustentação |
 | P-07 | Sprint 15A | Memory `migration-pitfalls.md` salvo: 5 padrões recorrentes em migrações Postgres | ✅ documental, salvo em 2026-06-30 |
@@ -813,6 +812,7 @@ foram fechados na Sprint 11.
   migrados de raw `<table>` pro Table/TH/TR/TD do design system.
   +23 testes (15 hook + 8 TH), 404/410 passing (4 falhas + 2
   skipped pré-existentes por env vars)
+<<<<<<< HEAD
 - P-13 401 do middleware vira "Unable to transform response from server" —
   `src/lib/trpc/session-guard.ts` novo com `sessionAwareFetch`
   interceptor injetado no `httpBatchLink` do `provider.tsx`. Detecta
@@ -846,6 +846,25 @@ foram fechados na Sprint 11.
   audit com override, Zod rejeita título curto/id inválido, soft
   delete preenche `deletedAt`). 443/449 passing (4 falhas + 2
   skipped pré-existentes por env vars)
+- P-04 audit() sem `tenantIdOverride` em routers tRPC — bug arquitetural
+  descoberto após 93ca6df (fix inicial do theme). `audit()` usa
+  `AsyncLocalStorage` pra pegar `tenantId`; dentro de `fetchRequestHandler`
+  do tRPC o contexto escapa em callbacks assíncronos e a entrada é
+  **descartada silenciosamente com warn** (audit_logs vazio mesmo com
+  escrita acontecendo). Fix mecânico em 19 routers: todas as 54
+  chamadas `audit({...})` receberam `tenantIdOverride: ctx.tenantId,`
+  como último campo. Arquivos: activities, ai-config, alerts,
+  approval-rules, companies, contacts, contracts, documents, imports,
+  inbox, opportunities, partner-engagements, partners, privacy,
+  products, proposals, reports, users. `search.ts` só tinha comentário
+  "NÃO chama audit()", skipado. Regressão em
+  `tests/unit/audit-context-loss.test.ts` com 4 cenários (contexto ok,
+  contexto perdido + override, sem contexto sem override, precedência).
+  Total 437 passing (baseline 433 + 4 novos), 2 skipped, 4 pré-existentes
+  (falhas env vars). Type-check pré-existente em `feature-gate.ts`
+  também não regride. Débito adjacente: services em
+  `src/server/services/*` que chamam `audit()` podem ter o mesmo bug —
+  escopo foi rigidamente routers tRPC conforme spec
 
 ---
 

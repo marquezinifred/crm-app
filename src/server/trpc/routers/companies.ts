@@ -92,6 +92,7 @@ export const companiesRouter = router({
       after: company,
       ip: ctx.ip,
       userAgent: ctx.userAgent,
+      tenantIdOverride: ctx.tenantId,
     });
     return company;
   }),
@@ -114,6 +115,7 @@ export const companiesRouter = router({
       after: updated,
       ip: ctx.ip,
       userAgent: ctx.userAgent,
+      tenantIdOverride: ctx.tenantId,
     });
     return updated;
   }),
@@ -134,6 +136,7 @@ export const companiesRouter = router({
       before,
       ip: ctx.ip,
       userAgent: ctx.userAgent,
+      tenantIdOverride: ctx.tenantId,
     });
     return { ok: true };
   }),

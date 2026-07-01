@@ -182,6 +182,7 @@ export const reportsRouter = router({
         after: input.rates,
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return { ok: true };
     }),

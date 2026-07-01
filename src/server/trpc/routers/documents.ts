@@ -97,6 +97,7 @@ export const documentsRouter = router({
         after: created,
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return created;
     }),
@@ -151,6 +152,7 @@ export const documentsRouter = router({
         after: { version: nextVersion, documentId: input.documentId },
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return { versionId: v.id, version: nextVersion, deduped: false };
     }),
@@ -239,6 +241,7 @@ export const templatesRouter = router({
         after: t,
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return t;
     }),
@@ -270,6 +273,7 @@ export const templatesRouter = router({
         after: { version: updated.currentVersionNumber },
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return updated;
     }),

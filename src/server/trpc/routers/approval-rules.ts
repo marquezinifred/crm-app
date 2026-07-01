@@ -52,6 +52,7 @@ export const approvalRulesRouter = router({
         after: r,
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return r;
     }),
@@ -79,6 +80,7 @@ export const approvalRulesRouter = router({
         after: updated,
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return updated;
     }),
@@ -97,6 +99,7 @@ export const approvalRulesRouter = router({
         after: { deleted: true },
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return { ok: true, id: updated.id };
     }),
@@ -130,6 +133,7 @@ export const contractsConfigRouter = router({
         after: input,
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return { ok: true };
     }),
@@ -152,6 +156,7 @@ export const contractsConfigRouter = router({
         after: r,
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return r;
     }),

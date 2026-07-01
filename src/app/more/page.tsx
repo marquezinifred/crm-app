@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { PageHeader } from '@/components/layout/PageHeader';
 
 const LINKS = [
   { href: '/companies', label: 'Empresas' },
@@ -31,7 +32,10 @@ const LINKS = [
 export default function MorePage() {
   return (
     <main className="mx-auto max-w-3xl p-4 md:p-6">
-      <h1 className="mb-4 text-2xl font-bold">Mais</h1>
+      <PageHeader
+        title="Mais"
+        description="Configurações e ferramentas adicionais."
+      />
       <p className="hidden md:block text-sm text-text-2 mb-4">
         Esta página é otimizada para mobile. No desktop, use o menu lateral à esquerda.
       </p>

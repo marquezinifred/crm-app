@@ -737,14 +737,13 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 ## Débitos técnicos com dependência cruzada (registrados para sprints futuros)
 
-**Débitos abertos (atualizado 2026-06-30):**
+**Débitos abertos (atualizado 2026-07-01):**
 
 | ID | Origem | Pendência | Resolve em |
 |----|--------|-----------|-----------|
 | P-03 | Sprint 14.5 | Visual baseline `scripts/visual-baseline.ts` (script pronto, ~1.5h) | depende app local + seed E2E |
 | P-05 | Sprint 14.5 | Lighthouse audit ≥ 90 (script + workflow prontos) | depende `vars.STAGING_URL` no GitHub |
 | P-07 | Sprint 15A | Memory `migration-pitfalls.md` salvo: 5 padrões recorrentes em migrações Postgres | ✅ documental, salvo em 2026-06-30 |
-| P-26 | P-02 spinoff | PageHeader em 7 rotas internas fora de `/admin` + `/platform` (~2h, mecânico) | quando conveniente |
 
 Detalhes em `docs/Backlog_Pos_MVP.md`. Débitos antigos (Sprints 1 e 2)
 foram fechados na Sprint 11.
@@ -942,6 +941,21 @@ foram fechados na Sprint 11.
   `/admin` e `/platform` (`/pipeline`, `/pipeline/[id]`, `/inbox`,
   `/contacts`, `/imports`, `/more`, `/reports`) ainda têm `<h1>`
   ad-hoc
+
+**Débitos zerados em 2026-07-01:**
+- P-26 PageHeader em rotas fora de `/admin` e `/platform` — refactor
+  mecânico substituindo `<h1>` + descrição ad-hoc por
+  `<PageHeader title description />` em 6 rotas: `/pipeline`
+  (primaryAction "+ Nova oportunidade"), `/inbox` (secondaryAction
+  "Configurar endereço →"), `/contacts`, `/imports`, `/more`,
+  `/reports` (secondaryAction "↓ Exportar Excel").
+  `/pipeline/[id]` **skipado por design** — header atual é unidade
+  contextual rica (título dinâmico + razão social + valor destacado
+  + badges estágio/status + botões avançar/voltar/cancelar); aplicar
+  PageHeader degradaria a UX (perderia layout right-aligned).
+  Consistência não vale regressão. Baseline mantido: 561 passing /
+  10 pré-existentes (env vars field-encryption + communication-summary-errors) /
+  2 skipped. Type-check zero. Lint zero
 - P-23 UI `/admin/ai` (4 Cards) — commits `17ef181` + `26833ac`.
   Sprint 15F entregou backend multi-provider completo, mas UI
   estava pré-15F (só provider global). Refactor completo de

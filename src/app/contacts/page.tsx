@@ -13,6 +13,7 @@ import { useToast } from '@/components/ui/toast';
 import { QuickCreateTrigger } from '@/components/ui/quick-create-trigger';
 import { useTableSort, type SortKey } from '@/lib/hooks/useTableSort';
 import { Table, THead, TBody, TH, TR, TD, TableEmpty } from '@/components/ui/table';
+import { PageHeader } from '@/components/layout/PageHeader';
 
 const RT_LABEL: Record<ContactRelationshipType, string> = {
   COLABORADOR: 'Colaborador',
@@ -136,12 +137,10 @@ export default function ContactsPage() {
 
   return (
     <main className="p-6 md:p-10 max-w-6xl mx-auto space-y-8">
-      <header>
-        <h1 className="text-2xl font-semibold">Contatos</h1>
-        <p className="text-sm text-text-2">
-          Gerencie pessoas vinculadas a empresas e oportunidades.
-        </p>
-      </header>
+      <PageHeader
+        title="Contatos"
+        description="Pessoas relacionadas às empresas cliente."
+      />
 
       <section
         aria-labelledby={formTitleId}

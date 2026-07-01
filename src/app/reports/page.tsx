@@ -6,6 +6,7 @@ import { brl } from '@/lib/utils/hooks';
 import { FunnelChart } from '@/components/reports/FunnelChart';
 import { Button } from '@/components/ui/button';
 import { STAGE_LABELS } from '@/components/pipeline/types';
+import { PageHeader } from '@/components/layout/PageHeader';
 
 export default function ReportsPage() {
   const [from, setFrom] = useState('');
@@ -26,15 +27,18 @@ export default function ReportsPage() {
 
   return (
     <main className="mx-auto max-w-5xl p-4 md:p-6">
-      <header className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-bold">Relatórios</h1>
-        <a
-          href="/api/v1/reports/export"
-          className="rounded border border-border-strong px-3 py-1.5 text-sm hover:bg-page"
-        >
-          ↓ Exportar Excel
-        </a>
-      </header>
+      <PageHeader
+        title="Relatórios"
+        description="Análise de conversão, performance e forecast."
+        secondaryAction={
+          <a
+            href="/api/v1/reports/export"
+            className="rounded border border-border-strong px-3 py-1.5 text-sm hover:bg-page"
+          >
+            ↓ Exportar Excel
+          </a>
+        }
+      />
 
       <section className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-3">
         <label className="text-sm">

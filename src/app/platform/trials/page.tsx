@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { trpc } from '@/lib/trpc/client';
+import { useMemo, useState } from 'react';
+import { trpc, type RouterOutputs } from '@/lib/trpc/client';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,17 @@ import { Modal, ModalFooter } from '@/components/ui/modal';
 import { Select } from '@/components/ui/input';
 import { Field } from '@/components/ui/field';
 import { formatRelativeDate } from '@/lib/utils/format';
+import { useTableSort, type SortKey } from '@/lib/hooks/useTableSort';
 import type { TenantPlan } from '@prisma/client';
+
+type TrialRow = RouterOutputs['platform']['trials']['list'][number];
+
+const SORT_TR_NAME: SortKey<TrialRow> = 'name';
+const SORT_TR_SOURCE: SortKey<TrialRow> = 'trialSource';
+const SORT_TR_ENDS: SortKey<TrialRow> = (t) =>
+  t.trialEndsAt ? new Date(t.trialEndsAt) : null;
+const SORT_TR_SETUP: SortKey<TrialRow> = (t) => Boolean(t.setupCompletedAt);
+const SORT_TR_EXTENDED: SortKey<TrialRow> = 'trialExtendedCount';
 
 export default function PlatformTrialsPage() {
   const utils = trpc.useUtils();
@@ -35,6 +45,9 @@ export default function PlatformTrialsPage() {
     plan?: TenantPlan;
   } | null>(null);
 
+  const rows = useMemo(() => list.data ?? [], [list.data]);
+  const { sorted, toggleSort, getSortState } = useTableSort<TrialRow>(rows);
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -46,19 +59,29 @@ export default function PlatformTrialsPage() {
       <Table>
         <THead>
           <tr>
-            <TH>Tenant</TH>
-            <TH>Source</TH>
-            <TH>Termina em</TH>
-            <TH>Setup</TH>
-            <TH>Estendido</TH>
+            <TH sortable sortState={getSortState(SORT_TR_NAME)} onSort={() => toggleSort(SORT_TR_NAME)}>
+              Tenant
+            </TH>
+            <TH sortable sortState={getSortState(SORT_TR_SOURCE)} onSort={() => toggleSort(SORT_TR_SOURCE)}>
+              Source
+            </TH>
+            <TH sortable sortState={getSortState(SORT_TR_ENDS)} onSort={() => toggleSort(SORT_TR_ENDS)}>
+              Termina em
+            </TH>
+            <TH sortable sortState={getSortState(SORT_TR_SETUP)} onSort={() => toggleSort(SORT_TR_SETUP)}>
+              Setup
+            </TH>
+            <TH sortable sortState={getSortState(SORT_TR_EXTENDED)} onSort={() => toggleSort(SORT_TR_EXTENDED)}>
+              Estendido
+            </TH>
             <TH>Ações</TH>
           </tr>
         </THead>
         <TBody>
-          {list.data && list.data.length === 0 && (
+          {list.data && sorted.length === 0 && (
             <TableEmpty colSpan={6}>Sem trials abertos no momento.</TableEmpty>
           )}
-          {list.data?.map((t) => {
+          {sorted.map((t) => {
             const daysLeft = t.trialEndsAt
               ? Math.ceil((new Date(t.trialEndsAt).getTime() - Date.now()) / 86_400_000)
               : null;

@@ -1,10 +1,12 @@
 'use client';
 
-import { trpc } from '@/lib/trpc/client';
-import { useId, useState } from 'react';
+import { trpc, type RouterOutputs } from '@/lib/trpc/client';
+import { useId, useMemo, useState } from 'react';
 import type { UserRole } from '@prisma/client';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
+import { Table, THead, TBody, TH, TR, TD, TableEmpty } from '@/components/ui/table';
+import { useTableSort, type SortKey } from '@/lib/hooks/useTableSort';
 
 const ROLE_LABEL: Record<UserRole, string> = {
   ADMIN: 'Admin',
@@ -25,6 +27,15 @@ const ALL_ROLES: UserRole[] = [
   'ANALISTA',
   'PARCEIRO',
 ];
+
+type UserRow = RouterOutputs['users']['list'][number];
+
+const SORT_USER_NAME: SortKey<UserRow> = 'fullName';
+const SORT_USER_EMAIL: SortKey<UserRow> = 'email';
+const SORT_USER_ROLE: SortKey<UserRow> = (u) => ROLE_LABEL[u.role];
+const SORT_USER_LAST_LOGIN: SortKey<UserRow> = (u) =>
+  u.lastLoginAt ? new Date(u.lastLoginAt) : null;
+const SORT_USER_STATUS: SortKey<UserRow> = 'active';
 
 export default function AdminUsersPage() {
   const utils = trpc.useUtils();
@@ -60,6 +71,9 @@ export default function AdminUsersPage() {
 
   const inviteTitleId = useId();
   const tableCaptionId = useId();
+
+  const rows = useMemo(() => list.data ?? [], [list.data]);
+  const { sorted, toggleSort, getSortState } = useTableSort<UserRow>(rows);
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -155,36 +169,42 @@ export default function AdminUsersPage() {
         </div>
       )}
 
-      <section aria-labelledby={tableCaptionId} className="border rounded-lg bg-card overflow-x-auto">
-        <table className="w-full text-sm">
+      <section aria-labelledby={tableCaptionId}>
+        <Table>
           <caption id={tableCaptionId} className="sr-only">
             Usuários cadastrados, com papel, último acesso e ações disponíveis
           </caption>
-          <thead className="bg-page">
+          <THead>
             <tr>
-              <th scope="col" className="text-left px-4 py-2 font-medium">Nome</th>
-              <th scope="col" className="text-left px-4 py-2 font-medium">E-mail</th>
-              <th scope="col" className="text-left px-4 py-2 font-medium">Papel</th>
-              <th scope="col" className="text-left px-4 py-2 font-medium">Último login</th>
-              <th scope="col" className="text-left px-4 py-2 font-medium">Status</th>
-              <th scope="col" className="text-right px-4 py-2 font-medium">Ações</th>
+              <TH sortable sortState={getSortState(SORT_USER_NAME)} onSort={() => toggleSort(SORT_USER_NAME)}>
+                Nome
+              </TH>
+              <TH sortable sortState={getSortState(SORT_USER_EMAIL)} onSort={() => toggleSort(SORT_USER_EMAIL)}>
+                E-mail
+              </TH>
+              <TH sortable sortState={getSortState(SORT_USER_ROLE)} onSort={() => toggleSort(SORT_USER_ROLE)}>
+                Papel
+              </TH>
+              <TH sortable sortState={getSortState(SORT_USER_LAST_LOGIN)} onSort={() => toggleSort(SORT_USER_LAST_LOGIN)}>
+                Último login
+              </TH>
+              <TH sortable sortState={getSortState(SORT_USER_STATUS)} onSort={() => toggleSort(SORT_USER_STATUS)}>
+                Status
+              </TH>
+              <TH className="text-right">Ações</TH>
             </tr>
-          </thead>
-          <tbody>
+          </THead>
+          <TBody>
             {list.isLoading && (
-              <tr>
-                <td colSpan={6} className="p-6 text-center text-text-2">
-                  Carregando...
-                </td>
-              </tr>
+              <TableEmpty colSpan={6}>Carregando...</TableEmpty>
             )}
-            {list.data?.map((u) => {
+            {sorted.map((u) => {
               const canEditThisUser = true;
               return (
-                <tr key={u.id} className="border-t">
-                  <td className="px-4 py-2 font-medium">{u.fullName}</td>
-                  <td className="px-4 py-2 text-text-2">{u.email}</td>
-                  <td className="px-4 py-2">
+                <TR key={u.id}>
+                  <TD className="font-medium">{u.fullName}</TD>
+                  <TD className="text-text-2">{u.email}</TD>
+                  <TD>
                     <label className="sr-only" htmlFor={`role-${u.id}`}>
                       Papel de {u.fullName}
                     </label>
@@ -206,13 +226,13 @@ export default function AdminUsersPage() {
                         </option>
                       ))}
                     </select>
-                  </td>
-                  <td className="px-4 py-2 text-text-2 text-xs">
+                  </TD>
+                  <TD className="text-text-2 text-xs">
                     {u.lastLoginAt
                       ? new Date(u.lastLoginAt).toLocaleString('pt-BR')
                       : 'Nunca'}
-                  </td>
-                  <td className="px-4 py-2">
+                  </TD>
+                  <TD>
                     {u.active ? (
                       <span className="text-xs px-2 py-0.5 rounded-full bg-success-bg text-success-text">
                         Ativo
@@ -222,8 +242,8 @@ export default function AdminUsersPage() {
                         Convidado / Inativo
                       </span>
                     )}
-                  </td>
-                  <td className="px-4 py-2 text-right">
+                  </TD>
+                  <TD className="text-right">
                     {u.id !== me.data?.id && canEditThisUser && (
                       <button
                         onClick={() => {
@@ -235,12 +255,12 @@ export default function AdminUsersPage() {
                         Desativar
                       </button>
                     )}
-                  </td>
-                </tr>
+                  </TD>
+                </TR>
               );
             })}
-          </tbody>
-        </table>
+          </TBody>
+        </Table>
       </section>
 
       <style jsx>{`

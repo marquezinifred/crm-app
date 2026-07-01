@@ -1,13 +1,40 @@
 'use client';
 
-import { useState } from 'react';
-import { trpc } from '@/lib/trpc/client';
+import { useMemo, useState } from 'react';
+import { trpc, type RouterOutputs } from '@/lib/trpc/client';
 import { Button } from '@/components/ui/button';
 import { brl } from '@/lib/utils/hooks';
+import {
+  compareSortValues,
+  resolveValue,
+  type SortKey,
+} from '@/lib/hooks/useTableSort';
+
+type Partner = RouterOutputs['partners']['listWithStats'][number];
+type SortOption = 'name' | 'commission' | 'active-deals';
+
+const SORT_ACCESSORS: Record<SortOption, SortKey<Partner>> = {
+  name: 'razaoSocial',
+  commission: (p) => Number(p.commissionPct),
+  'active-deals': (p) => p.totalDeals - p.won,
+};
 
 export default function AdminPartnersPage() {
   const { data, isLoading } = trpc.partners.listWithStats.useQuery();
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<SortOption>('name');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  const rows = useMemo(() => data ?? [], [data]);
+  const sorted = useMemo(() => {
+    const accessor = SORT_ACCESSORS[sortBy];
+    const copy = rows.slice();
+    copy.sort((a, b) => {
+      const cmp = compareSortValues(resolveValue(a, accessor), resolveValue(b, accessor));
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+    return copy;
+  }, [rows, sortBy, sortDir]);
 
   if (isLoading) return <main className="p-6">Carregando…</main>;
 
@@ -23,13 +50,38 @@ export default function AdminPartnersPage() {
         </p>
       </header>
 
-      {data && data.length === 0 ? (
+      {rows.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
+          <label htmlFor="partner-sort" className="text-text-2">
+            Ordenar por
+          </label>
+          <select
+            id="partner-sort"
+            value={`${sortBy}:${sortDir}`}
+            onChange={(e) => {
+              const [opt, dir] = e.target.value.split(':') as [SortOption, 'asc' | 'desc'];
+              setSortBy(opt);
+              setSortDir(dir);
+            }}
+            className="rounded border border-border bg-card px-2 py-1 focus-visible:ring-2 focus-visible:ring-brand-primary"
+          >
+            <option value="name:asc">Nome (A→Z)</option>
+            <option value="name:desc">Nome (Z→A)</option>
+            <option value="commission:desc">Comissão (maior)</option>
+            <option value="commission:asc">Comissão (menor)</option>
+            <option value="active-deals:desc">Contratos abertos (maior)</option>
+            <option value="active-deals:asc">Contratos abertos (menor)</option>
+          </select>
+        </div>
+      )}
+
+      {rows.length === 0 ? (
         <p className="rounded border border-dashed border-border-strong p-6 text-center text-sm text-text-2">
           Sem parceiros ainda. Cadastre o primeiro.
         </p>
       ) : (
         <ul className="space-y-3">
-          {data?.map((p) => (
+          {sorted.map((p) => (
             <li key={p.id} className="rounded-lg border border-border bg-card p-4">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>

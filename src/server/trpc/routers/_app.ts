@@ -34,6 +34,7 @@ import { platformRouter } from './platform';
 import { broadcastsRouter } from './platform-health-trials-broadcasts';
 import { tenantsRouter } from './tenants';
 import { inboundRouter } from './inbound';
+import { permissionsRouter } from './permissions';
 
 export const appRouter = router({
   health: publicProcedure.query(() => ({
@@ -99,6 +100,7 @@ export const appRouter = router({
   broadcasts: broadcastsRouter,
   tenants: tenantsRouter,
   inbound: inboundRouter,
+  permissions: permissionsRouter,
 });
 
 export type AppRouter = typeof appRouter;

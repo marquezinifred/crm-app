@@ -2,6 +2,7 @@
 
 import { trpc, type RouterOutputs } from '@/lib/trpc/client';
 import { friendlyTrpcError } from '@/lib/trpc/error-format';
+import Link from 'next/link';
 import { useId, useMemo, useState } from 'react';
 import type { UserRole } from '@prisma/client';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -261,17 +262,25 @@ export default function AdminUsersPage() {
                     )}
                   </TD>
                   <TD className="text-right">
-                    {u.id !== me.data?.id && canEditThisUser && (
-                      <button
-                        onClick={() => {
-                          if (confirm(`Desativar ${u.fullName}?`))
-                            deactivate.mutate({ id: u.id });
-                        }}
-                        className="px-2 py-1 text-xs rounded border text-danger hover:bg-danger-bg focus-visible:ring-2 focus-visible:ring-rose-500"
+                    <div className="flex items-center justify-end gap-2">
+                      <Link
+                        href={`/admin/users/${u.id}/permissions`}
+                        className="px-2 py-1 text-xs rounded border text-text-1 hover:bg-hover focus-visible:ring-2 focus-visible:ring-brand"
                       >
-                        Desativar
-                      </button>
-                    )}
+                        Permissões
+                      </Link>
+                      {u.id !== me.data?.id && canEditThisUser && (
+                        <button
+                          onClick={() => {
+                            if (confirm(`Desativar ${u.fullName}?`))
+                              deactivate.mutate({ id: u.id });
+                          }}
+                          className="px-2 py-1 text-xs rounded border text-danger hover:bg-danger-bg focus-visible:ring-2 focus-visible:ring-rose-500"
+                        >
+                          Desativar
+                        </button>
+                      )}
+                    </div>
                   </TD>
                 </TR>
               );

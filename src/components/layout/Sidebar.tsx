@@ -2,7 +2,11 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useMemo } from 'react';
 import { cn } from '@/lib/utils/cn';
+import { trpc } from '@/lib/trpc/client';
+import { hasPermissionByRole } from '@/lib/auth/rbac';
+import type { Permission } from '@/lib/auth/permissions-catalog';
 
 /**
  * Sidebar Venzo — Sprint 14.
@@ -20,7 +24,16 @@ import { cn } from '@/lib/utils/cn';
 
 type Variant = 'overlay' | 'fixed';
 
-type Item = { href: string; label: string; Icon: (p: { className?: string }) => JSX.Element };
+// Sprint 15E — items opcionalmente gated por permission. Se `permission`
+// setada, item só renderiza se `hasPermissionByRole(role, permission)`.
+// Ausente = visível a todos os authed (comportamento pré-15E preservado).
+// UI é hint apenas — backend re-valida em cada procedure.
+type Item = {
+  href: string;
+  label: string;
+  Icon: (p: { className?: string }) => JSX.Element;
+  permission?: Permission;
+};
 type Section = { title: string; items: Item[] };
 
 const SECTIONS: Section[] = [
@@ -32,7 +45,7 @@ const SECTIONS: Section[] = [
       { href: '/contacts', label: 'Contatos', Icon: IconUsers },
       { href: '/companies', label: 'Empresas', Icon: IconBuilding },
       { href: '/inbox', label: 'Inbox', Icon: IconMail },
-      { href: '/inbox/prospects', label: 'Fila inbound', Icon: IconInbox },
+      { href: '/inbox/prospects', label: 'Fila inbound', Icon: IconInbox, permission: 'inbound:view_queue' },
       { href: '/search', label: 'Buscar', Icon: IconSearch },
     ],
   },
@@ -63,10 +76,10 @@ const SECTIONS: Section[] = [
       { href: '/admin/approval-rules', label: 'Regras de aprovação', Icon: IconShield },
       { href: '/admin/contracts', label: 'Config. contratos', Icon: IconSettings },
       { href: '/admin/conversion-rates', label: 'Taxas de conversão', Icon: IconPercent },
-      { href: '/admin/email-inbound', label: 'E-mail inbound', Icon: IconAt },
+      { href: '/admin/email-inbound', label: 'E-mail inbound', Icon: IconAt, permission: 'inbound:configure' },
       { href: '/admin/templates', label: 'Templates', Icon: IconFiles },
       { href: '/admin/privacy', label: 'LGPD', Icon: IconLock },
-      { href: '/imports', label: 'Importação', Icon: IconUpload },
+      { href: '/imports', label: 'Importação', Icon: IconUpload, permission: 'import:run' },
     ],
   },
 ];
@@ -95,6 +108,23 @@ export function Sidebar({
   onToggleCollapsed: () => void;
 }) {
   const pathname = usePathname() ?? '/';
+  // Sprint 15E — hooks ficam ANTES do early return pra respeitar rules-of-hooks.
+  // Filtro condicional baseado no role default. Não considera overrides
+  // individuais (backend re-valida). Enquanto `me` carrega, mostramos todos
+  // os itens (opção mais permissiva) — o server bloqueará um clique em item
+  // que o user não tem permissão.
+  const me = trpc.users.me.useQuery(undefined, { staleTime: 60_000 });
+  const visibleSections = useMemo(() => {
+    const role = me.data?.role;
+    if (!role) return SECTIONS;
+    return SECTIONS.map((s) => ({
+      ...s,
+      items: s.items.filter(
+        (i) => !i.permission || hasPermissionByRole(role, i.permission),
+      ),
+    })).filter((s) => s.items.length > 0);
+  }, [me.data?.role]);
+
   if (HIDDEN_ON.some((p) => pathname.startsWith(p))) return null;
 
   const isOverlay = variant === 'overlay';
@@ -166,7 +196,7 @@ export function Sidebar({
 
         {/* Nav groups */}
         <nav id="sidebar-nav" className="flex-1 overflow-y-auto py-3 px-2">
-          {SECTIONS.map((section) => (
+          {visibleSections.map((section) => (
             <div key={section.title} className="mb-4">
               {!isCollapsed && (
                 <div className="px-2 pb-1 text-[10px] uppercase tracking-wider font-semibold text-text-3">

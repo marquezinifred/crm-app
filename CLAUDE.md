@@ -652,6 +652,20 @@ foram fechados na Sprint 11.
   input. Fix: capturar `onClose` em `onCloseRef` e depender só
   de `[open]`. +3 testes em `tests/unit/modal.test.tsx`,
   381/387 passing (4 falhas + 2 skipped pré-existentes)
+- P-16 Busca global (Command Palette ⌘K) sem handler — botão
+  "Buscar…" em `src/components/layout/Topbar.tsx` era placeholder
+  desde Sprint 14. Fix: router tRPC novo
+  `src/server/trpc/routers/search.ts` (procedure `global`, 4
+  buckets companies/contacts/opportunities/users, ILIKE '%q%'
+  top 5 cada, RBAC gracioso = bucket vazio quando sem permissão)
+  mesclado com `searchNaturalRouter` do Sprint 6 sob a key
+  tRPC `search`. Novo componente `src/components/search/CommandPalette.tsx`
+  standalone (não usa Modal — evita conflito Tab-trap vs setas)
+  com debounce 200ms, ↑/↓/Enter/ESC, empty/loading/hint states.
+  Topbar ganhou `onClick` + listener `(Cmd|Ctrl)+K` global. Rotas
+  públicas (HIDDEN_ON) não registram o atalho. +18 testes
+  (search-router +9, command-palette +9). 399/405 passing (4
+  falhas + 2 skipped pré-existentes)
 
 ---
 

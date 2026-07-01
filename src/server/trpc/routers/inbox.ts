@@ -114,7 +114,7 @@ export const inboxRouter = router({
     }),
 });
 
-export const searchRouter = router({
+export const searchNaturalRouter = router({
   natural: canRead
     .input(
       z.object({

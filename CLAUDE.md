@@ -901,7 +901,6 @@ foram fechados na Sprint 11.
   em chunks pra evitar stack overflow. +24 testes (13 dropzone +
   11 upload-router), 457/463 passing (4 falhas + 2 skipped
   pré-existentes por env vars)
-<<<<<<< HEAD
 - P-21 Erro Zod renderizado como JSON cru na UI — helper
   `src/lib/trpc/error-format.ts` novo com `friendlyTrpcError(err)`.
   O `errorFormatter` em `src/server/trpc/trpc.ts` já expunha

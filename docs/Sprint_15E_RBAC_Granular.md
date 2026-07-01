@@ -1,8 +1,9 @@
-# Sprint 15E — RBAC Granular (Permissões Configuráveis) — v2
+# Sprint 15E — RBAC Granular (Permissões Configuráveis) — v3
 
-**Estimativa:** 8-10 dias úteis (revisado — v1 estimou 7d com base em ~30 procedures; estado atual mostra 47)
+**Estimativa:** 8-10 dias úteis
 **Data spec v1:** 2026-06-30
 **Data spec v2:** 2026-07-01 (pós-15D fechado e 15F fechado)
+**Data spec v3:** 2026-07-01 (revisão PO — corrige contagens da matrix, adiciona enforcement `opportunity:read_others`, guard anti-escalada em grant/revoke, backfill script pós-migration, `cachedPermissions` nullable)
 **Migration:** 0030 (0024/0025 ficaram como skips; 0026 = clerk_id, 0027-0028 = 15F, 0029 = 15D)
 **Pré-requisitos:**
 - ✅ Sprint 15A fechado (dual identity Platform Owner + tenant admin)
@@ -298,11 +299,23 @@ CREATE INDEX user_permission_overrides_tenant_idx
   ON user_permission_overrides(tenant_id);
 
 -- 2. Cache de permissions efetivas por user
+--    NULL = "não computado ainda" (força recompute).
+--    []   = "computado, resultado vazio" (PARCEIRO com todas defaults revogadas).
+--    Distinção crítica pra evitar loop de recompute (ver §6.6).
 ALTER TABLE users
-  ADD COLUMN cached_permissions text[];
+  ADD COLUMN cached_permissions text[];  -- nullable por design
 
--- 3. Backfill GESTOR_INBOUND → ADMIN + 4 permission grants
---    Ordem crítica: INSERIR overrides ANTES de mudar o role
+-- 3. Backfill GESTOR_INBOUND → ADMIN + 2 permission grants
+--    Ordem crítica: INSERIR overrides ANTES de mudar o role.
+--    Nota: ADMIN já tem inbound:view_queue, inbound:assign_prospects e
+--    inbound:configure por default (ver permission-matrix.md). Concedemos
+--    apenas as permissions que NÃO estão nos defaults do ADMIN pra evitar
+--    poluir user_permission_overrides com redundâncias.
+--    → Só 'inbound:view_reports' é redundância pro ADMIN? Não — ADMIN
+--    já tem. Então na verdade TODOS os 4 são redundantes pós-role change.
+--    → Fazemos backfill APENAS pra rastreabilidade (audit "quem virou
+--    ADMIN vindo de GESTOR_INBOUND"). ON CONFLICT DO NOTHING evita erro
+--    se admin já concedeu manualmente antes.
 INSERT INTO user_permission_overrides (user_id, tenant_id, permission, action, granted_at, reason)
 SELECT
   id,
@@ -317,7 +330,8 @@ SELECT
   now(),
   'Backfill Sprint 15E — migrated from GESTOR_INBOUND role (2026-07-XX)'
 FROM users
-WHERE role = 'GESTOR_INBOUND' AND deleted_at IS NULL;
+WHERE role = 'GESTOR_INBOUND' AND deleted_at IS NULL
+ON CONFLICT (user_id, permission) DO NOTHING;
 
 -- Users soft-deleted também migram (por integridade referencial de audit_logs)
 INSERT INTO user_permission_overrides (user_id, tenant_id, permission, action, granted_at, reason)
@@ -365,13 +379,22 @@ ALTER TABLE users
 
 DROP TYPE "UserRole_old";
 
--- 6. Backfill cached_permissions
---    Estratégia: NULL agora, computa on-demand no service.
---    UPDATE massivo com JOIN complexo seria mais performático mas
---    duplicaria a lógica do rbac.ts em SQL. Deixamos NULL e a primeira
---    chamada de cada user popula o cache.
+-- 6. cached_permissions fica NULL — cache preenchido pelo service
+--    quando cada user faz sua primeira chamada pós-migration.
 --
--- (nenhum UPDATE aqui — cache preenchido pelo service quando acessado)
+-- 🔴 CRÍTICO: rodar script de backfill do cache logo após a migration
+--    (via `npm run rbac:backfill-cache`) pra evitar problema do whoHas:
+--    procedure `permissions.whoHas('inbound:assign_prospects')` filtra
+--    `cachedPermissions: { has: 'inbound:assign_prospects' }` — se nenhum
+--    user tiver cache populado ainda, o whoHas retorna VAZIO
+--    silenciosamente até cada user logar.
+--
+--    Script: scripts/rbac-backfill-cache.ts
+--      for each user ativo (deleted_at IS NULL AND active = true):
+--        await computeAndCacheUserPermissions(user.id)
+--    Roda em ~30s pra 1000 users. IDEMPOTENTE — pode re-executar.
+--
+--    Ver §5.4 "Rollout" pra ordem exata: migrate → backfill script → deploy.
 
 -- 7. Alterar approval_rules pra aceitar approver_permission
 ALTER TABLE approval_rules
@@ -419,7 +442,7 @@ model UserPermissionOverride {
 
 model User {
   // ... campos existentes
-  cachedPermissions       String[]                  @map("cached_permissions")
+  cachedPermissions       String[]?                 @map("cached_permissions")   // nullable — ver §6.6
   permissionOverrides     UserPermissionOverride[]
   grantedOverrides        UserPermissionOverride[]  @relation("PermissionGrantedBy")
 }
@@ -440,6 +463,30 @@ enum UserRole {
   // GESTOR_INBOUND removido — Sprint 15E migrou pra ADMIN + overrides
 }
 ```
+
+### 5.4. Rollout ordenado (crítico)
+
+Ordem exata em produção pra evitar janela de comportamento inconsistente:
+
+1. **Deploy do código** (com feature flag `RBAC_GRANULAR_ENABLED=false`)
+   Todos os procedures ainda usam `withRoles`/`withCapability` legado. Migration ainda não rodou.
+
+2. **Rodar migration 0030** (`npx prisma migrate deploy`)
+   Adiciona tabela `user_permission_overrides`, coluna `cached_permissions` (nullable), backfill GESTOR_INBOUND → ADMIN + overrides, remove enum.
+
+3. **Rodar script de backfill do cache** (`npm run rbac:backfill-cache`)
+   ```
+   for each user WHERE deleted_at IS NULL AND active = true:
+     computeAndCacheUserPermissions(user.id)
+   ```
+   Sem isso, `permissions.whoHas('...')` retorna vazio até cada user logar. Bloqueia notificações inbound.
+
+4. **Ativar feature flag** (`RBAC_GRANULAR_ENABLED=true` no Vercel)
+   Procedures passam a usar `withPermission`. Cascata de resolução (default do role + overrides) fica ativa.
+
+5. **Monitorar 24h** — `audit_logs` mostra `user.permission_granted` / `_revoked` como esperado, `permissions.whoHas` retorna users corretos, nenhum spike de 403.
+
+**Rollback rápido:** setar `RBAC_GRANULAR_ENABLED=false` volta pro path legado. Tabela `user_permission_overrides` fica no banco (não deleta). Enum já foi migrado — se precisar reverter role de user, ver §5.3.
 
 ### 5.3. Rollback plan
 
@@ -506,8 +553,10 @@ export async function hasPermission(
   // Platform Owner bypass (Sprint 15A)
   if (user.platformRole === 'PLATFORM_OWNER') return true;
 
-  // Cache hit
-  if (user.cachedPermissions && user.cachedPermissions.length > 0) {
+  // Cache hit — NOTA: distingue null (não computado) de [] (computado vazio).
+  // Um PARCEIRO com todas as defaults revogadas legitimamente tem [] — sem
+  // essa distinção, cada request dele rodaria recompute em loop.
+  if (user.cachedPermissions !== null) {
     return user.cachedPermissions.includes(permission);
   }
 
@@ -560,11 +609,15 @@ export async function computeAndCacheUserPermissions(userId: string): Promise<Se
  * Invalida cache de um user. Chamado por:
  *  - users.updateRole
  *  - permissions.grant / revoke / restore
+ *
+ * Seta `null` (não `[]`) pra distinguir "não computado" de "computado
+ * = vazio" (PARCEIRO com todas as defaults revogadas). Sem essa
+ * distinção, `hasPermission` entra em loop de recompute.
  */
 export async function invalidateUserPermissionsCache(userId: string): Promise<void> {
   await prisma.user.update({
     where: { id: userId },
-    data: { cachedPermissions: [] },
+    data: { cachedPermissions: null },
   });
 }
 ```
@@ -604,6 +657,10 @@ Anexar à PR como `docs/rbac-migration-map.md`. Amostra:
 | `users.grantPermission` | (nova) | `withPermission('user:grant_permissions')` |
 | `companies.create` | `withCapability('company', 'create')` | `withPermission('company:create')` |
 | `opportunities.advanceStage` | `withCapability('opportunity', 'advance_stage')` | `withPermission('opportunity:advance_stage')` |
+| `opportunities.list` | `withCapability('opportunity', 'read')` (mostra tudo) | `withPermission('opportunity:read')` + filtro por `ownerId` se **não** tem `opportunity:read_others` (ver §6.4 abaixo) |
+| `opportunities.count` | idem | idem |
+| `opportunities.kanban` | idem | idem |
+| `opportunities.byId` | `withCapability('opportunity', 'read')` | `withPermission('opportunity:read')` + verificar `ownerId === ctx.user.id` OR `hasPermission(ctx.user.id, 'opportunity:read_others')` — 404 se não |
 | `proposals.approve` | `withCapability('proposal', 'approve')` | `withPermission('proposal:approve')` |
 | `documents.upload` | `withCapability('document', 'create')` | `withPermission('document:upload')` |
 | `tasks.create` | `withCapability('opportunity', 'update')` | `withPermission('task:create')` |
@@ -618,6 +675,116 @@ Anexar à PR como `docs/rbac-migration-map.md`. Amostra:
 | ... (47 total) | | |
 
 **Regra de decoupling:** cada permission nova (25+) recebe um caller único a princípio, mas se DIRETOR_COMERCIAL ganha tanto `reports:read` quanto `reports:financial` no default, backup do padrão anterior é preservado.
+
+### 6.4. Enforcement de `opportunity:read_others` (⚠️ breaking change)
+
+**Comportamento atual (Sprint 5 baseline):** `opportunities.list`, `.count`, `.kanban` filtram implicitamente por `ownerId === ctx.user.id` **apenas** quando `ctx.user.role === 'PARCEIRO'`. Todos os demais roles veem tudo do tenant.
+
+**Comportamento novo (Sprint 15E):** filtro passa a depender da permission `opportunity:read_others`. Como a matrix (`permission-matrix.md`) marca essa permission como default apenas em ADMIN/DIRETOR_*/GESTOR, **o ANALISTA passa a ver só as próprias opps** por default — mudança de comportamento visível em produção.
+
+**Padrão obrigatório em toda query de listagem de opps:**
+
+```ts
+export const opportunitiesRouter = router({
+  list: withPermission('opportunity:read')
+    .input(z.object({ /* filtros */ }))
+    .query(async ({ ctx, input }) => {
+      const canSeeAll = await hasPermission(ctx.user.id, 'opportunity:read_others');
+      return prisma.opportunity.findMany({
+        where: {
+          tenantId: ctx.tenantId,
+          deletedAt: null,
+          ...(canSeeAll ? {} : { ownerId: ctx.user.id }),
+          // ... filtros de input
+        },
+      });
+    }),
+
+  count: withPermission('opportunity:read')
+    .input(...)
+    .query(async ({ ctx, input }) => {
+      const canSeeAll = await hasPermission(ctx.user.id, 'opportunity:read_others');
+      return prisma.opportunity.count({
+        where: {
+          tenantId: ctx.tenantId,
+          ...(canSeeAll ? {} : { ownerId: ctx.user.id }),
+        },
+      });
+    }),
+
+  byId: withPermission('opportunity:read')
+    .input(z.object({ id: zUuid }))
+    .query(async ({ ctx, input }) => {
+      const opp = await prisma.opportunity.findFirst({
+        where: { id: input.id, tenantId: ctx.tenantId, deletedAt: null },
+      });
+      if (!opp) throw new TRPCError({ code: 'NOT_FOUND' });
+      const canSeeAll = await hasPermission(ctx.user.id, 'opportunity:read_others');
+      if (!canSeeAll && opp.ownerId !== ctx.user.id) {
+        throw new TRPCError({ code: 'NOT_FOUND' }); // 404 pra evitar enumeration
+      }
+      return opp;
+    }),
+});
+```
+
+**Aplica também em:**
+- `reports.performance` — a linha "eu vejo minha" já existe (Sprint 5 preserva). Trocar guard implicit por check explícito via `hasPermission('opportunity:read_others')`.
+- `activities.list`, `tasks.list`, `documents.listByOpportunity` — se opp é filtrada, atividades/tasks/docs seguem.
+
+### 6.5. Anti-escalada em `permissions.grant`/`revoke` (crítico segurança)
+
+Sem esse guard, qualquer user com `user:grant_permissions` (mesmo via override temporário) consegue conceder permissions arbitrárias que ele próprio não tem. Cenário de ataque: admin lateral com `user:grant_permissions` mas sem `ai:manage_breaker` → concede `ai:manage_breaker` a si mesmo → escalada.
+
+**Regra padrão:** *você só delega o que você tem.* Aplicada em grant, revoke e restore.
+
+```ts
+if (ctx.user.platformRole !== 'PLATFORM_OWNER') {
+  const callerHas = await hasPermission(ctx.user.id, input.permission as Permission);
+  if (!callerHas) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: `Você não tem "${input.permission}" e não pode alterá-la a outros.`,
+    });
+  }
+}
+```
+
+**Platform Owner** é a exceção legítima (bypass total já preservado do Sprint 15A) — pode conceder qualquer permission pra debug/recovery cross-tenant sem estar logado no tenant.
+
+Testes obrigatórios:
+- ADMIN com `ai:configure_global` concede `ai:configure_global` a GESTOR ✓
+- ADMIN sem `audit:read` tentando conceder `audit:read` → 403
+- Platform Owner concede qualquer permission ✓
+- Mesmo guard aplica em `revoke` e `restore`
+
+### 6.6. `cachedPermissions` — semântica `null` vs `[]`
+
+Distinção crítica pra evitar loop de recompute:
+
+| Valor | Significado |
+|---|---|
+| `null` | "Cache não computado" — hasPermission chama `computeAndCacheUserPermissions` e popula |
+| `[]` | "Cache computado, resultado legítimamente vazio" — PARCEIRO com todas as defaults revogadas |
+| `['x', 'y', ...]` | Cache hit normal |
+
+Sem essa distinção, um user com cache `[]` faria recompute em cada request pra sempre. Impacto: 3+ queries por procedure em vez de 1.
+
+Regras:
+- Migration 0030: coluna nullable
+- `invalidateUserPermissionsCache`: seta `null` (não `[]`)
+- `hasPermission`: checa `!== null` antes de `.includes`
+- `computeAndCacheUserPermissions`: sempre grava array (mesmo que vazio)
+
+**Comunicação com tenants:** marcar no changelog `CLAUDE.md` que ANALISTA agora vê só suas próprias opps. Se algum tenant específico precisa manter comportamento antigo, admin concede `opportunity:read_others` via override individual — sem mudar role.
+
+**Testes obrigatórios (adicionar em §10):**
+
+- `opportunities.list` com role ANALISTA sem override → só retorna opps onde `ownerId = ctx.user.id`
+- `opportunities.list` com role ANALISTA + override granted → retorna todas
+- `opportunities.byId` alheia sem `read_others` → 404
+- `opportunities.byId` alheia com `read_others` → 200
+- `reports.performance` respeita mesma regra
 
 ---
 
@@ -732,6 +899,21 @@ export const permissionsRouter = router({
       validatePermissionInCatalog(input.permission);
       await ensureSameTenant(input.userId, ctx.tenantId);
 
+      // ⚠️ Guard anti-escalada de privilégio (Sprint 15E crítico):
+      // Você só pode delegar o que você mesmo tem. Bloqueia cenário de
+      // "co-admin temporário com user:grant_permissions concede audit:read
+      // ou ai:manage_breaker que ele próprio não tem".
+      // Platform Owner (bypass) permanece isento.
+      if (ctx.user.platformRole !== 'PLATFORM_OWNER') {
+        const callerHas = await hasPermission(ctx.user.id, input.permission as Permission);
+        if (!callerHas) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: `Você não tem "${input.permission}" e não pode concedê-la a outros.`,
+          });
+        }
+      }
+
       await prisma.userPermissionOverride.upsert({
         where: { user_permission_unique: { userId: input.userId, permission: input.permission } },
         create: {
@@ -768,7 +950,12 @@ export const permissionsRouter = router({
   // Revoga permission (mesmo padrão de grant, action='revoked')
   revoke: requirePermission('user:grant_permissions')
     .input(z.object({ userId: zUuid, permission: z.string(), reason: z.string().max(500).optional() }))
-    .mutation(async ({ input, ctx }) => { /* análogo */ }),
+    .mutation(async ({ input, ctx }) => {
+      // Guard anti-escalada aplica também a revoke: só quem tem a permission
+      // pode "tirá-la" via override. Bloqueia caso de admin lateral revogar
+      // audit:read de um DIRETOR sem ter audit:read ele mesmo.
+      /* análogo a grant, incluindo o guard */
+    }),
 
   // Deleta override — volta a usar default do role
   restore: requirePermission('user:grant_permissions')
@@ -1024,6 +1211,11 @@ Admin convida ANALISTA mas com permissions extra pré-aplicadas. UI do modal inv
 | Sprint 15D adicionou `GESTOR_INBOUND` em `approval_rules.approver_roles` de algum tenant seed | Migration 0030 sanitiza com `array_remove` antes de castar |
 | Sprint 15F já tem permission `ai:configure` — colisão com split granular | Preservar `ai:configure` como alias (default para o dueto `ai:configure_global` + `ai:configure_feature`) OU migrar catallers em uma passada só |
 | Testes existentes assumem role check em mocks | Refactor mecânico: substituir `role: 'ADMIN'` por `cachedPermissions: ['user:create', ...]` — grep pattern |
+| ANALISTA passa a ver só suas próprias opps (breaking change) | Comunicação explícita no CLAUDE.md; admin pode reverter caso a caso com override `opportunity:read_others`. Ver §6.4 |
+| Escalada de privilégio via `permissions.grant` | Guard "só delega o que tem" em grant/revoke/restore. Platform Owner isento. Testes §6.5 |
+| `whoHas` retorna vazio pós-migration (users sem cache) | Script obrigatório `scripts/rbac-backfill-cache.ts` roda logo após `migrate deploy`. Ver §5.4 rollout ordenado |
+| Loop de recompute do cache pra PARCEIRO com defaults revogadas | Coluna `cached_permissions` nullable + `invalidate` seta `null`. Ver §6.6 |
+| Grants redundantes no backfill GESTOR_INBOUND → ADMIN | `ON CONFLICT (user_id, permission) DO NOTHING` na migration. Overrides ficam por rastreabilidade. Aceitável |
 
 ---
 

@@ -245,13 +245,15 @@ Rationale: rodar import é ação delicada (pode duplicar dados) — ADMIN + GES
 
 | Role | # defaults | Uso típico |
 |---|:-:|---|
-| ADMIN | **55** | Configuração do tenant, gestão de users, tudo |
-| DIRETOR_COMERCIAL | **34** | Aprovação de propostas, pipeline amplo, reports financeiros |
-| DIRETOR_OPERACOES | **24** | Contratos, handoff, parceiros, leitura de opps |
-| DIRETOR_FINANCEIRO | **17** | Aprovação por margem, reports financeiros, leitura ampla |
-| GESTOR | **29** | Team lead — CRUD opps, tasks, parceiros, imports |
-| ANALISTA | **17** | Execução — CRUD suas opps, tasks, AI summary/extraction |
-| PARCEIRO | **6** | Só o essencial das opps em que está engajado |
+| ADMIN | **60** | Configuração do tenant, gestão de users, tudo |
+| DIRETOR_COMERCIAL | **39** | Aprovação de propostas, pipeline amplo, reports financeiros |
+| DIRETOR_OPERACOES | **25** | Contratos, handoff, parceiros, leitura de opps |
+| DIRETOR_FINANCEIRO | **18** | Aprovação por margem, reports financeiros, leitura ampla |
+| GESTOR | **31** | Team lead — CRUD opps, tasks, parceiros, imports |
+| ANALISTA | **23** | Execução — CRUD suas opps + tasks + documents + AI summary/extraction |
+| PARCEIRO | **5** | Só o essencial das opps em que está engajado |
+
+**Contagens validadas célula a célula em 2026-07-01.** Fonte da verdade — quando implementar `ROLE_DEFAULT_PERMISSIONS` no `rbac.ts`, cada `Set<Permission>` deve ter EXATAMENTE esse número de entries.
 
 Total permissions distintas: **65**.
 
@@ -288,7 +290,7 @@ Alias `ai:configure` (v1 monolítica) removido — ninguém deve depender do che
 ## Cenários operacionais reais (justificativa da granularidade)
 
 1. **"Estagiária ANALISTA sem valores R$"**
-   Grant: default. Revoke: `reports:financial` já é default `false` — sem ação.
+   Nada a fazer — ANALISTA já não tem `reports:financial` por padrão. Se admin havia concedido override e quer revogar, chamar `permissions.restore` (deleta o override → volta pro default `false`).
 
 2. **"GESTOR também aloca prospects inbound"**
    Grant: `inbound:view_queue` + `inbound:assign_prospects` em cima do role GESTOR. Não precisa mudar role.

@@ -180,6 +180,37 @@ telas (kanban column, breadcrumb, conversion-rates) seguem usando
 `STAGE_LABELS` curto; os dois mapas são intencionalmente
 separados. 3 testes novos validando cobertura completa do enum.
 
+### ~~P-12. Modal rouba foco a cada keystroke~~ ✅ FECHADO
+**Resolvido em 2026-06-30.** Sintoma: em qualquer modal de criação/
+edição (12 callers no app — `/platform/tenants`, `/companies`,
+`/admin/users`, etc.), a cada tecla digitada o cursor pulava pro
+primeiro input. Forms intestáveis.
+
+**Causa raiz:** `src/components/ui/modal.tsx` linhas 34-63 tinha
+`onClose` nas deps do `useEffect` que faz focus inicial + listener
+de Tab trap/ESC. Callers passam `onClose={() => setOpen(false)}`
+inline — cada render do parent (disparado por `setForm` a cada
+keystroke) criava nova closure, mudando a identidade de `onClose`,
+disparando o cleanup+setup do effect por completo, com
+`focusables[0].focus()` roubando o foco.
+
+**Fix:** capturar `onClose` em `onCloseRef` e remover das deps do
+effect principal. Effect agora depende só de `[open]`, roda uma
+única vez ao abrir e desmonta ao fechar. ESC continua funcionando
+via `onCloseRef.current()`. Tab trap intacto.
+
+**Escopo:** único arquivo modificado. Fix no `Modal` propaga
+automaticamente pros 12 callers sem tocar em nenhum deles.
+
+**Testes:** `tests/unit/modal.test.tsx` novo com 3 casos:
+(1) re-render do parent com `onClose` inline não rouba foco do
+input ativo — reproduz o bug via 5 re-renders forçados;
+(2) ESC continua fechando o modal;
+(3) Tab trap continua ciclando (Shift+Tab do primeiro → último,
+Tab do último → primeiro). Baseline 378 → 381 passing.
+Verificação cruzada: reverter só o modal.tsx faz o teste (1)
+falhar, confirmando que ele captura o bug real.
+
 ---
 
 ## 📅 Sprints planejados (próximas 4–6 semanas)

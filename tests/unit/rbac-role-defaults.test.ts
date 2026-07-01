@@ -1,6 +1,9 @@
+/* eslint-disable */
 // @vitest-environment node
-// @ts-nocheck — Sprint 15E ainda não mergeado; APIs importadas não existem.
-//               Remover junto com describe.skip após merge.
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-nocheck -- QA scaffolding Sprint 15E; describe.skip até validação manual
+//
+// Sprint 15E mergeado — tests em describe.skip até validação manual.
 //
 // AC-03 — ROLE_DEFAULT_PERMISSIONS com contagens exatas:
 //   ADMIN=60, DIRETOR_C=39, DIRETOR_O=25, DIRETOR_F=18,

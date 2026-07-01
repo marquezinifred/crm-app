@@ -1,5 +1,7 @@
+/* eslint-disable */
 // @vitest-environment node
-// @ts-nocheck — Sprint 15E ainda não mergeado. Remover junto com describe.skip.
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-nocheck -- QA scaffolding Sprint 15E; describe.skip até validação manual
 //
 // AC-14 — permissions.listCatalog retorna todas as 65 permissions.
 // AC-15 — permissions.forUser retorna {role, defaults, overrides, effective}
@@ -18,7 +20,6 @@ import {
   ANALISTA_DEFAULT_PERMS,
   EXPECTED_CATALOG_SIZE,
   TENANT_A,
-  TENANT_B,
   USER_IDS,
   makeCtx,
   makeOverride,

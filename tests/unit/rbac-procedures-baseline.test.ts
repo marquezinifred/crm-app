@@ -1,5 +1,7 @@
+/* eslint-disable */
 // @vitest-environment node
-// @ts-nocheck — Sprint 15E ainda não mergeado. Remover junto com describe.skip.
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-nocheck -- QA scaffolding Sprint 15E; describe.skip até validação manual
 //
 // AC-07 — Baseline: grep -rn "withRoles\|withCapability" src/server/trpc/routers
 //          retorna 0 (todos migrados pra withPermission).

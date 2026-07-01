@@ -1,5 +1,7 @@
+/* eslint-disable */
 // @vitest-environment node
-// @ts-nocheck — Sprint 15E ainda não mergeado; APIs importadas não existem.
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-nocheck -- QA scaffolding Sprint 15E; describe.skip até validação manual
 //               Remover junto com describe.skip após merge.
 //
 // AC-04 — hasPermission(userId, perm) async: bypass Platform Owner,

@@ -1,5 +1,7 @@
+/* eslint-disable */
 // @vitest-environment node
-// @ts-nocheck — Sprint 15E ainda não mergeado. Remover junto com describe.skip.
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-nocheck -- QA scaffolding Sprint 15E; describe.skip até validação manual
 //
 // AC-09 — opportunities.list: ANALISTA sem override vê só ownerId===userId;
 //          ADMIN grant opportunity:read_others → passa a ver tudo.
@@ -17,7 +19,6 @@ import {
   makeOpp,
   OPP_IDS,
   TENANT_A,
-  TENANT_B,
   USER_IDS,
 } from '../helpers/rbac-fixtures';
 

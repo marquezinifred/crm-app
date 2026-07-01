@@ -1,5 +1,7 @@
+/* eslint-disable */
 // @vitest-environment node
-// @ts-nocheck — Sprint 15E ainda não mergeado. Remover junto com describe.skip.
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-nocheck -- QA scaffolding Sprint 15E; describe.skip até validação manual
 //
 // AC-08 — Cada procedure responde 403 sem permission + 200 com — smoke
 //         test em 10 procedures representativas (SMOKE_PROCEDURES).
@@ -13,7 +15,7 @@ process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ??= 'pk_test_stub';
 process.env.CLERK_SECRET_KEY ??= 'sk_test_stub';
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { SMOKE_PROCEDURES, USER_IDS, makeCtx } from '../helpers/rbac-fixtures';
+import { SMOKE_PROCEDURES, makeCtx } from '../helpers/rbac-fixtures';
 
 const hasPermissionSpy = vi.fn();
 

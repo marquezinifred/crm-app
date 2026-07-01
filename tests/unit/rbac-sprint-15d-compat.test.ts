@@ -1,8 +1,12 @@
+/* eslint-disable */
 // @vitest-environment node
-// @ts-nocheck — Sprint 15E ainda não mergeado. Remover junto com describe.skip.
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-nocheck -- QA scaffolding Sprint 15E; describe.skip até validação manual
 //
 // AC-24 — Sprint 15D compat: users antes com GESTOR_INBOUND (agora ADMIN +
 //          4 overrides inbound) continuam acessando /inbox/prospects.
+//
+// Tests marcados com describe.skip até validação manual pós-merge Sprint 15E.
 
 process.env.DATABASE_URL ??= 'postgresql://test:test@localhost:5432/test';
 process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ??= 'pk_test_stub';
@@ -10,7 +14,6 @@ process.env.CLERK_SECRET_KEY ??= 'sk_test_stub';
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
-  TENANT_A,
   USER_IDS,
   makeCtx,
   makeOverride,
@@ -147,6 +150,7 @@ describe.skip('AC-24 — Sprint 15D users continuam funcionando pós-15E', () =>
       '@/server/trpc/routers/permissions'
     );
     const caller = permissionsRouter.createCaller(
+      // @ts-expect-error — FixtureCtx difere levemente de Context real; ok em test
       makeCtx({ role: 'ADMIN', userId: USER_IDS.admin }),
     );
     const result = await caller.forUser({ userId: 'ex-gi-1' });

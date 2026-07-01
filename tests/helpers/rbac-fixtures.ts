@@ -194,6 +194,16 @@ export function makeCtx(overrides: Partial<{
   };
 }
 
+/**
+ * Versão de `makeCtx` que devolve o tipo esperado pelo `createCaller` real
+ * do tRPC. Usa cast `unknown` porque `FixtureUser` é subset estruturalmente
+ * compatível em runtime — pra evitar `@ts-expect-error` em cada linha.
+ * Só use dentro de testes skipados enquanto Sprint 15E ainda não é validado.
+ */
+export function makeCtxForCaller(overrides: Parameters<typeof makeCtx>[0] = {}): unknown {
+  return makeCtx(overrides);
+}
+
 // ---- Opportunity factory ------------------------------------------------
 
 export interface FixtureOpp {

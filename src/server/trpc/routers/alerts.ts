@@ -75,6 +75,7 @@ export const alertsRouter = router({
         after: updated,
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return updated;
     }),

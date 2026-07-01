@@ -85,6 +85,7 @@ export const inboxRouter = router({
         after: { opportunityId: input.opportunityId, activityId: activity.id },
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return { activityId: activity.id };
     }),
@@ -109,6 +110,7 @@ export const inboxRouter = router({
         after: { reason: input.reason },
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return { ok: true };
     }),
@@ -162,6 +164,7 @@ export const adminEmailRouter = router({
         after: { slug: input.slug },
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return { ok: true };
     }),
@@ -179,6 +182,7 @@ export const adminEmailRouter = router({
       after: { slug },
       ip: ctx.ip,
       userAgent: ctx.userAgent,
+      tenantIdOverride: ctx.tenantId,
     });
     return { slug };
   }),

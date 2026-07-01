@@ -70,6 +70,7 @@ export const partnerEngagementsRouter = router({
         after: engagement,
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return engagement;
     }),
@@ -120,6 +121,7 @@ export const partnerEngagementsRouter = router({
         after: updated,
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return updated;
     }),
@@ -156,6 +158,7 @@ export const partnerEngagementsRouter = router({
         after: updated,
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return updated;
     }),

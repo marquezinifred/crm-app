@@ -54,6 +54,7 @@ export const activitiesRouter = router({
       after: { type: created.type, opportunityId: created.opportunityId },
       ip: ctx.ip,
       userAgent: ctx.userAgent,
+      tenantIdOverride: ctx.tenantId,
     });
     return created;
   }),
@@ -173,6 +174,7 @@ export const activitiesRouter = router({
         after: { tasksCreated: input.confirmedTasks.length },
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
 
       return { activityId: activity.id, tasksCreated: input.confirmedTasks.length };
@@ -255,6 +257,7 @@ export const tasksRouter = router({
         after: t,
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return t;
     }),
@@ -285,6 +288,7 @@ export const tasksRouter = router({
         after: { status: updated.status },
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return updated;
     }),

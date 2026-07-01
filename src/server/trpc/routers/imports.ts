@@ -112,6 +112,7 @@ export const importsRouter = router({
         after: { entity: job.entity, strategy: input.strategy },
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
 
       return { ok: true };
@@ -128,6 +129,7 @@ export const importsRouter = router({
       recordId: input.id,
       ip: ctx.ip,
       userAgent: ctx.userAgent,
+      tenantIdOverride: ctx.tenantId,
     });
     return { ok: true };
   }),

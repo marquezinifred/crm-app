@@ -189,6 +189,7 @@ export const opportunitiesRouter = router({
       after: opp,
       ip: ctx.ip,
       userAgent: ctx.userAgent,
+      tenantIdOverride: ctx.tenantId,
     });
     return opp;
   }),
@@ -209,6 +210,7 @@ export const opportunitiesRouter = router({
       after: updated,
       ip: ctx.ip,
       userAgent: ctx.userAgent,
+      tenantIdOverride: ctx.tenantId,
     });
     return updated;
   }),
@@ -271,6 +273,7 @@ export const opportunitiesRouter = router({
         after: member,
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return member;
     }),
@@ -287,6 +290,7 @@ export const opportunitiesRouter = router({
           before: { userId: input.userId },
           ip: ctx.ip,
           userAgent: ctx.userAgent,
+          tenantIdOverride: ctx.tenantId,
         });
         return { ok: true };
       },

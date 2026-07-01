@@ -93,6 +93,7 @@ export const contactsRouter = router({
       after: contact,
       ip: ctx.ip,
       userAgent: ctx.userAgent,
+      tenantIdOverride: ctx.tenantId,
     });
     return contact;
   }),
@@ -115,6 +116,7 @@ export const contactsRouter = router({
       after: updated,
       ip: ctx.ip,
       userAgent: ctx.userAgent,
+      tenantIdOverride: ctx.tenantId,
     });
     return updated;
   }),
@@ -135,6 +137,7 @@ export const contactsRouter = router({
       before,
       ip: ctx.ip,
       userAgent: ctx.userAgent,
+      tenantIdOverride: ctx.tenantId,
     });
     return { ok: true };
   }),
@@ -175,6 +178,7 @@ export const contactsRouter = router({
         after: updated,
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return updated;
     }),

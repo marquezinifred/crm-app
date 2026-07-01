@@ -105,6 +105,7 @@ export const privacyRouter = router({
           after: { exportKey, requestType: req.requestType },
           ip: ctx.ip,
           userAgent: ctx.userAgent,
+          tenantIdOverride: ctx.tenantId,
         });
         return done;
       } catch (err) {
@@ -124,6 +125,7 @@ export const privacyRouter = router({
         after: { reason: input.reason },
         ip: ctx.ip,
         userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
       });
       return updated;
     }),

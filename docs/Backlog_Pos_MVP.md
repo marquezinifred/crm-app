@@ -46,27 +46,29 @@ fechou parcialmente — auditoria recomendada.
 **Esforço:** ~1.5h. **Bloqueador:** depende app rodando local +
 seed E2E.
 
-### P-04. Bug do audit log em outros sprints (não só theme.update)
-**Severidade:** Alta. Memory `audit-trpc-context-loss.md` documenta:
-o fix de `93ca6df` corrigiu `audit.service` pra usar `runAsSystem`
-sempre, **mas** o caminho A (sem `tenantIdOverride`) ainda é
-silencioso em vários callers.
+### ~~P-04. Bug do audit log em outros sprints (não só theme.update)~~ ✅ FECHADO
+**Resolvido em 2026-06-30.** Refactor mecânico em 19 routers tRPC:
+todas as 54 chamadas `audit({...})` sem `tenantIdOverride` receberam
+`tenantIdOverride: ctx.tenantId,` como último campo. Arquivos tocados:
+`activities`, `ai-config`, `alerts`, `approval-rules`, `companies`,
+`contacts`, `contracts`, `documents`, `imports`, `inbox`,
+`opportunities`, `partner-engagements`, `partners`, `privacy`,
+`products`, `proposals`, `reports`, `users`. `search.ts` só tinha
+comentário (`* Read-only, alto volume — NÃO chama audit()`),
+skipado.
 
-Callers que ainda dependem de AsyncLocalStorage perfeito:
-- `src/server/trpc/routers/companies.ts` (3 ocorrências)
-- `src/server/trpc/routers/contracts.ts` (4 ocorrências)
-- `src/server/trpc/routers/proposals.ts` (3 ocorrências)
-- `src/server/trpc/routers/approval-rules.ts` (5 ocorrências)
-- `src/server/trpc/routers/partners.ts` (provável)
-- `src/server/trpc/routers/documents.ts` (provável)
-- `src/server/trpc/routers/imports.ts` (provável)
+**Regressão:** `tests/unit/audit-context-loss.test.ts` novo com
+4 cenários: (1) audit dentro de `runWithTenant` sem override usa
+ALS, (2) contexto perdido + override grava com override — o fix,
+(3) sem contexto e sem override descarta com warn (documenta o
+bug histórico como assert), (4) override tem precedência sobre
+contexto. Total 437 passing (baseline 433 + 4 novos), 2 skipped,
+4 pré-existentes.
 
-**Fix:** passar `tenantIdOverride: ctx.tenantId` em cada `audit({...})`
-desses arquivos.
-
-**Esforço:** ~2h (grep + sed mecânico + spot check). **Status:** débito
-aberto; não verificado se Sprint 15A/15B passaram nesses arquivos
-com fix incidental.
+**Débito adjacente identificado:** services em `src/server/services/*`
+que chamam `audit()` também podem estar afetados. Escopo desse
+fix foi rigidamente `src/server/trpc/routers/*.ts` conforme spec.
+Ver P-20 se levantamento aplicável for feito.
 
 ### P-05. Lighthouse audit em CI
 **Severidade:** Média. 🟡 do Sprint 14.5 item 8. Script + workflow

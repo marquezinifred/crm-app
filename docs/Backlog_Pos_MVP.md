@@ -449,20 +449,54 @@ Baseline 381 → 404 passing. Type-check zero. Lint zero.
   neste rollout; adicionar `sortBy`/`sortDir` na query tRPC
   quando surgir
 
-### P-23. Sprint 15F — UI `/admin/ai` (4 Cards) adiada
-**Severidade:** Alta (feature multi-provider inacessível pelo tenant sem UI).
-Backend do Sprint 15F completo (routers, adapters, resolução em cascata,
-fallback, testKey, breakerStatus). Falta a UI dos 4 Cards da spec §3.3:
-- Card A: Configuração padrão do tenant
-- Card B: Tabela features com override por (tenant, feature)
-- Card C: Uso e custo (últimos 7 e 30 dias)
-- Card D: Alertas ativos
+### ~~P-23. Sprint 15F — UI `/admin/ai` (4 Cards)~~ ✅ FECHADO
+**Resolvido em 2026-06-30 pelos commits `17ef181` + `26833ac`.**
+Backend do Sprint 15F já expunha todos os procedures em
+`aiConfig` (`updateConfig`, `listFeatures`, `updateFeature`,
+`testKey`, `breakerStatus`, `clearCircuitBreaker`,
+`monthlyUsage`). Faltava só a UI que consome. Refactor completo
+de `src/app/admin/ai/page.tsx` em 4 cards:
 
-**Impacto:** enquanto UI não existir, feature `MULTI_AI_ENABLED=true` só é
-utilizável via Prisma Studio ou seed direto. Path legado
-(`getAnthropic()` global) continua funcional como fallback.
+- **Card A** — Configuração padrão do tenant: provider, modelo e
+  chave global; botão "Testar chave" chama `aiConfig.testKey` e
+  mostra latência/erro sem expor a chave.
+- **Card B** — Features de IA: tabela agrupada por
+  `AiFeatureCategory` (Resumos, Scoring, Busca, Classificação,
+  Geração, Extração). Cada linha mostra provider/modelo
+  efetivos, marca "padrão" quando herdado, badge de status
+  (Ativa/Add-on/Desativada), estado da chave (Custom/Herdada)
+  e fallback configurado. Clique na linha abre modal com trinca
+  provider/modelo/chave própria + trinca fallback + alerta de
+  custo mensal. Testar chave por-feature reusa o mesmo procedure.
+- **Card C** — Uso e custo: total de tokens + custo USD do mês
+  corrente + breakdown por (provider, modelo) via
+  `aiConfig.monthlyUsage`. Breakdown primary vs fallback fica de
+  fora (débito residual — precisa novo procedure agregando
+  `ai_usage_logs.used_fallback`).
+- **Card D** — Alertas: pura em
+  [src/lib/ai/admin-alerts.ts](../src/lib/ai/admin-alerts.ts).
+  Regras: (1) provider com circuit aberto → 🔴 com botão
+  "Limpar" que dispara `AlertDialog` → `clearCircuitBreaker`;
+  (2) feature ativa sem chave própria E tenant sem chave global
+  → 🔴 sem-chave. Refinamentos futuros: fallback frequente e
+  custo acima do threshold.
 
-**Esforço:** ~2 dias.
+Testes: +16 novos — `admin-ai-alerts.test.ts` (10 casos cobrindo
+matriz de combinações CIRCUIT_OPEN × MISSING_KEY, DISABLED
+suprime, ADDON_ACTIVE dispara, IDs únicos) e
+`admin-ai-page.test.tsx` (6 casos smoke com trpc mockado). Total
+541 passing / 10 falhas + 2 skipped pré-existentes por env vars.
+Type-check zero. Lint zero.
+
+**Débitos residuais registrados aqui:**
+- Card C sem breakdown primary vs fallback (precisa procedure novo
+  em `aiConfig.monthlyUsageByFallback` ou expor `used_fallback`
+  no `monthlyUsage` atual).
+- Alerta "feature caiu em fallback N vezes em 24h" e "custo acima
+  do threshold" — requerem query em `ai_usage_logs`.
+- Chave viaja plaintext no wire tRPC (encrypt server-side em
+  `updateConfig`/`updateFeature`). MVP aceitável — HTTPS obrigatório
+  em produção. Melhoria: encrypt-in-client com pubkey por tenant.
 
 ### P-24. Sprint 15F — UI `/platform/ai-marketplace` form adiada
 **Severidade:** Média. Backend

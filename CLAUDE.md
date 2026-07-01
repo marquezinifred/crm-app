@@ -942,6 +942,36 @@ foram fechados na Sprint 11.
   `/admin` e `/platform` (`/pipeline`, `/pipeline/[id]`, `/inbox`,
   `/contacts`, `/imports`, `/more`, `/reports`) ainda têm `<h1>`
   ad-hoc
+- P-23 UI `/admin/ai` (4 Cards) — commits `17ef181` + `26833ac`.
+  Sprint 15F entregou backend multi-provider completo, mas UI
+  estava pré-15F (só provider global). Refactor completo de
+  `src/app/admin/ai/page.tsx` em 4 cards consumindo `aiConfig`
+  router:
+  - Card A: configuração padrão do tenant (provider/model/apiKey)
+    + botão "Testar chave" (`testKey` retorna latência sem eco
+    da chave)
+  - Card B: tabela agrupada por `AiFeatureCategory` (5 features
+    Sprint 15F), badge de status, indicador Herdada/Custom.
+    Clique abre `FeatureEditModal` com trinca provider/modelo/
+    chave própria + trinca fallback + costAlertBrlMonthly →
+    `updateFeature`
+  - Card C: total mês corrente (tokens + custo USD) + breakdown
+    por (provider, modelo) via `monthlyUsage`. Breakdown primary
+    vs fallback fica pra depois (débito residual em P-23).
+  - Card D: alertas puros — regra em `src/lib/ai/admin-alerts.ts`
+    (novo, isolado da page pra testar sem tRPC). CIRCUIT_OPEN
+    dispara `AlertDialog` de confirmação → `clearCircuitBreaker`;
+    MISSING_KEY quando feature ativa sem chave e tenant sem chave
+    global. Refinamentos (fallback frequente, custo threshold)
+    registrados como débitos residuais em P-23.
+  Testes: +16 (10 casos puros em `admin-ai-alerts.test.ts`,
+  6 casos smoke em `admin-ai-page.test.tsx` com trpc mockado
+  no padrão do `command-palette.test.tsx`). Total 541 passing /
+  10 falhas + 2 skipped pré-existentes por env vars
+  (field-encryption, rate-limiter, ai-pricing, document-compare,
+  summary-parser, communication-summary-errors — todos falham
+  no import por env vars ausentes; irrelevante a este chip).
+  Type-check zero. Lint zero. Sem alterações no backend.
 
 ---
 

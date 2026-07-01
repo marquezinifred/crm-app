@@ -11,6 +11,90 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 ## Sprint atual
 
+> **Sprint 15F — IA Multi-Provider por Feature + Fallback:
+> ✅ BACKEND CONCLUÍDO em 2026-06-30**
+>
+> Spec: `docs/Sprint_15F_IA_Multi_Provider.md`. Feature flag
+> `MULTI_AI_ENABLED` (default `false`) — path legado permanece ativo;
+> ativar por-tenant em staging antes de flag global.
+>
+> **Entregue (Fases 1–4 backend):**
+>  - ✅ Migration `0027_ai_multi_provider` — `defaultProvider` de TEXT
+>    → `AIProvider` enum + colunas em `tenant_ai_features`
+>    (providerOverride/modelOverride/apiKeyEncrypted, fallbackProvider/
+>    fallbackModel/fallbackApiKeyEncrypted, costAlertBrlMonthly,
+>    updatedAt) + index parcial de resolução
+>  - ✅ Migration `0028_ai_usage_fallback_tracking` —
+>    `ai_usage_logs.used_fallback` + `configured_provider` pra medir
+>    fallback rate por feature
+>  - ✅ `src/lib/ai/adapters/` — `LlmClient` + `AiProviderError` +
+>    `classifyStatus` (mapping padronizado HTTP → kind/retryable).
+>    4 adapters: `AnthropicAdapter` (chat), `OpenAIAdapter`
+>    (chat + embed), `PerplexityAdapter` (extends OpenAI, baseURL
+>    perplexity.ai), `GoogleAdapter` (Gemini via REST direto — sem
+>    dep nova). `registry.ts` com `createClient` +
+>    `providerSupportsEmbedding`
+>  - ✅ `src/lib/ai/breakers.ts` — Map por-`(provider, tenant)` com
+>    TTL 1h + cleanup + `clearBreakers` + `snapshotBreakers`.
+>    In-memory (aceitável no MVP; migrar pra Redis se serverless
+>    multi-pod virar gargalo)
+>  - ✅ `src/lib/ai/resolve.ts` — `resolveAiConfig` cascata
+>    (override → default → global). Curto-circuito same-key.
+>    Validação `supportsEmbedding` pra features SEARCH.
+>    Chave sai como plaintext SÓ no objeto retornado
+>  - ✅ `src/lib/ai/call.ts` — `callAiWithFallback`:
+>    (1) circuit aberto pula pro próximo attempt;
+>    (2) `retryable=false` NÃO registra no breaker mas fallback é
+>    tentado (chave diferente pode funcionar);
+>    (3) `MODEL_NOT_FOUND` e `CONTEXT_LENGTH` abortam sem fallback
+>  - ✅ `src/lib/ai/dispatch.ts` — `dispatchChat`/`dispatchEmbed`
+>    roteiam pelo `MULTI_AI_ENABLED`: false → legado
+>    (`callAiFeature` + `getAnthropicForTenant`); true →
+>    `callAiWithFallback`. Interface uniforme retorna
+>    `{text, tokens, usedProvider, configuredProvider, usedFallback}`
+>  - ✅ **5 services refatorados preservando DataMaskingService**:
+>    `communication-summary`, `conversion-rate-suggestion`,
+>    `email-link`, `document-compare`, `semantic-search`. Teste
+>    estrutural `ai-masking-preserved.test.ts` faz grep no source
+>    (ordem `masking.mask` → `dispatchChat`) pra pegar regressão
+>  - ✅ `getAnthropic()` re-deprecated com nota de remoção Sprint 15G
+>  - ✅ Router tRPC `aiConfig` estendido: `listFeatures`,
+>    `updateFeature` (fallback trinca), `testKey` (retorna
+>    `{ok, latencyMs, reason?}` — nunca eco a chave),
+>    `breakerStatus`, `clearCircuitBreaker`. Audit em todas as
+>    mutations (`tenant.ai.updateGlobal/updateFeature/clearCircuitBreaker`)
+>  - ✅ Router `platform.aiMarketplace.setFeature` estendido pra
+>    editar `defaultProvider`/`defaultModel` (Platform Owner only)
+>  - ✅ Env: `MULTI_AI_ENABLED` (default `false`)
+>  - ✅ Testes: 103 novos. Total **491/493** (2 skipped
+>    pré-existentes). Type-check zero. Lint zero
+>
+> **Pendências operacionais (UI polish + rollout):**
+>  - 🟡 UI dos 4 Cards em `/admin/ai` (spec §3.3) — backend expõe
+>    tudo; UI atual pré-15F ainda funciona mas não mostra overrides
+>    por feature nem fallback. Trabalho mecânico ~2 dias
+>  - 🟡 UI `/platform/ai-marketplace` — form Adicionar Feature nova
+>    e edit inline de `defaultProvider`/`defaultModel`.
+>    Router pronto, UI atual pré-15F só lê
+>  - 🟡 Rollout: aplicar migrations 0027 + 0028 no Neon dev; ativar
+>    `MULTI_AI_ENABLED=true` só pro tenant Fred; monitorar 3–5 dias;
+>    depois early adopters; depois flag global
+>
+> **Segurança validada:**
+>  - ✅ `resolveAiConfig` decriptografa chave só no objeto retornado
+>    (não passa por logger, não vai pra Redis)
+>  - ✅ `testKey` retorna `{ok, latencyMs, reason?}` — nunca eco a chave
+>  - ✅ Chaves são criptografadas antes de `prisma.update`
+>  - ✅ `updateFeature` audita com `hasOwnKey`/`hasFallbackKey`
+>    booleanos, sem o valor
+>
+> **Compat com legado:**
+>  - Flag `false` mantém 100% comportamento pré-15F
+>    (services chamam `dispatchChat` que delega pro
+>    `callAiFeature`+`getAnthropicForTenant`)
+>
+> 🎉 Backend completo. Falta UI polish + rollout gradual.
+
 > **Fix corretivo — IA per-tenant + erros estruturados (P-14/P-15):
 > ✅ CONCLUÍDO em 2026-06-30**
 >

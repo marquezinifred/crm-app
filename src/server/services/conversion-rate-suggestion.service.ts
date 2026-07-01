@@ -1,9 +1,9 @@
 import { TRPCError } from '@trpc/server';
 import { prisma } from '@/server/db/client';
 import { masking } from '@/lib/ai/masking';
-import { getAnthropicForTenant, MODELS } from '@/lib/ai/claude';
+import { MODELS } from '@/lib/ai/claude';
 import { mapAnthropicError } from '@/lib/ai/anthropic-errors';
-import { callAiFeature } from '@/lib/ai/feature-gate';
+import { dispatchChat } from '@/lib/ai/dispatch';
 import { logAiUsage } from './ai-usage.service';
 import { CircuitBreaker } from './ai-circuit-breaker';
 import {
@@ -133,25 +133,27 @@ CONTRATO deve sempre ser 100 (estágio terminal).`;
   let raw = '';
   let success = true;
   let providerError: TRPCError | null = null;
+  let usedProvider: AIProvider = AIProvider.ANTHROPIC;
+  let configuredProvider: AIProvider = AIProvider.ANTHROPIC;
+  let usedFallback = false;
+  let effectiveModel = MODELS.HAIKU;
   try {
-    const completion = await callAiFeature(
-      'conversion-rate-suggestion',
-      { tenantId },
-      async ({ model }) => {
-        const client = await getAnthropicForTenant(tenantId);
-        return client.messages.create({
-          model: model || MODELS.HAIKU,
-          max_tokens: 512,
-          messages: [{ role: 'user', content: masked }],
-        });
+    // Sprint 15F — `masked` já contém contexto mascarado pelo DataMaskingService.
+    const out = await dispatchChat({
+      featureCode: 'conversion-rate-suggestion',
+      tenantId,
+      chat: {
+        messages: [{ role: 'user', content: masked }],
+        maxTokens: 512,
       },
-    );
-    promptTokens = completion.usage.input_tokens;
-    completionTokens = completion.usage.output_tokens;
-    raw = completion.content
-      .filter((c): c is { type: 'text'; text: string } => c.type === 'text')
-      .map((c) => c.text)
-      .join('\n');
+    });
+    promptTokens = out.inputTokens;
+    completionTokens = out.outputTokens;
+    raw = out.text;
+    usedProvider = out.usedProvider;
+    configuredProvider = out.configuredProvider;
+    usedFallback = out.usedFallback;
+    effectiveModel = out.model || MODELS.HAIKU;
     breaker.recordSuccess();
   } catch (err) {
     success = false;
@@ -165,13 +167,15 @@ CONTRATO deve sempre ser 100 (estágio terminal).`;
     await logAiUsage({
       tenantId,
       userId,
-      provider: AIProvider.ANTHROPIC,
-      model: MODELS.HAIKU,
+      provider: usedProvider,
+      model: effectiveModel,
       promptTokens,
       completionTokens,
       requestType: 'conversion_rate_suggestion',
       latencyMs: Date.now() - t0,
       success,
+      usedFallback,
+      configuredProvider,
     });
   }
 

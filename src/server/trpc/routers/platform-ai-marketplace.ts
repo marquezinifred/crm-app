@@ -4,7 +4,7 @@ import { prisma } from '@/server/db/client';
 import { runAsPlatform } from '@/server/db/tenant-context';
 import { platformAudit } from '@/server/services/audit-platform.service';
 import { zUuid } from '@/lib/validators';
-import { AiFeatureStatus } from '@prisma/client';
+import { AiFeatureStatus, AIProvider } from '@prisma/client';
 
 export const platformAiMarketplaceRouter = router({
   list: platformProcedure.query(async ({ ctx }) =>
@@ -21,8 +21,11 @@ export const platformAiMarketplaceRouter = router({
     .input(
       z.object({
         id: zUuid,
-        active: z.boolean(),
+        active: z.boolean().optional(),
         addonPriceBrlMonthly: z.number().min(0).nullable().optional(),
+        // Sprint 15F — Platform Owner ajusta defaults de provider/model
+        defaultProvider: z.nativeEnum(AIProvider).optional(),
+        defaultModel: z.string().min(2).max(80).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) =>
@@ -30,9 +33,15 @@ export const platformAiMarketplaceRouter = router({
         const updated = await prisma.aiFeature.update({
           where: { id: input.id },
           data: {
-            active: input.active,
+            ...(input.active !== undefined ? { active: input.active } : {}),
             ...(input.addonPriceBrlMonthly !== undefined
               ? { addonPriceBrlMonthly: input.addonPriceBrlMonthly }
+              : {}),
+            ...(input.defaultProvider !== undefined
+              ? { defaultProvider: input.defaultProvider }
+              : {}),
+            ...(input.defaultModel !== undefined
+              ? { defaultModel: input.defaultModel }
               : {}),
           },
         });

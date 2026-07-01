@@ -2,8 +2,8 @@ import { prisma } from '@/server/db/client';
 import { runAsSystem } from '@/server/db/tenant-context';
 import { isEnabled, searchByVector } from './embeddings.service';
 import { masking } from '@/lib/ai/masking';
-import { getAnthropicForTenant, MODELS } from '@/lib/ai/claude';
-import { callAiFeature } from '@/lib/ai/feature-gate';
+import { MODELS } from '@/lib/ai/claude';
+import { dispatchChat } from '@/lib/ai/dispatch';
 import { logAiUsage } from './ai-usage.service';
 import { CircuitBreaker } from './ai-circuit-breaker';
 import { AIProvider } from '@prisma/client';
@@ -203,25 +203,28 @@ Devolva SOMENTE JSON: { "order": [1,3,2,...] } — índices dos resultados em or
     let completionTokens = 0;
     let raw = '';
     let success = true;
+    let usedProvider: AIProvider = AIProvider.ANTHROPIC;
+    let configuredProvider: AIProvider = AIProvider.ANTHROPIC;
+    let usedFallback = false;
+    let effectiveModel = MODELS.HAIKU;
     try {
-      const completion = await callAiFeature(
-        'semantic-search',
-        { tenantId },
-        async ({ model }) => {
-          const client = await getAnthropicForTenant(tenantId);
-          return client.messages.create({
-            model: model || MODELS.HAIKU,
-            max_tokens: 200,
-            messages: [{ role: 'user', content: prompt }],
-          });
+      // Sprint 15F — `prompt` foi construído com hits já mascarados
+      // (masking.mask aplicado em conteúdo de activity/incoming_email).
+      const out = await dispatchChat({
+        featureCode: 'semantic-search',
+        tenantId,
+        chat: {
+          messages: [{ role: 'user', content: prompt }],
+          maxTokens: 200,
         },
-      );
-      promptTokens = completion.usage.input_tokens;
-      completionTokens = completion.usage.output_tokens;
-      raw = completion.content
-        .filter((c): c is { type: 'text'; text: string } => c.type === 'text')
-        .map((c) => c.text)
-        .join('\n');
+      });
+      promptTokens = out.inputTokens;
+      completionTokens = out.outputTokens;
+      raw = out.text;
+      usedProvider = out.usedProvider;
+      configuredProvider = out.configuredProvider;
+      usedFallback = out.usedFallback;
+      effectiveModel = out.model || MODELS.HAIKU;
       breaker.recordSuccess();
     } catch {
       success = false;
@@ -230,13 +233,15 @@ Devolva SOMENTE JSON: { "order": [1,3,2,...] } — índices dos resultados em or
       await logAiUsage({
         tenantId,
         userId,
-        provider: AIProvider.ANTHROPIC,
-        model: MODELS.HAIKU,
+        provider: usedProvider,
+        model: effectiveModel,
         promptTokens,
         completionTokens,
         requestType: 'search_rerank',
         latencyMs: Date.now() - t0,
         success,
+        usedFallback,
+        configuredProvider,
       });
     }
 

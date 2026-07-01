@@ -40,6 +40,9 @@ export interface LogUsageInput {
   latencyMs?: number;
   success?: boolean;
   errorCode?: string | null;
+  // Sprint 15F — tracking de fallback
+  usedFallback?: boolean;
+  configuredProvider?: AIProvider | null;
 }
 
 export async function logAiUsage(input: LogUsageInput): Promise<void> {
@@ -60,6 +63,8 @@ export async function logAiUsage(input: LogUsageInput): Promise<void> {
         latencyMs: input.latencyMs ?? null,
         success: input.success ?? true,
         errorCode: input.errorCode ?? null,
+        usedFallback: input.usedFallback ?? false,
+        configuredProvider: input.configuredProvider ?? null,
       } as Prisma.AIUsageLogUncheckedCreateInput,
     });
   } catch (err) {

@@ -73,6 +73,12 @@ const envSchema = z.object({
 
   // Margem da Plataforma sobre o custo bruto (0.20 = +20%).
   AI_PLATFORM_MARGIN: z.coerce.number().min(0).max(2).default(0.20),
+
+  // Sprint 15F — Feature flag do multi-provider por feature + fallback.
+  // false (default): 5 services usam getAnthropicForTenant() (path legado).
+  // true: consumidores usam callAiWithFallback() (path novo).
+  // Ver docs/Sprint_15F_IA_Multi_Provider.md.
+  MULTI_AI_ENABLED: z.coerce.boolean().default(false),
 });
 
 const parsed = envSchema.safeParse(process.env);

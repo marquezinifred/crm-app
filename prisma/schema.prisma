@@ -1260,20 +1260,23 @@ model DocumentVersion {
 // ---------------------------------------------------------------------
 
 model AIUsageLog {
-  id               String     @id @default(uuid()) @db.Uuid
-  tenantId         String     @map("tenant_id") @db.Uuid
-  userId           String?    @map("user_id") @db.Uuid
-  provider         AIProvider
-  model            String
-  promptTokens     Int        @map("prompt_tokens")
-  completionTokens Int        @map("completion_tokens")
-  totalTokens      Int        @map("total_tokens")
-  costUsd          Decimal    @map("cost_usd") @db.Decimal(12, 6)
-  requestType      String     @map("request_type")
-  latencyMs        Int?       @map("latency_ms")
-  success          Boolean    @default(true)
-  errorCode        String?    @map("error_code")
-  createdAt        DateTime   @default(now()) @map("created_at")
+  id                 String      @id @default(uuid()) @db.Uuid
+  tenantId           String      @map("tenant_id") @db.Uuid
+  userId             String?     @map("user_id") @db.Uuid
+  provider           AIProvider
+  model              String
+  promptTokens       Int         @map("prompt_tokens")
+  completionTokens   Int         @map("completion_tokens")
+  totalTokens        Int         @map("total_tokens")
+  costUsd            Decimal     @map("cost_usd") @db.Decimal(12, 6)
+  requestType        String      @map("request_type")
+  latencyMs          Int?        @map("latency_ms")
+  success            Boolean     @default(true)
+  errorCode          String?     @map("error_code")
+  // Sprint 15F — tracking de fallback + provider originalmente configurado
+  usedFallback       Boolean     @default(false) @map("used_fallback")
+  configuredProvider AIProvider? @map("configured_provider")
+  createdAt          DateTime    @default(now()) @map("created_at")
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user   User?  @relation(fields: [userId], references: [id])
@@ -1716,7 +1719,8 @@ model AiFeature {
   defaultInclusion     Json              @map("default_inclusion")
   addonPriceBrlMonthly Decimal?          @map("addon_price_brl_monthly") @db.Decimal(10, 2)
   addonPriceBrlPerUse  Decimal?          @map("addon_price_brl_per_use") @db.Decimal(10, 4)
-  defaultProvider      String            @map("default_provider")
+  // Sprint 15F — defaultProvider virou AIProvider enum (migration 0027)
+  defaultProvider      AIProvider        @map("default_provider")
   defaultModel         String            @map("default_model")
   active               Boolean           @default(true)
   createdAt            DateTime          @default(now()) @map("created_at")
@@ -1734,6 +1738,16 @@ model TenantAiFeature {
   addonDeactivatedAt DateTime?       @map("addon_deactivated_at")
   enabledById        String?         @map("enabled_by") @db.Uuid
   notes              String?         @db.Text
+
+  // Sprint 15F — override + fallback + alerta por-feature (migration 0027)
+  providerOverride        AIProvider? @map("provider_override")
+  modelOverride           String?     @map("model_override")
+  apiKeyEncrypted         String?     @map("api_key_encrypted")
+  fallbackProvider        AIProvider? @map("fallback_provider")
+  fallbackModel           String?     @map("fallback_model")
+  fallbackApiKeyEncrypted String?     @map("fallback_api_key_encrypted")
+  costAlertBrlMonthly     Decimal?    @map("cost_alert_brl_monthly") @db.Decimal(10, 2)
+  updatedAt               DateTime    @default(now()) @updatedAt @map("updated_at")
 
   tenant  Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   feature AiFeature @relation(fields: [featureId], references: [id], onDelete: Cascade)

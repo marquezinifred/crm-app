@@ -1,8 +1,8 @@
 import { prisma } from '@/server/db/client';
 import { runAsSystem } from '@/server/db/tenant-context';
 import { masking } from '@/lib/ai/masking';
-import { getAnthropicForTenant, MODELS } from '@/lib/ai/claude';
-import { callAiFeature } from '@/lib/ai/feature-gate';
+import { MODELS } from '@/lib/ai/claude';
+import { dispatchChat } from '@/lib/ai/dispatch';
 import { logAiUsage } from './ai-usage.service';
 import { CircuitBreaker } from './ai-circuit-breaker';
 import { ActivityType, AIProvider, IncomingEmailStatus, Prisma } from '@prisma/client';
@@ -76,25 +76,28 @@ Responda SOMENTE com JSON: { "ranking": [{ "id": "uuid", "score": 0-1 }] } no m√
   let completionTokens = 0;
   let raw = '';
   let success = true;
+  let usedProvider: AIProvider = AIProvider.ANTHROPIC;
+  let configuredProvider: AIProvider = AIProvider.ANTHROPIC;
+  let usedFallback = false;
+  let effectiveModel = MODELS.HAIKU;
   try {
-    const completion = await callAiFeature(
-      'email-routing',
-      { tenantId },
-      async ({ model }) => {
-        const client = await getAnthropicForTenant(tenantId);
-        return client.messages.create({
-          model: model || MODELS.HAIKU,
-          max_tokens: 256,
-          messages: [{ role: 'user', content: prompt }],
-        });
+    // Sprint 15F ‚Äî `prompt` j√° foi constru√≠do com dados mascarados
+    // (subject/body passaram por masking.mask antes de chegar aqui).
+    const out = await dispatchChat({
+      featureCode: 'email-routing',
+      tenantId,
+      chat: {
+        messages: [{ role: 'user', content: prompt }],
+        maxTokens: 256,
       },
-    );
-    promptTokens = completion.usage.input_tokens;
-    completionTokens = completion.usage.output_tokens;
-    raw = completion.content
-      .filter((c): c is { type: 'text'; text: string } => c.type === 'text')
-      .map((c) => c.text)
-      .join('\n');
+    });
+    promptTokens = out.inputTokens;
+    completionTokens = out.outputTokens;
+    raw = out.text;
+    usedProvider = out.usedProvider;
+    configuredProvider = out.configuredProvider;
+    usedFallback = out.usedFallback;
+    effectiveModel = out.model || MODELS.HAIKU;
     breaker.recordSuccess();
   } catch {
     success = false;
@@ -103,13 +106,15 @@ Responda SOMENTE com JSON: { "ranking": [{ "id": "uuid", "score": 0-1 }] } no m√
     await logAiUsage({
       tenantId,
       userId: null,
-      provider: AIProvider.ANTHROPIC,
-      model: MODELS.HAIKU,
+      provider: usedProvider,
+      model: effectiveModel,
       promptTokens,
       completionTokens,
       requestType: 'email_link_rank',
       latencyMs: Date.now() - t0,
       success,
+      usedFallback,
+      configuredProvider,
     });
   }
 

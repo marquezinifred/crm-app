@@ -26,9 +26,13 @@ const tenantClientCache = new Map<
 >();
 
 /**
- * @deprecated use `getAnthropicForTenant(tenantId)` — o cliente global
- * consome a conta Anthropic da Plataforma (env `ANTHROPIC_API_KEY`).
- * Mantido só pra call sites sem tenant (nenhum previsto em produção).
+ * @deprecated Sprint 15F — usar `callAiWithFallback` via
+ * `dispatchChat`/`dispatchEmbed` de `@/lib/ai/dispatch`. Remoção
+ * planejada no Sprint 15G após MULTI_AI_ENABLED estar ligado 30d
+ * sem regressão.
+ *
+ * Cliente global (consome env ANTHROPIC_API_KEY) — só sobrevive por
+ * call sites sem tenant, nenhum previsto em produção.
  */
 let _client: Anthropic | null = null;
 export function getAnthropic(): Anthropic {

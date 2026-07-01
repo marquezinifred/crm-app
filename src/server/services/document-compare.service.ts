@@ -1,8 +1,8 @@
 import { TRPCError } from '@trpc/server';
 import { masking } from '@/lib/ai/masking';
-import { getAnthropicForTenant, MODELS } from '@/lib/ai/claude';
+import { MODELS } from '@/lib/ai/claude';
 import { mapAnthropicError } from '@/lib/ai/anthropic-errors';
-import { callAiFeature } from '@/lib/ai/feature-gate';
+import { dispatchChat } from '@/lib/ai/dispatch';
 import { logAiUsage } from './ai-usage.service';
 import { CircuitBreaker } from './ai-circuit-breaker';
 import { AIProvider } from '@prisma/client';
@@ -94,26 +94,28 @@ ${toMasked}
   let raw = '';
   let success = true;
   let providerError: TRPCError | null = null;
+  let usedProvider: AIProvider = AIProvider.ANTHROPIC;
+  let configuredProvider: AIProvider = AIProvider.ANTHROPIC;
+  let usedFallback = false;
+  let effectiveModel = MODELS.HAIKU;
   try {
-    const completion = await callAiFeature(
-      'proposal-version-diff',
-      { tenantId: input.tenantId },
-      async ({ model }) => {
-        const client = await getAnthropicForTenant(input.tenantId);
-        return client.messages.create({
-          model: model || MODELS.HAIKU,
-          max_tokens: 1024,
-          system: SYSTEM,
-          messages: [{ role: 'user', content: userPrompt }],
-        });
+    // Sprint 15F — texto já mascarado acima (fromMasked/toMasked).
+    const out = await dispatchChat({
+      featureCode: 'proposal-version-diff',
+      tenantId: input.tenantId,
+      chat: {
+        systemPrompt: SYSTEM,
+        messages: [{ role: 'user', content: userPrompt }],
+        maxTokens: 1024,
       },
-    );
-    promptTokens = completion.usage.input_tokens;
-    completionTokens = completion.usage.output_tokens;
-    raw = completion.content
-      .filter((c): c is { type: 'text'; text: string } => c.type === 'text')
-      .map((c) => c.text)
-      .join('\n');
+    });
+    promptTokens = out.inputTokens;
+    completionTokens = out.outputTokens;
+    raw = out.text;
+    usedProvider = out.usedProvider;
+    configuredProvider = out.configuredProvider;
+    usedFallback = out.usedFallback;
+    effectiveModel = out.model || MODELS.HAIKU;
     breaker.recordSuccess();
   } catch (err) {
     success = false;
@@ -127,13 +129,15 @@ ${toMasked}
     await logAiUsage({
       tenantId: input.tenantId,
       userId: input.userId,
-      provider: AIProvider.ANTHROPIC,
-      model: MODELS.HAIKU,
+      provider: usedProvider,
+      model: effectiveModel,
       promptTokens,
       completionTokens,
       requestType: 'document_compare',
       latencyMs: Date.now() - t0,
       success,
+      usedFallback,
+      configuredProvider,
     });
   }
 

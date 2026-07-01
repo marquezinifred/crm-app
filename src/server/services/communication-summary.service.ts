@@ -1,12 +1,12 @@
 import { TRPCError } from '@trpc/server';
 import { masking } from '@/lib/ai/masking';
-import { getAnthropicForTenant, MODELS } from '@/lib/ai/claude';
+import { MODELS } from '@/lib/ai/claude';
 import { mapAnthropicError } from '@/lib/ai/anthropic-errors';
 import {
-  callAiFeature,
   AiLimitExceededError,
   FeatureNotAvailableError,
 } from '@/lib/ai/feature-gate';
+import { dispatchChat } from '@/lib/ai/dispatch';
 import { logAiUsage } from './ai-usage.service';
 import { CircuitBreaker } from './ai-circuit-breaker';
 import { AIProvider } from '@prisma/client';
@@ -117,29 +117,33 @@ export async function summarizeCommunication(
   let success = true;
   let errorCode: string | null = null;
   let rawResponse = '';
+  let usedProvider: AIProvider = AIProvider.ANTHROPIC;
+  let configuredProvider: AIProvider = AIProvider.ANTHROPIC;
+  let usedFallback = false;
+  let effectiveModel = MODELS.HAIKU;
   let gateError: FeatureNotAvailableError | AiLimitExceededError | null = null;
   let providerError: TRPCError | null = null;
 
   try {
-    const completion = await callAiFeature(
-      'communication-summary',
-      { tenantId: input.tenantId },
-      async ({ model }) => {
-        const client = await getAnthropicForTenant(input.tenantId);
-        return client.messages.create({
-          model: model || MODELS.HAIKU,
-          max_tokens: 1024,
-          system: SYSTEM_PROMPT,
-          messages: [{ role: 'user', content: masked }],
-        });
+    // Sprint 15F — dispatchChat respeita MULTI_AI_ENABLED. `masked` já
+    // foi produzido acima pelo DataMaskingService. Não passar texto raw
+    // pra IA — regra crítica preservada.
+    const out = await dispatchChat({
+      featureCode: 'communication-summary',
+      tenantId: input.tenantId,
+      chat: {
+        systemPrompt: SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: masked }],
+        maxTokens: 1024,
       },
-    );
-    promptTokens = completion.usage.input_tokens;
-    completionTokens = completion.usage.output_tokens;
-    rawResponse = completion.content
-      .filter((c): c is { type: 'text'; text: string } => c.type === 'text')
-      .map((c) => c.text)
-      .join('\n');
+    });
+    promptTokens = out.inputTokens;
+    completionTokens = out.outputTokens;
+    rawResponse = out.text;
+    usedProvider = out.usedProvider;
+    configuredProvider = out.configuredProvider;
+    usedFallback = out.usedFallback;
+    effectiveModel = out.model || MODELS.HAIKU;
     breaker.recordSuccess();
   } catch (err) {
     success = false;
@@ -163,14 +167,16 @@ export async function summarizeCommunication(
     await logAiUsage({
       tenantId: input.tenantId,
       userId: input.userId,
-      provider: AIProvider.ANTHROPIC,
-      model: MODELS.HAIKU,
+      provider: usedProvider,
+      model: effectiveModel,
       promptTokens,
       completionTokens,
       requestType: 'communication_summary',
       latencyMs,
       success,
       errorCode,
+      usedFallback,
+      configuredProvider,
     });
   }
 

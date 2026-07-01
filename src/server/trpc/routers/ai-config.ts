@@ -1,12 +1,35 @@
 import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '@/server/trpc/trpc';
 import { adminOnlyProcedure } from '@/server/trpc/middlewares';
 import { prisma } from '@/server/db/client';
 import { audit } from '@/server/services/audit.service';
-import { encryptField, maskApiKey, decryptField } from '@/lib/crypto/field-encryption';
+import {
+  encryptField,
+  maskApiKey,
+  decryptField,
+} from '@/lib/crypto/field-encryption';
 import { getMonthlyUsage, AI_PRICING } from '@/server/services/ai-usage.service';
 import { invalidateTenantClient } from '@/lib/ai/claude';
-import { AIProvider } from '@prisma/client';
+import { createClient } from '@/lib/ai/adapters/registry';
+import { AiProviderError } from '@/lib/ai/adapters/types';
+import { clearBreakers, snapshotBreakers } from '@/lib/ai/breakers';
+import { AIProvider, AiFeatureStatus } from '@prisma/client';
+
+/**
+ * Sprint 15F — Router estendido para IA multi-provider por feature.
+ *
+ * Contratos importantes de segurança:
+ *   - `updateConfig` / `updateFeature` recebem `apiKey` em plaintext no
+ *     tRPC (dev). Servidor criptografa antes de gravar e NUNCA loga.
+ *   - `testKey` chama o provider com min payload e retorna latency —
+ *     não retorna nem loga a chave.
+ *   - Todas as ações mutation registram audit_log.
+ */
+
+const providerEnum = z.nativeEnum(AIProvider);
+const modelSchema = z.string().min(2).max(80);
+const keySchema = z.string().min(10).max(500);
 
 export const aiConfigRouter = router({
   getConfig: adminOnlyProcedure.query(async ({ ctx }) => {
@@ -34,16 +57,17 @@ export const aiConfigRouter = router({
   updateConfig: adminOnlyProcedure
     .input(
       z.object({
-        provider: z.nativeEnum(AIProvider),
-        model: z.string().min(2).max(80),
-        apiKey: z.string().min(10).max(500).optional(),
+        provider: providerEnum,
+        model: modelSchema,
+        apiKey: keySchema.optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const data: { aiProvider: AIProvider; aiModel: string; aiApiKeyEncrypted?: string } = {
-        aiProvider: input.provider,
-        aiModel: input.model,
-      };
+      const data: {
+        aiProvider: AIProvider;
+        aiModel: string;
+        aiApiKeyEncrypted?: string;
+      } = { aiProvider: input.provider, aiModel: input.model };
       if (input.apiKey) {
         data.aiApiKeyEncrypted = encryptField(input.apiKey);
       }
@@ -55,7 +79,7 @@ export const aiConfigRouter = router({
         invalidateTenantClient(ctx.tenantId);
       }
       await audit({
-        action: 'tenant.update_ai_config',
+        action: 'tenant.ai.updateGlobal',
         tableName: 'tenants',
         recordId: ctx.tenantId,
         after: {
@@ -67,6 +91,205 @@ export const aiConfigRouter = router({
         userAgent: ctx.userAgent,
       });
       return { ok: true };
+    }),
+
+  // ─── Sprint 15F: listagem enriquecida com estados de tenant ─────
+  listFeatures: adminOnlyProcedure.query(async ({ ctx }) => {
+    const features = await prisma.aiFeature.findMany({
+      where: { active: true },
+      orderBy: { name: 'asc' },
+    });
+    const states = await prisma.tenantAiFeature.findMany({
+      where: { tenantId: ctx.tenantId },
+    });
+    const stateMap = new Map(states.map((s) => [s.featureId, s]));
+
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: ctx.tenantId },
+      select: { plan: true },
+    });
+
+    return features.map((f) => {
+      const s = stateMap.get(f.id);
+      const defaultPerPlan = (f.defaultInclusion as Record<string, string>) ?? {};
+      const planDefault =
+        defaultPerPlan[tenant?.plan ?? '']?.toUpperCase() ?? 'DISABLED';
+      const effectiveStatus =
+        s?.status ??
+        (planDefault === 'INCLUDED' ? 'INCLUDED' : 'DISABLED');
+      return {
+        id: f.id,
+        code: f.code,
+        name: f.name,
+        description: f.description,
+        category: f.category,
+        defaultProvider: f.defaultProvider,
+        defaultModel: f.defaultModel,
+        effectiveStatus,
+        providerOverride: s?.providerOverride ?? null,
+        modelOverride: s?.modelOverride ?? null,
+        fallbackProvider: s?.fallbackProvider ?? null,
+        fallbackModel: s?.fallbackModel ?? null,
+        hasOwnKey: !!s?.apiKeyEncrypted,
+        hasFallbackKey: !!s?.fallbackApiKeyEncrypted,
+        costAlertBrlMonthly: s?.costAlertBrlMonthly
+          ? Number(s.costAlertBrlMonthly)
+          : null,
+      };
+    });
+  }),
+
+  updateFeature: adminOnlyProcedure
+    .input(
+      z.object({
+        featureId: z.string().uuid(),
+        providerOverride: providerEnum.nullable(),
+        modelOverride: modelSchema.nullable(),
+        apiKey: keySchema.nullable(),
+        fallbackProvider: providerEnum.nullable(),
+        fallbackModel: modelSchema.nullable(),
+        fallbackApiKey: keySchema.nullable(),
+        costAlertBrlMonthly: z.number().nonnegative().nullable(),
+        enable: z.boolean().optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const feature = await prisma.aiFeature.findUnique({
+        where: { id: input.featureId },
+      });
+      if (!feature) throw new TRPCError({ code: 'NOT_FOUND' });
+
+      // Validação: se há fallback provider, precisa ter model.
+      if (input.fallbackProvider && !input.fallbackModel) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Fallback provider exige fallback model.',
+        });
+      }
+
+      const data = {
+        tenantId: ctx.tenantId,
+        featureId: input.featureId,
+        status: (input.enable ?? true)
+          ? AiFeatureStatus.INCLUDED
+          : AiFeatureStatus.DISABLED,
+        providerOverride: input.providerOverride,
+        modelOverride: input.modelOverride,
+        apiKeyEncrypted: input.apiKey ? encryptField(input.apiKey) : null,
+        fallbackProvider: input.fallbackProvider,
+        fallbackModel: input.fallbackModel,
+        fallbackApiKeyEncrypted: input.fallbackApiKey
+          ? encryptField(input.fallbackApiKey)
+          : null,
+        costAlertBrlMonthly: input.costAlertBrlMonthly,
+      };
+
+      await prisma.tenantAiFeature.upsert({
+        where: {
+          tenantId_featureId: {
+            tenantId: ctx.tenantId,
+            featureId: input.featureId,
+          },
+        },
+        create: data,
+        update: {
+          status: data.status,
+          providerOverride: data.providerOverride,
+          modelOverride: data.modelOverride,
+          apiKeyEncrypted: data.apiKeyEncrypted,
+          fallbackProvider: data.fallbackProvider,
+          fallbackModel: data.fallbackModel,
+          fallbackApiKeyEncrypted: data.fallbackApiKeyEncrypted,
+          costAlertBrlMonthly: data.costAlertBrlMonthly,
+        },
+      });
+
+      await audit({
+        action: 'tenant.ai.updateFeature',
+        tableName: 'tenant_ai_features',
+        recordId: `${ctx.tenantId}:${input.featureId}`,
+        after: {
+          featureCode: feature.code,
+          providerOverride: input.providerOverride,
+          modelOverride: input.modelOverride,
+          hasOwnKey: !!input.apiKey,
+          fallbackProvider: input.fallbackProvider,
+          fallbackModel: input.fallbackModel,
+          hasFallbackKey: !!input.fallbackApiKey,
+        },
+        ip: ctx.ip,
+        userAgent: ctx.userAgent,
+      });
+      return { ok: true };
+    }),
+
+  /**
+   * Chama o provider com uma requisição mínima só pra validar a chave
+   * e medir latência. NUNCA loga a chave (ela sai do escopo desta
+   * função sem persistir e sem passar por logger).
+   */
+  testKey: adminOnlyProcedure
+    .input(
+      z.object({
+        provider: providerEnum,
+        model: modelSchema,
+        apiKey: keySchema,
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const client = createClient(input.provider, input.apiKey);
+      const t0 = Date.now();
+      try {
+        await client.chat({
+          model: input.model,
+          messages: [{ role: 'user', content: 'ping' }],
+          maxTokens: 8,
+        });
+        return { ok: true, latencyMs: Date.now() - t0 };
+      } catch (err) {
+        if (err instanceof AiProviderError) {
+          return {
+            ok: false,
+            latencyMs: Date.now() - t0,
+            reason: err.kind,
+            status: err.status,
+          };
+        }
+        return {
+          ok: false,
+          latencyMs: Date.now() - t0,
+          reason: 'UNKNOWN',
+          status: null,
+        };
+      }
+    }),
+
+  /**
+   * Estado dos circuit breakers do tenant — Card D em /admin/ai.
+   */
+  breakerStatus: adminOnlyProcedure.query(({ ctx }) => {
+    return snapshotBreakers().filter((b) => b.tenantId === ctx.tenantId);
+  }),
+
+  /**
+   * Limpa manualmente um circuit breaker específico do tenant.
+   */
+  clearCircuitBreaker: adminOnlyProcedure
+    .input(z.object({ provider: providerEnum }))
+    .mutation(async ({ input, ctx }) => {
+      const cleared = clearBreakers({
+        provider: input.provider,
+        tenantId: ctx.tenantId,
+      });
+      await audit({
+        action: 'tenant.ai.clearCircuitBreaker',
+        tableName: 'ai_circuit_breakers',
+        recordId: `${ctx.tenantId}:${input.provider}`,
+        after: { cleared },
+        ip: ctx.ip,
+        userAgent: ctx.userAgent,
+      });
+      return { ok: true, cleared };
     }),
 
   monthlyUsage: protectedProcedure.query(({ ctx }) => getMonthlyUsage(ctx.tenantId)),

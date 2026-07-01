@@ -385,6 +385,80 @@ Baseline 381 → 404 passing. Type-check zero. Lint zero.
   neste rollout; adicionar `sortBy`/`sortDir` na query tRPC
   quando surgir
 
+### P-22. Convite de usuário sem indicação do tenant de destino
+**Severidade:** 🔴 Alta (risco de convite pro tenant errado em
+impersonação). Identificado em 2026-06-30 por Fred: "como sei
+para qual tenant estou convidando o usuário?".
+
+**Comportamento atual:** o backend `users.invite` pega
+`ctx.tenantId` da sessão ativa e convida sem exibir isso ao
+Admin. Em cenário de impersonação (Platform Owner logado como
+outro tenant), o convite vai pro tenant impersonated — nada
+indica isso na UI.
+
+**Impacto real:**
+- Admin de tenant único (99% dos casos) confia que é sempre o
+  próprio — OK.
+- **Platform Owner impersonando** pode convidar erradamente pra
+  tenant X quando ainda achava que estava fora do modo
+  impersonate. Convite disparado, senha configurada, acesso
+  garantido — reverter exige remover user à mão.
+
+**Fix (~30min):**
+1. Modal de convite em `src/app/admin/users/page.tsx:99` adiciona
+   linha abaixo do título:
+   ```
+   Convidando usuário para: {tenantName}
+   ```
+   com `tenantName` vindo de `trpc.tenants.current.useQuery()` (já
+   existe, retorna nome do tenant ativo).
+2. Se `ctx.impersonatedFrom` (Sprint 15A) estiver setado, mostrar
+   badge amarelo "⚠ Modo impersonação — verifique o destino
+   antes de enviar".
+3. Analogamente: aplicar em todos os outros modais de "criar
+   entidade que vira do tenant" (create company, create contact,
+   create partner) — mesma linha discreta.
+
+**Esforço:** ~30min pra usuários + ~1h se propagar pra todas as
+telas de criação.
+
+### P-21. Erro Zod renderizado como JSON cru na UI
+**Severidade:** Média (UX). Identificado em 2026-06-30 no
+`/admin/users` — convidar usuário com email inválido mostra:
+
+```
+[ { "code": "custom", "message": "E-mail inválido", "path": [ "email" ] } ]
+```
+
+em vez de apenas "E-mail inválido".
+
+**Causa raiz:** `src/app/admin/users/page.tsx:51` — `onError: (e) =>
+setInviteError(e.message)` renderiza `e.message` cru. Do
+`TRPCClientError`, `e.message` de erros Zod vem como JSON.stringify
+do `zodError.flatten()`.
+
+**Fix (~1h):** helper `src/lib/trpc/error-format.ts` novo:
+```ts
+export function friendlyTrpcError(err: TRPCClientErrorLike<AppRouter>): string {
+  const zod = err.data?.zodError?.fieldErrors;
+  if (zod) {
+    const first = Object.values(zod).flat()[0];
+    if (first) return String(first);
+  }
+  return err.message;
+}
+```
+
+E aplicar em todos os formulários com Zod input:
+```bash
+grep -rn "onError.*e\.message\|setError(e\.message)" src --include="*.tsx"
+```
+
+**Padrão consistente:** todo `.useMutation({onError})` deve usar
+`friendlyTrpcError(e)` em vez de `e.message`.
+
+**Esforço:** ~1h — helper + refactor de ~10-15 callers + 1 teste.
+
 ### P-20. Tarefas na oportunidade sem criar/editar/deletar
 **Severidade:** 🔴 Alta (feature incompleta). Identificado em
 2026-06-30 por Fred: "falta um botão para cadastrar ou editar as

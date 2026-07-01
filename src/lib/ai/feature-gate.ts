@@ -91,7 +91,7 @@ async function resolveAccess(
     // Modelo: tenant pinned (haiku/sonnet) overrideia default da feature
     const limits = tenant.aiLimits;
     let model = feature.defaultModel;
-    if (feature.defaultProvider === 'anthropic') {
+    if (feature.defaultProvider === 'ANTHROPIC') {
       if (feature.defaultModel.includes('haiku') && limits?.pinnedModelHaiku) {
         model = limits.pinnedModelHaiku;
       } else if (

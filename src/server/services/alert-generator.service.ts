@@ -226,6 +226,10 @@ async function generateForTenant(
   ];
 
   for (const opp of opps) {
+    // Sprint 15D — opps inbound sem owner (aguardando alocação) não
+    // recebem alertas de pipeline ainda. O Gestor de Inbound aloca antes
+    // e o vendedor recebe os alertas a partir daí.
+    if (!opp.owner) continue;
     for (const c of checks) {
       const value = opp[c.field];
       if (!(value instanceof Date)) continue;
@@ -290,7 +294,7 @@ async function resolveRelationshipRecipient(
       orderBy: { updatedAt: 'desc' },
       select: { owner: { select: { email: true } } },
     });
-    if (opp?.owner.email) return opp.owner.email;
+    if (opp?.owner?.email) return opp.owner.email;
   }
   if (entityType === ImportantDateEntityType.CONTACT) {
     const contact = await prisma.contact.findFirst({
@@ -303,7 +307,7 @@ async function resolveRelationshipRecipient(
         orderBy: { updatedAt: 'desc' },
         select: { owner: { select: { email: true } } },
       });
-      if (opp?.owner.email) return opp.owner.email;
+      if (opp?.owner?.email) return opp.owner.email;
     }
   }
   // Fallback: primeiro ADMIN ativo do tenant

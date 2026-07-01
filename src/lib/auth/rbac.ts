@@ -12,13 +12,19 @@ export const ACTIONS = {
   catalog: ['create', 'read', 'update', 'delete'] as const, // território, segmento, produto
   company: ['create', 'read', 'update', 'delete'] as const,
   contact: ['create', 'read', 'update', 'delete'] as const,
-  opportunity: ['create', 'read', 'update', 'delete', 'advance_stage', 'cancel'] as const,
+  opportunity: [
+    'create', 'read', 'update', 'delete', 'advance_stage', 'cancel',
+    // Sprint 15D — assign/set_inbound_owner: alocar opp inbound não-atribuída
+    'assign', 'set_inbound_owner',
+  ] as const,
   proposal: ['create', 'read', 'update', 'approve'] as const,
   contract: ['create', 'read', 'update'] as const,
   partner: ['invite', 'approve_engagement'] as const,
   ai: ['use_summary', 'configure'] as const,
   alert: ['configure'] as const,
   audit: ['read'] as const,
+  // Sprint 15D — ver fila /inbox/prospects; configurar canais (email/webhook).
+  inbound: ['view_queue', 'configure'] as const,
 } as const;
 
 type ActionMap = typeof ACTIONS;
@@ -35,12 +41,14 @@ const ROLE_PERMISSIONS: Record<UserRole, Set<Permission>> = {
     'company:create', 'company:read', 'company:update', 'company:delete',
     'contact:create', 'contact:read', 'contact:update', 'contact:delete',
     'opportunity:create', 'opportunity:read', 'opportunity:update', 'opportunity:delete', 'opportunity:advance_stage', 'opportunity:cancel',
+    'opportunity:assign', 'opportunity:set_inbound_owner',
     'proposal:create', 'proposal:read', 'proposal:update', 'proposal:approve',
     'contract:create', 'contract:read', 'contract:update',
     'partner:invite', 'partner:approve_engagement',
     'ai:use_summary', 'ai:configure',
     'alert:configure',
     'audit:read',
+    'inbound:view_queue', 'inbound:configure',
   ]),
 
   DIRETOR_COMERCIAL: new Set<Permission>([
@@ -50,11 +58,13 @@ const ROLE_PERMISSIONS: Record<UserRole, Set<Permission>> = {
     'company:read', 'company:update',
     'contact:read', 'contact:update',
     'opportunity:create', 'opportunity:read', 'opportunity:update', 'opportunity:advance_stage', 'opportunity:cancel',
+    'opportunity:assign', 'opportunity:set_inbound_owner',
     'proposal:create', 'proposal:read', 'proposal:update', 'proposal:approve',
     'contract:create', 'contract:read', 'contract:update',
     'partner:invite', 'partner:approve_engagement',
     'ai:use_summary',
     'audit:read',
+    'inbound:view_queue',
   ]),
 
   // Diretor de Operações — Sprint 15A: foco em pós-venda, entrega e
@@ -94,6 +104,19 @@ const ROLE_PERMISSIONS: Record<UserRole, Set<Permission>> = {
     'contract:read',
     'partner:invite', 'partner:approve_engagement',
     'ai:use_summary',
+  ]),
+
+  // Sprint 15D — role temporária. Sprint 15E migra estas capabilities pra
+  // permission `inbound.assign_prospects` atribuível a qualquer role.
+  // Foco: ver fila de prospects e alocar vendedor.
+  GESTOR_INBOUND: new Set<Permission>([
+    'tenant:read',
+    'user:read',
+    'company:read', 'company:create',
+    'contact:read', 'contact:create',
+    'opportunity:read',
+    'opportunity:assign', 'opportunity:set_inbound_owner',
+    'inbound:view_queue',
   ]),
 
   ANALISTA: new Set<Permission>([

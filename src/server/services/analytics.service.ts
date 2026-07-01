@@ -32,7 +32,9 @@ export interface OpportunitySnap {
   status: OpportunityStatus;
   estimatedValue: number;
   closedValue: number | null;
-  ownerId: string;
+  // Sprint 15D — nullable pra suportar opps inbound aguardando alocação
+  // na fila de prospects. performanceByOwner filtra estas out.
+  ownerId: string | null;
   ownerName: string;
   lossReason: OpportunityLossReason | null;
   createdAt: Date;
@@ -247,6 +249,8 @@ export interface PerformanceReport {
 export function performanceByOwner(opps: OpportunitySnap[]): PerformanceReport {
   const map = new Map<string, OwnerPerformance>();
   for (const o of opps) {
+    // Sprint 15D — opps inbound sem owner ainda não contam no ranking.
+    if (!o.ownerId) continue;
     const cur = map.get(o.ownerId) ?? {
       ownerId: o.ownerId,
       ownerName: o.ownerName,

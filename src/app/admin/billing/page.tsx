@@ -2,6 +2,7 @@
 
 import { trpc } from '@/lib/trpc/client';
 import { useState } from 'react';
+import { PageHeader } from '@/components/layout/PageHeader';
 
 function fmtBytes(b: number) {
   if (b >= 1024 ** 3) return `${(b / 1024 ** 3).toFixed(1)} GB`;
@@ -56,12 +57,10 @@ export default function BillingPage() {
 
   return (
     <main className="p-6 md:p-10 max-w-5xl mx-auto space-y-8">
-      <header>
-        <h1 className="text-2xl font-semibold">Plano e cobrança</h1>
-        <p className="text-sm text-text-2">
-          Gerencie seu plano, métodos de pagamento e veja o consumo atual.
-        </p>
-      </header>
+      <PageHeader
+        title="Plano e cobrança"
+        description="Assinatura Stripe, métodos de pagamento e consumo atual do plano."
+      />
 
       <section className="border rounded-lg p-5 bg-card">
         <div className="flex items-center justify-between gap-4 flex-wrap">

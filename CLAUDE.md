@@ -741,10 +741,10 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 | ID | Origem | Pendência | Resolve em |
 |----|--------|-----------|-----------|
-| P-02 | Sprint 14.5 | PageHeader em 13 rotas `/admin/*` restantes (~3h, mecânico) | auditar se Sprint 15C fechou parcialmente |
 | P-03 | Sprint 14.5 | Visual baseline `scripts/visual-baseline.ts` (script pronto, ~1.5h) | depende app local + seed E2E |
 | P-05 | Sprint 14.5 | Lighthouse audit ≥ 90 (script + workflow prontos) | depende `vars.STAGING_URL` no GitHub |
 | P-07 | Sprint 15A | Memory `migration-pitfalls.md` salvo: 5 padrões recorrentes em migrações Postgres | ✅ documental, salvo em 2026-06-30 |
+| P-26 | P-02 spinoff | PageHeader em 7 rotas internas fora de `/admin` + `/platform` (~2h, mecânico) | quando conveniente |
 
 Detalhes em `docs/Backlog_Pos_MVP.md`. Débitos antigos (Sprints 1 e 2)
 foram fechados na Sprint 11.
@@ -901,6 +901,7 @@ foram fechados na Sprint 11.
   em chunks pra evitar stack overflow. +24 testes (13 dropzone +
   11 upload-router), 457/463 passing (4 falhas + 2 skipped
   pré-existentes por env vars)
+<<<<<<< HEAD
 - P-21 Erro Zod renderizado como JSON cru na UI — helper
   `src/lib/trpc/error-format.ts` novo com `friendlyTrpcError(err)`.
   O `errorFormatter` em `src/server/trpc/trpc.ts` já expunha
@@ -926,6 +927,22 @@ foram fechados na Sprint 11.
   intercaladas). 533 passing (10 falhas + 2 skipped pré-existentes
   por env vars em field-encryption + communication-summary-errors,
   confirmadas em HEAD antes do fix)
+- P-02 PageHeader consistente em 13 rotas `/admin/*` — 🟡 do Sprint
+  14.5 item 4 fechado. Refactor mecânico substituindo `<h1>` +
+  descrição ad-hoc por `<PageHeader title description />` do design
+  system em 10 arquivos (`/admin/ai`, `/alerts`, `/approval-rules`,
+  `/billing`, `/branding` — 2 ocorrências —, `/contracts`,
+  `/conversion-rates`, `/email-inbound`, `/partners`, `/templates`).
+  Já corretas (skip): `/admin/listas`, `/admin/privacy`,
+  `/admin/products`, `/admin/users`. `/admin/branding` preserva
+  banner de override WCAG como div separado (description do
+  PageHeader é typed string); `/admin/partners` move link
+  `/companies/new` pra parágrafo helper abaixo. Zero `<h1>` residual
+  nas 13 rotas. 525 passing (baseline preservado), type-check zero,
+  lint zero. Débito adjacente P-26 registrado: 7 rotas fora de
+  `/admin` e `/platform` (`/pipeline`, `/pipeline/[id]`, `/inbox`,
+  `/contacts`, `/imports`, `/more`, `/reports`) ainda têm `<h1>`
+  ad-hoc
 
 ---
 

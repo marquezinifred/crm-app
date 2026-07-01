@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
 import { friendlyTrpcError } from '@/lib/trpc/error-format';
+import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 
 export default function AdminAlertsPage() {
@@ -28,7 +29,10 @@ export default function AdminAlertsPage() {
 
   return (
     <main className="mx-auto max-w-2xl p-6">
-      <h1 className="mb-4 text-2xl font-bold">Configuração de Alertas</h1>
+      <PageHeader
+        title="Alertas"
+        description="Antecedência de alertas de renovação e vencimento, escalonamento de tarefas e destino da central de CRM."
+      />
 
       <form
         className="space-y-5"

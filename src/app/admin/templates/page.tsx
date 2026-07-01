@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
+import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 import { FileDropzone, type FileMetadata } from '@/components/ui/file-dropzone';
 import { DocumentCategory } from '@prisma/client';
@@ -102,7 +103,10 @@ export default function AdminTemplatesPage() {
 
   return (
     <main className="mx-auto max-w-3xl p-4 md:p-6">
-      <h1 className="mb-4 text-2xl font-bold">Templates de documentos</h1>
+      <PageHeader
+        title="Templates"
+        description="Modelos de proposta, contrato, NDA e outros — organizados por categoria."
+      />
 
       <section className="mb-6 rounded-lg border border-border bg-card p-4">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-1">

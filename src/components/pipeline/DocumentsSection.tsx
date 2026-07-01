@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
-import { Button } from '@/components/ui/button';
+import { FileDropzone, type FileMetadata } from '@/components/ui/file-dropzone';
 import { DocumentCategory } from '@prisma/client';
 
 const CATEGORY_LABELS: Record<DocumentCategory, string> = {
@@ -17,27 +17,72 @@ const CATEGORY_LABELS: Record<DocumentCategory, string> = {
   OUTRO: 'Outro',
 };
 
+const DOC_ACCEPT =
+  '.pdf,.docx,.xlsx,.png,.jpg,.jpeg,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/*';
+const DOC_MAX_BYTES = 20 * 1024 * 1024;
+
 interface Props {
   opportunityId: string;
+}
+
+async function fileToBase64(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunk = 8192;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
 }
 
 export function DocumentsSection({ opportunityId }: Props) {
   const utils = trpc.useUtils();
   const { data, isLoading } = trpc.documents.listByOpportunity.useQuery({ opportunityId });
-  const [form, setForm] = useState({
-    category: 'PROPOSTA_TECNICA' as DocumentCategory,
-    filename: '',
-    storageKey: '',
-    sizeBytes: '',
-    sha256: '',
-  });
+  const [category, setCategory] = useState<DocumentCategory>('PROPOSTA_TECNICA');
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
+  const getUploadIntent = trpc.documents.getUploadIntent.useMutation();
+  const uploadProxy = trpc.documents.uploadProxy.useMutation();
   const create = trpc.documents.create.useMutation({
     onSuccess: () => {
-      setForm({ ...form, filename: '', storageKey: '', sizeBytes: '', sha256: '' });
       utils.documents.listByOpportunity.invalidate({ opportunityId });
     },
   });
+
+  async function handleFileSelected(meta: FileMetadata) {
+    setError(null);
+    setUploading(true);
+    try {
+      const { storageKey } = await getUploadIntent.mutateAsync({
+        filename: meta.filename,
+        mimeType: meta.mimeType,
+        sizeBytes: meta.sizeBytes,
+      });
+      const contentBase64 = await fileToBase64(meta.file);
+      await uploadProxy.mutateAsync({
+        storageKey,
+        contentBase64,
+        mimeType: meta.mimeType,
+      });
+      await create.mutateAsync({
+        opportunityId,
+        category,
+        filename: meta.filename,
+        mimeType: meta.mimeType,
+        sizeBytes: meta.sizeBytes,
+        storageKey,
+        sha256: meta.sha256,
+      });
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Falha ao enviar arquivo.',
+      );
+    } finally {
+      setUploading(false);
+    }
+  }
 
   return (
     <section className="mb-4 rounded-lg border border-border bg-card p-4">
@@ -49,83 +94,38 @@ export function DocumentsSection({ opportunityId }: Props) {
         <summary className="cursor-pointer text-sm font-medium text-text-1">
           + Anexar documento
         </summary>
-        <form
-          className="mt-3 space-y-2 text-sm"
-          onSubmit={(e) => {
-            e.preventDefault();
-            create.mutate({
-              opportunityId,
-              category: form.category,
-              filename: form.filename,
-              mimeType: form.filename.endsWith('.pdf')
-                ? 'application/pdf'
-                : 'application/octet-stream',
-              sizeBytes: Number(form.sizeBytes) || 0,
-              storageKey: form.storageKey,
-              sha256: form.sha256,
-            });
-          }}
-        >
-          <div className="grid grid-cols-2 gap-2">
-            <label>
-              <span className="mb-0.5 block text-xs">Categoria</span>
-              <select
-                value={form.category}
-                onChange={(e) => setForm({ ...form, category: e.target.value as DocumentCategory })}
-                className="w-full rounded border px-2 py-1"
-              >
-                {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
-                  <option key={k} value={k}>{v}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span className="mb-0.5 block text-xs">Nome do arquivo</span>
-              <input
-                required
-                value={form.filename}
-                onChange={(e) => setForm({ ...form, filename: e.target.value })}
-                placeholder="proposta-v1.pdf"
-                className="w-full rounded border px-2 py-1"
-              />
-            </label>
-          </div>
+        <div className="mt-3 space-y-3 text-sm">
           <label className="block">
-            <span className="mb-0.5 block text-xs">URL/path do arquivo</span>
-            <input
-              required
-              value={form.storageKey}
-              onChange={(e) => setForm({ ...form, storageKey: e.target.value })}
-              placeholder="https://drive.google.com/file/... ou s3://bucket/key"
-              className="w-full rounded border px-2 py-1"
-            />
+            <span className="mb-1 block text-xs text-text-2">Categoria</span>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value as DocumentCategory)}
+              disabled={uploading}
+              className="w-full rounded border border-border bg-card px-2 py-1"
+            >
+              {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
           </label>
-          <div className="grid grid-cols-2 gap-2">
-            <label>
-              <span className="mb-0.5 block text-xs">Tamanho (bytes)</span>
-              <input
-                required
-                type="number"
-                value={form.sizeBytes}
-                onChange={(e) => setForm({ ...form, sizeBytes: e.target.value })}
-                className="w-full rounded border px-2 py-1"
-              />
-            </label>
-            <label>
-              <span className="mb-0.5 block text-xs">SHA-256</span>
-              <input
-                required
-                value={form.sha256}
-                onChange={(e) => setForm({ ...form, sha256: e.target.value })}
-                placeholder="64 chars hex"
-                className="w-full rounded border px-2 py-1 font-mono text-xs"
-              />
-            </label>
-          </div>
-          <Button type="submit" disabled={create.isPending}>
-            {create.isPending ? 'Salvando…' : 'Anexar'}
-          </Button>
-        </form>
+
+          <FileDropzone
+            accept={DOC_ACCEPT}
+            maxSizeBytes={DOC_MAX_BYTES}
+            disabled={uploading}
+            hint="PDF, DOCX, XLSX ou imagem até 20 MB"
+            onFileSelected={handleFileSelected}
+          />
+
+          {uploading && (
+            <p className="text-xs text-text-2">Enviando arquivo…</p>
+          )}
+          {error && (
+            <p role="alert" className="rounded bg-danger/10 p-2 text-xs text-danger">
+              {error}
+            </p>
+          )}
+        </div>
       </details>
 
       {isLoading && <p className="text-sm text-text-2">Carregando…</p>}
@@ -155,14 +155,9 @@ export function DocumentsSection({ opportunityId }: Props) {
                     v{v.version} · {new Date(v.createdAt).toLocaleDateString('pt-BR')} ·{' '}
                     {v.uploadedBy?.fullName ?? '—'}
                   </span>
-                  <a
-                    href={v.storageKey}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-info-text hover:underline"
-                  >
-                    abrir ↗
-                  </a>
+                  <span className="font-mono text-[10px] text-text-3" title={v.storageKey}>
+                    {v.sha256.slice(0, 8)}
+                  </span>
                 </li>
               ))}
             </ul>

@@ -812,7 +812,6 @@ foram fechados na Sprint 11.
   migrados de raw `<table>` pro Table/TH/TR/TD do design system.
   +23 testes (15 hook + 8 TH), 404/410 passing (4 falhas + 2
   skipped pré-existentes por env vars)
-<<<<<<< HEAD
 - P-13 401 do middleware vira "Unable to transform response from server" —
   `src/lib/trpc/session-guard.ts` novo com `sessionAwareFetch`
   interceptor injetado no `httpBatchLink` do `provider.tsx`. Detecta
@@ -865,6 +864,22 @@ foram fechados na Sprint 11.
   também não regride. Débito adjacente: services em
   `src/server/services/*` que chamam `audit()` podem ter o mesmo bug —
   escopo foi rigidamente routers tRPC conforme spec
+- P-19 Upload real de documentos + templates — commits `aa71f25`
+  (infra) + `22b63fc` (backend) + `cbbb4c8` (rollout). Sprint 8
+  ficou pela metade: modelos Prisma e serviço S3 existem, mas a
+  UI pedia digitar SHA-256/URL/tamanho à mão. Fix: novo
+  `src/components/ui/file-dropzone.tsx` (drag-and-drop + Web
+  Crypto SHA-256 + a11y `role=button`/Enter/Space + polifill
+  `Blob.arrayBuffer` em `tests/setup.ts` via FileReader);
+  router `documents` ganhou `getUploadIntent` (gera storageKey
+  `tenant/${tenantId}/documents/<uuid>-<sanitizedName>`) +
+  `uploadProxy` (valida cross-tenant, decoda base64, delega pra
+  S3 ou fallback `/tmp/venzo-uploads`). `sanitizeFilename`
+  colapsa `..`, strip `/\`, remove diacríticos NFKD.
+  `DocumentsSection` + `admin/templates` refeitos; `fileToBase64`
+  em chunks pra evitar stack overflow. +24 testes (13 dropzone +
+  11 upload-router), 457/463 passing (4 falhas + 2 skipped
+  pré-existentes por env vars)
 
 ---
 

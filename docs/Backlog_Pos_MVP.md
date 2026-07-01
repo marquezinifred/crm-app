@@ -565,6 +565,62 @@ gradual.
 
 **Esforço:** 5–7 dias. Sprint dedicado.
 
+### ~~P-19. Upload real de documentos + templates~~ ✅ FECHADO
+**Resolvido em 2026-06-30** pelos commits `aa71f25` (infra),
+`22b63fc` (backend) e `cbbb4c8` (rollout).
+
+**Sintoma original:** Sprint 8 deixou os forms de anexar documento
+(`/pipeline/[id]` → DocumentsSection) e cadastrar template
+(`/admin/templates`) pedindo URL/path, tamanho e SHA-256 digitados
+à mão. Impossível de usar — ninguém sabe SHA-256 de cabeça.
+
+**Fix entregue em 3 commits atômicos:**
+
+1. **`aa71f25`** — `src/components/ui/file-dropzone.tsx` reusável:
+   click + drag-and-drop, SHA-256 via Web Crypto (`crypto.subtle
+   .digest`), validação mime (`.ext` / `wildcard/*` / `mime/exact`)
+   + tamanho, `role=alert` inline, a11y (`role=button`, `tabIndex=0`,
+   Enter/Space, `aria-label`, `aria-disabled`). Polifill de
+   `Blob.arrayBuffer` via `FileReader` em `tests/setup.ts` pra
+   jsdom. +13 testes.
+
+2. **`22b63fc`** — router `documents` ganhou `getUploadIntent` e
+   `uploadProxy`. Intent gera `storageKey` no padrão
+   `tenant/${ctx.tenantId}/documents/<uuid>-<sanitizedName>`. Proxy
+   valida cross-tenant checando prefixo (defesa em profundidade
+   sobre Prisma extension), decoda base64 → Buffer, delega pra
+   `uploadObject` do storage-s3.service. Fallback grava em
+   `/tmp/venzo-uploads/<key>` quando S3 ausente. `sanitizeFilename`
+   remove diacríticos (NFKD + strip combining), colapsa `..`
+   (path traversal), converte `/\` em `_`, limita a 120 chars.
+   `withCapability('opportunity','update')` (admin sempre atende).
+   Audit `document.upload_intent` + `document.upload` com
+   `tenantIdOverride`. +11 testes.
+
+3. **`cbbb4c8`** — `DocumentsSection` e `admin/templates` refeitos.
+   Fluxo: dropzone calcula SHA-256 → `getUploadIntent` gera key →
+   `uploadProxy` sobe bytes → `documents.create` (ou
+   `templates.create`) persiste metadata real. `fileToBase64` usa
+   chunked `String.fromCharCode.apply` pra evitar stack overflow
+   em arquivos >64KB. Link "abrir ↗" externo substituído por
+   prefixo SHA-256 curto (visualização depende de P-20).
+
+**Decisão de arquitetura:** upload via server (proxy) em vez de
+presigned URL direto pro cliente. Overhead aceitável pra <20 MB
+e evita configuração de CORS bucket. Registrar como P-20 se
+volume justificar.
+
+**Testes:** 457/463 (+24 vs baseline — 4 pré-existentes de env
+vars). Type-check zero novo (apenas o pré-existente P-18 em
+`feature-gate.ts:94`). Lint zero.
+
+**Débitos residuais registrados como P-20:**
+- Procedure `documents.presignDownload` (S3) + `presign` fallback
+  local pra Activity attachments (Sprint 4 mesmo problema)
+- Upload em Contract attachments (existirá se módulo evoluir)
+- Explorar presigned upload direto (PUT do cliente) quando algum
+  arquivo passar de 20 MB — hoje o proxy via base64 é OK
+
 ---
 
 ## 📅 Sprints planejados (próximas 4–6 semanas)

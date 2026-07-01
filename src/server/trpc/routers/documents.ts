@@ -1,12 +1,40 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
+import { randomUUID } from 'node:crypto';
+import { promises as fs } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { router, protectedProcedure } from '@/server/trpc/trpc';
 import { adminOnlyProcedure, withCapability } from '@/server/trpc/middlewares';
 import { prisma } from '@/server/db/client';
 import { audit } from '@/server/services/audit.service';
 import { compareDocumentVersions } from '@/server/services/document-compare.service';
+import { uploadObject, s3Enabled } from '@/server/services/storage-s3.service';
 import { zUuid } from '@/lib/validators';
 import { DocumentCategory, Prisma } from '@prisma/client';
+
+// P-19 — nome sanitizado pro storageKey: preserva letras/dígitos/./-/_
+// e converte espaços em `_`. Colapsa `..` (path traversal) em `_` e
+// remove diacríticos via NFKD antes do strip.
+export function sanitizeFilename(name: string): string {
+  const cleaned = name
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[/\\]+/g, '_')
+    .replace(/\.{2,}/g, '_')
+    .replace(/[^\w.\-]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^[_.\-]+|[_.\-]+$/g, '')
+    .slice(0, 120);
+  return cleaned || 'file';
+}
+
+export function buildDocumentStorageKey(tenantId: string, filename: string): string {
+  return `tenant/${tenantId}/documents/${randomUUID()}-${sanitizeFilename(filename)}`;
+}
+
+const UPLOAD_MAX_BYTES = 20 * 1024 * 1024;
+const LOCAL_UPLOAD_ROOT = join(tmpdir(), 'venzo-uploads');
 
 /**
  * Routers de documentos (Sprint 7):
@@ -21,6 +49,83 @@ const canRead = withCapability('opportunity', 'read');
 const canWrite = withCapability('opportunity', 'update');
 
 export const documentsRouter = router({
+  // P-19 — cliente pede intent de upload. Server gera storageKey com
+  // prefixo tenant/${tenantId}/ e retorna. Cliente sobe bytes via
+  // uploadProxy (upload-then-forward via server) — mais simples que
+  // presigned URL direto (que exigiria CORS bucket).
+  getUploadIntent: canWrite
+    .input(
+      z.object({
+        filename: z.string().min(1).max(255),
+        mimeType: z.string().min(3).max(120),
+        sizeBytes: z.number().int().positive().max(UPLOAD_MAX_BYTES),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const storageKey = buildDocumentStorageKey(ctx.tenantId, input.filename);
+      const mode: 's3' | 'local' = s3Enabled() ? 's3' : 'local';
+      await audit({
+        action: 'document.upload_intent',
+        tableName: 'documents',
+        recordId: storageKey,
+        after: { filename: input.filename, sizeBytes: input.sizeBytes, mode },
+        ip: ctx.ip,
+        userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
+      });
+      return { storageKey, mode };
+    }),
+
+  // P-19 — cliente sobe os bytes em base64. Server valida prefixo do
+  // storageKey (defesa cross-tenant), decoda e delega pra S3 ou grava
+  // em fallback local (/tmp/venzo-uploads) quando S3 não configurado.
+  uploadProxy: canWrite
+    .input(
+      z.object({
+        storageKey: z.string().min(1).max(500),
+        contentBase64: z.string().min(1).max(30 * 1024 * 1024), // ~22 MB binário
+        mimeType: z.string().min(3).max(120),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const prefix = `tenant/${ctx.tenantId}/`;
+      if (!input.storageKey.startsWith(prefix)) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'storageKey fora do escopo do tenant.',
+        });
+      }
+      const body = Buffer.from(input.contentBase64, 'base64');
+      if (body.byteLength === 0 || body.byteLength > UPLOAD_MAX_BYTES) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Payload vazio ou maior que o limite.',
+        });
+      }
+
+      let mode: 's3' | 'local';
+      const s3Key = await uploadObject(input.storageKey, body, input.mimeType);
+      if (s3Key) {
+        mode = 's3';
+      } else {
+        const localPath = join(LOCAL_UPLOAD_ROOT, input.storageKey);
+        await fs.mkdir(dirname(localPath), { recursive: true });
+        await fs.writeFile(localPath, body);
+        mode = 'local';
+      }
+
+      await audit({
+        action: 'document.upload',
+        tableName: 'documents',
+        recordId: input.storageKey,
+        after: { sizeBytes: body.byteLength, mode },
+        ip: ctx.ip,
+        userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
+      });
+      return { storageKey: input.storageKey, mode, sizeBytes: body.byteLength };
+    }),
+
   listByOpportunity: canRead
     .input(z.object({ opportunityId: zUuid }))
     .query(({ input }) =>

@@ -1,9 +1,24 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { trpc } from '@/lib/trpc/client';
-import { Button } from '@/components/ui/button';
+import * as React from 'react';
 import { AIProvider } from '@prisma/client';
+import { trpc } from '@/lib/trpc/client';
+import { PageHeader } from '@/components/layout/PageHeader';
+import { Button } from '@/components/ui/button';
+import { Field } from '@/components/ui/field';
+import { Input, Select } from '@/components/ui/input';
+import { useToast } from '@/components/ui/toast';
+
+/**
+ * P-23 fase 1 — Sprint 15F: /admin/ai refactor.
+ *
+ * Card A: configuração padrão do tenant (provider/model/apiKey) +
+ * botão "Testar chave". Consome `aiConfig.getConfig`,
+ * `aiConfig.updateConfig` e `aiConfig.testKey` (todos já entregues
+ * pelo backend Sprint 15F).
+ *
+ * Cards B/C/D vêm na fase 2.
+ */
 
 const RECOMMENDED_MODELS: Record<AIProvider, string[]> = {
   ANTHROPIC: [
@@ -16,15 +31,44 @@ const RECOMMENDED_MODELS: Record<AIProvider, string[]> = {
   PERPLEXITY: ['llama-3.1-sonar-small-128k-online'],
 };
 
-export default function AdminAIPage() {
-  const cfg = trpc.aiConfig.getConfig.useQuery();
-  const usage = trpc.aiConfig.monthlyUsage.useQuery();
-  const utils = trpc.useUtils();
-  const [provider, setProvider] = useState<AIProvider>('ANTHROPIC');
-  const [model, setModel] = useState('claude-haiku-4-5-20251001');
-  const [apiKey, setApiKey] = useState('');
+const PROVIDER_LABEL: Record<AIProvider, string> = {
+  ANTHROPIC: 'Anthropic',
+  OPENAI: 'OpenAI',
+  GOOGLE: 'Google',
+  PERPLEXITY: 'Perplexity',
+};
 
-  useEffect(() => {
+export default function AdminAIPage() {
+  return (
+    <main className="mx-auto max-w-5xl p-6 space-y-6">
+      <PageHeader
+        title="IA"
+        description="Provider, modelo e chave por tenant e por feature. Fallback opcional quando o provider primário falha."
+      />
+      <CardConfigPadrao />
+    </main>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────
+// Card A — Configuração padrão do tenant
+// ────────────────────────────────────────────────────────────────
+
+function CardConfigPadrao() {
+  const { toast } = useToast();
+  const cfg = trpc.aiConfig.getConfig.useQuery();
+  const utils = trpc.useUtils();
+
+  const [provider, setProvider] = React.useState<AIProvider>('ANTHROPIC');
+  const [model, setModel] = React.useState('claude-haiku-4-5-20251001');
+  const [apiKey, setApiKey] = React.useState('');
+  const [testResult, setTestResult] = React.useState<{
+    ok: boolean;
+    latencyMs: number;
+    reason?: string;
+  } | null>(null);
+
+  React.useEffect(() => {
     if (cfg.data) {
       setProvider(cfg.data.provider);
       setModel(cfg.data.model ?? 'claude-haiku-4-5-20251001');
@@ -35,131 +79,121 @@ export default function AdminAIPage() {
     onSuccess: () => {
       setApiKey('');
       utils.aiConfig.getConfig.invalidate();
+      toast({ kind: 'success', title: 'Configuração salva.' });
+    },
+    onError: (e) => {
+      toast({ kind: 'error', title: 'Erro ao salvar', description: e.message });
+    },
+  });
+
+  const test = trpc.aiConfig.testKey.useMutation({
+    onSuccess: (r) => setTestResult(r),
+    onError: (e) => {
+      setTestResult({ ok: false, latencyMs: 0, reason: e.message });
     },
   });
 
   return (
-    <main className="mx-auto max-w-3xl p-6">
-      <h1 className="mb-4 text-2xl font-bold">Configuração de IA</h1>
+    <section className="rounded-lg border border-border bg-card p-6">
+      <header className="mb-4">
+        <h2 className="text-h3 text-text-1">Configuração padrão</h2>
+        <p className="text-body text-text-2 mt-1">
+          Provider, modelo e chave usados quando uma feature não tem override específico.
+        </p>
+      </header>
 
-      <section className="mb-6 rounded-lg border border-border bg-card p-4">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-1">
-          Provedor e modelo
-        </h2>
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            save.mutate({
-              provider,
-              model,
-              apiKey: apiKey || undefined,
-            });
-          }}
+      <form
+        className="space-y-4 max-w-md"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save.mutate({ provider, model, apiKey: apiKey || undefined });
+        }}
+      >
+        <Field label="Provider" required>
+          <Select
+            value={provider}
+            onChange={(e) => {
+              const p = e.target.value as AIProvider;
+              setProvider(p);
+              setModel(RECOMMENDED_MODELS[p][0]!);
+              setTestResult(null);
+            }}
+          >
+            {Object.values(AIProvider).map((p) => (
+              <option key={p} value={p}>
+                {PROVIDER_LABEL[p]}
+              </option>
+            ))}
+          </Select>
+        </Field>
+
+        <Field label="Modelo" required>
+          <Select value={model} onChange={(e) => setModel(e.target.value)}>
+            {RECOMMENDED_MODELS[provider].map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </Select>
+        </Field>
+
+        <Field
+          label="Chave API"
+          helper={
+            cfg.data?.hasApiKey
+              ? `Atual: ${cfg.data.apiKeyMasked}. Preencha para substituir.`
+              : 'Nenhuma chave configurada. Preencha para habilitar IA.'
+          }
         >
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium">Provedor</span>
-            <select
-              value={provider}
-              onChange={(e) => {
-                const p = e.target.value as AIProvider;
-                setProvider(p);
-                setModel(RECOMMENDED_MODELS[p][0]!);
-              }}
-              className="w-full rounded border px-3 py-2"
-            >
-              {Object.values(AIProvider).map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-          </label>
+          <Input
+            type="password"
+            value={apiKey}
+            onChange={(e) => {
+              setApiKey(e.target.value);
+              setTestResult(null);
+            }}
+            placeholder={cfg.data?.hasApiKey ? '(deixe vazio para manter)' : 'sk-…'}
+            autoComplete="off"
+          />
+        </Field>
 
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium">Modelo</span>
-            <select
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              className="w-full rounded border px-3 py-2"
-            >
-              {RECOMMENDED_MODELS[provider].map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium">API Key</span>
-            <p className="mb-1 text-xs text-text-2">
-              {cfg.data?.hasApiKey
-                ? `Atual: ${cfg.data.apiKeyMasked} — preencha aqui para substituir.`
-                : 'Nenhuma chave configurada — preencha para habilitar IA.'}
-            </p>
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder={cfg.data?.hasApiKey ? '(deixe vazio para manter)' : 'sk-...'}
-              className="w-full rounded border px-3 py-2"
-            />
-          </label>
-
-          <Button type="submit" disabled={save.isLoading}>
-            {save.isLoading ? 'Salvando…' : 'Salvar'}
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            loading={test.isLoading}
+            disabled={!apiKey}
+            onClick={() =>
+              test.mutate({ provider, model, apiKey })
+            }
+          >
+            Testar chave
           </Button>
-        </form>
-      </section>
+          <Button type="submit" loading={save.isLoading}>
+            Salvar
+          </Button>
+        </div>
 
-      <section className="rounded-lg border border-border bg-card p-4">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-1">
-          Consumo do mês corrente
-        </h2>
-        {usage.isLoading && <p className="text-sm text-text-2">Calculando…</p>}
-        {usage.data && (
-          <>
-            <div className="mb-4 grid grid-cols-2 gap-3 text-sm">
-              <Stat label="Total de tokens" value={usage.data.totalTokens.toLocaleString('pt-BR')} />
-              <Stat label="Custo (USD)" value={`$${usage.data.costUsd.toFixed(4)}`} />
-            </div>
-            {usage.data.breakdown.length > 0 ? (
-              <table className="w-full text-sm">
-                <thead className="text-left text-xs uppercase text-text-2">
-                  <tr>
-                    <th className="py-2">Provider</th>
-                    <th>Modelo</th>
-                    <th className="text-right">Tokens</th>
-                    <th className="text-right">Custo</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {usage.data.breakdown.map((b, i) => (
-                    <tr key={i} className="border-t border-border">
-                      <td className="py-2">{b.provider}</td>
-                      <td>{b.model}</td>
-                      <td className="text-right">{b.tokens.toLocaleString('pt-BR')}</td>
-                      <td className="text-right">${b.cost.toFixed(4)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        {testResult && (
+          <div
+            role="status"
+            className={
+              testResult.ok
+                ? 'rounded border border-success/40 bg-success/10 p-3 text-[13.5px] text-success-text'
+                : 'rounded border border-danger/40 bg-danger/10 p-3 text-[13.5px] text-danger-text'
+            }
+          >
+            {testResult.ok ? (
+              <>✓ Chave válida — resposta em {testResult.latencyMs}ms.</>
             ) : (
-              <p className="text-sm text-text-2">Sem uso de IA neste mês.</p>
+              <>
+                ✗ Chave inválida
+                {testResult.reason ? ` — ${testResult.reason}` : ''}.
+              </>
             )}
-          </>
+          </div>
         )}
-      </section>
-    </main>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded border border-border p-3">
-      <p className="text-xs text-text-2">{label}</p>
-      <p className="text-lg font-semibold">{value}</p>
-    </div>
+      </form>
+    </section>
   );
 }

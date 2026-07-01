@@ -972,6 +972,41 @@ foram fechados na Sprint 11.
   summary-parser, communication-summary-errors — todos falham
   no import por env vars ausentes; irrelevante a este chip).
   Type-check zero. Lint zero. Sem alterações no backend.
+- P-24 UI `/platform/ai-marketplace` form "Adicionar feature" —
+  fechado em 2026-07-01. Débito residual do Sprint 15F: o Platform
+  Owner só podia adicionar features novas via INSERT direto no
+  banco. Fix backend + frontend:
+  - **Backend** (`src/server/trpc/routers/platform-ai-marketplace.ts`):
+    nova mutation `createFeature` (platformProcedure) com Zod
+    validando code kebab-case (regex `/^[a-z0-9-]+$/`, 3-64 chars),
+    name/description tamanhos, category/provider como
+    `nativeEnum`, defaultInclusion como shape `{TRIAL, STARTER,
+    PRO, ENTERPRISE}` × `disabled|included|addon` (alinhado ao seed
+    da migration 0018), addonPrices opcionais nullable. CONFLICT
+    quando code duplicado. `platformAudit` com `after` populado
+  - **Frontend** (`src/app/platform/ai-marketplace/page.tsx`):
+    botão "+ Nova feature" no PageHeader abre `<Modal size="lg">`
+    com form completo (code em font-mono minusculado on-change,
+    name, description via `<Textarea>`, 2 selects enum, modelo
+    padrão como input livre, fieldset com 4 selects de inclusão
+    por plano em grid 2×2/4×1 responsivo, 2 inputs de preço
+    add-on opcionais). Submit converte strings vazias em null.
+    `friendlyTrpcError` (P-21) traduz erro Zod. `onSuccess`
+    invalida `list` e reseta form
+  - Testes: +14 novos em
+    `tests/unit/platform-ai-marketplace-create.test.ts` (7 de
+    validação Zod — kebab-case pass/fail em 3 variações, descrição
+    curta, provider inválido, defaultInclusion parcial; 5 de
+    persistência — CONFLICT, campos corretos + active=true,
+    preços nullable, audit assertion, list mostra criada; 2 de
+    RBAC — sem platformUser=FORBIDDEN em 2 variações). 563
+    passing / 4 falhas + 2 skipped pré-existentes por env vars
+    (field-encryption). Type-check zero (apenas erros pré-existentes
+    fora dos meus arquivos). Lint zero
+  - Escopo intencionalmente estreito: não implementa delete (spawn
+    de P-27 se necessário) nem edit inline de campos além dos já
+    cobertos pelo `setFeature` (active/addonPriceBrlMonthly/
+    defaultProvider/defaultModel)
 
 ---
 

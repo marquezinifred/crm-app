@@ -10,6 +10,7 @@ import {
   decryptField,
 } from '@/lib/crypto/field-encryption';
 import { getMonthlyUsage, AI_PRICING } from '@/server/services/ai-usage.service';
+import { env } from '@/lib/env';
 import { invalidateTenantClient } from '@/lib/ai/claude';
 import { createClient } from '@/lib/ai/adapters/registry';
 import { AiProviderError } from '@/lib/ai/adapters/types';
@@ -295,5 +296,92 @@ export const aiConfigRouter = router({
 
   monthlyUsage: protectedProcedure.query(({ ctx }) => getMonthlyUsage(ctx.tenantId)),
 
+  /**
+   * P-23 refino — dados por-feature pro Card D calcular alertas de
+   * FALLBACK_FREQUENT e COST_ABOVE_THRESHOLD.
+   *
+   * Retorna por feature ativa:
+   *   - fallbackCountLast24h: rows em ai_usage_logs com used_fallback=true
+   *     nas últimas 24h
+   *   - costBrlMtd: soma cost_usd do mês corrente × USD_BRL_RATE (sem
+   *     margem — é o custo direto pro tenant, que traz sua própria
+   *     chave)
+   *   - costAlertBrlMonthly: threshold configurado (null = sem alerta)
+   */
+  featureUsageForAlerts: adminOnlyProcedure.query(async ({ ctx }) => {
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+    const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const [features, states, mtdRows, fallbackRows] = await Promise.all([
+      prisma.aiFeature.findMany({ where: { active: true } }),
+      prisma.tenantAiFeature.findMany({ where: { tenantId: ctx.tenantId } }),
+      prisma.aIUsageLog.groupBy({
+        by: ['requestType'],
+        where: {
+          tenantId: ctx.tenantId,
+          createdAt: { gte: startOfMonth },
+          success: true,
+        },
+        _sum: { costUsd: true },
+      }),
+      prisma.aIUsageLog.groupBy({
+        by: ['requestType'],
+        where: {
+          tenantId: ctx.tenantId,
+          createdAt: { gte: last24h },
+          usedFallback: true,
+        },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const stateMap = new Map(states.map((s) => [s.featureId, s]));
+    const mtdMap = new Map(
+      mtdRows.map((r) => [r.requestType, Number(r._sum.costUsd ?? 0)]),
+    );
+    const fallbackMap = new Map(
+      fallbackRows.map((r) => [r.requestType, r._count._all]),
+    );
+
+    return features.map((f) => {
+      const requestType = FEATURE_CODE_TO_REQUEST_TYPE[f.code] ?? null;
+      const costUsdMtd = requestType ? (mtdMap.get(requestType) ?? 0) : 0;
+      const costBrlMtd = costUsdMtd * env.USD_BRL_RATE;
+      const fallbackCountLast24h = requestType
+        ? (fallbackMap.get(requestType) ?? 0)
+        : 0;
+      const s = stateMap.get(f.id);
+      return {
+        featureId: f.id,
+        featureCode: f.code,
+        featureName: f.name,
+        costBrlMtd,
+        fallbackCountLast24h,
+        costAlertBrlMonthly: s?.costAlertBrlMonthly
+          ? Number(s.costAlertBrlMonthly)
+          : null,
+      };
+    });
+  }),
+
   pricingTable: protectedProcedure.query(() => AI_PRICING),
 });
+
+/**
+ * P-23 refino — mapa feature.code → requestType logado por cada service.
+ * Sem essa ponte, não conseguimos atribuir uso a uma feature. Cada nova
+ * feature IA precisa registrar aqui o requestType usado no service dela.
+ *
+ * Débito residual: reverse mapping automático (via decorator ou registry
+ * central) fica pra Sprint 15G — hoje mantido explícito pra ficar óbvio
+ * quando um novo service esquecer de logar consistente.
+ */
+const FEATURE_CODE_TO_REQUEST_TYPE: Record<string, string> = {
+  'communication-summary': 'communication_summary',
+  'semantic-search': 'search_rerank',
+  'proposal-version-diff': 'document_compare',
+  'email-routing': 'email_link_rank',
+  'conversion-rate-suggestion': 'conversion_rate_suggestion',
+};

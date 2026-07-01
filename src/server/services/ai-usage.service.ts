@@ -72,30 +72,86 @@ export async function logAiUsage(input: LogUsageInput): Promise<void> {
   }
 }
 
-/** Agrega tokens + custo do tenant no mês corrente. Para o painel admin. */
+export interface MonthlyUsageBreakdownRow {
+  provider: AIProvider;
+  model: string;
+  tokens: number;
+  cost: number;
+  requests: number;
+  fallbackTokens: number;
+  fallbackCost: number;
+  fallbackRequests: number;
+}
+
+/**
+ * Agrega tokens + custo do tenant no mês corrente. Para o painel admin.
+ *
+ * P-23 refino — separa uso primary vs fallback por (provider, modelo)
+ * pra Card C mostrar as duas barras. Groupby usa `usedFallback` como
+ * pivot no cliente.
+ */
 export async function getMonthlyUsage(tenantId: string): Promise<{
   totalTokens: number;
   costUsd: number;
-  breakdown: Array<{ provider: AIProvider; model: string; tokens: number; cost: number }>;
+  totalFallbackTokens: number;
+  totalFallbackCostUsd: number;
+  breakdown: MonthlyUsageBreakdownRow[];
 }> {
   const start = new Date();
   start.setDate(1);
   start.setHours(0, 0, 0, 0);
 
   const rows = await prisma.aIUsageLog.groupBy({
-    by: ['provider', 'model'],
+    by: ['provider', 'model', 'usedFallback'],
     where: { tenantId, createdAt: { gte: start }, success: true },
     _sum: { totalTokens: true, costUsd: true },
+    _count: { _all: true },
   });
 
+  const pivot = new Map<string, MonthlyUsageBreakdownRow>();
   let totalTokens = 0;
   let costUsd = 0;
-  const breakdown = rows.map((r) => {
+  let totalFallbackTokens = 0;
+  let totalFallbackCostUsd = 0;
+
+  for (const r of rows) {
+    const key = `${r.provider}::${r.model}`;
+    const cur =
+      pivot.get(key) ??
+      {
+        provider: r.provider,
+        model: r.model,
+        tokens: 0,
+        cost: 0,
+        requests: 0,
+        fallbackTokens: 0,
+        fallbackCost: 0,
+        fallbackRequests: 0,
+      };
     const t = r._sum.totalTokens ?? 0;
     const c = Number(r._sum.costUsd ?? 0);
+    const n = r._count._all;
+    if (r.usedFallback) {
+      cur.fallbackTokens += t;
+      cur.fallbackCost += c;
+      cur.fallbackRequests += n;
+      totalFallbackTokens += t;
+      totalFallbackCostUsd += c;
+    } else {
+      cur.tokens += t;
+      cur.cost += c;
+      cur.requests += n;
+    }
     totalTokens += t;
     costUsd += c;
-    return { provider: r.provider, model: r.model, tokens: t, cost: c };
-  });
-  return { totalTokens, costUsd, breakdown };
+    pivot.set(key, cur);
+  }
+
+  return {
+    totalTokens,
+    costUsd,
+    totalFallbackTokens,
+    totalFallbackCostUsd,
+    breakdown: Array.from(pivot.values()).sort((a, b) => b.cost + b.fallbackCost - (a.cost + a.fallbackCost)),
+  };
 }

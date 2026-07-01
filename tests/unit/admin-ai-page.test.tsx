@@ -41,11 +41,38 @@ type Feature = {
   costAlertBrlMonthly: number | null;
 };
 
+type UsageBreakdownRow = {
+  provider: 'ANTHROPIC' | 'OPENAI';
+  model: string;
+  tokens: number;
+  cost: number;
+  requests: number;
+  fallbackTokens: number;
+  fallbackCost: number;
+  fallbackRequests: number;
+};
+
+type FeatureUsageAlert = {
+  featureId: string;
+  featureCode: string;
+  featureName: string;
+  fallbackCountLast24h: number;
+  costBrlMtd: number;
+  costAlertBrlMonthly: number | null;
+};
+
 const state: {
   cfg: Cfg;
   features: Feature[];
   breakers: Array<{ provider: 'ANTHROPIC'; open: boolean }>;
-  usage: { totalTokens: number; costUsd: number; breakdown: [] };
+  usage: {
+    totalTokens: number;
+    costUsd: number;
+    totalFallbackTokens: number;
+    totalFallbackCostUsd: number;
+    breakdown: UsageBreakdownRow[];
+  };
+  featureUsageAlerts: FeatureUsageAlert[];
 } = {
   cfg: {
     provider: 'ANTHROPIC',
@@ -55,7 +82,14 @@ const state: {
   },
   features: [],
   breakers: [],
-  usage: { totalTokens: 0, costUsd: 0, breakdown: [] },
+  usage: {
+    totalTokens: 0,
+    costUsd: 0,
+    totalFallbackTokens: 0,
+    totalFallbackCostUsd: 0,
+    breakdown: [],
+  },
+  featureUsageAlerts: [],
 };
 
 vi.mock('@/lib/trpc/client', () => {
@@ -82,6 +116,9 @@ vi.mock('@/lib/trpc/client', () => {
         listFeatures: { useQuery: () => useQueryReturn(state.features) },
         breakerStatus: { useQuery: () => useQueryReturn(state.breakers) },
         monthlyUsage: { useQuery: () => useQueryReturn(state.usage) },
+        featureUsageForAlerts: {
+          useQuery: () => useQueryReturn(state.featureUsageAlerts),
+        },
         updateConfig: { useMutation: noopMutation },
         updateFeature: { useMutation: noopMutation },
         testKey: { useMutation: noopMutation },
@@ -114,6 +151,14 @@ afterEach(() => {
   };
   state.features = [];
   state.breakers = [];
+  state.usage = {
+    totalTokens: 0,
+    costUsd: 0,
+    totalFallbackTokens: 0,
+    totalFallbackCostUsd: 0,
+    breakdown: [],
+  };
+  state.featureUsageAlerts = [];
 });
 
 async function render(node: React.ReactElement) {
@@ -214,6 +259,74 @@ describe('/admin/ai page (P-23)', () => {
       (b) => b.textContent,
     );
     expect(buttons).toContain('Limpar');
+  });
+
+  it('Card C mostra breakdown com barra primary + fallback e legenda', async () => {
+    state.usage = {
+      totalTokens: 1500,
+      costUsd: 0.5,
+      totalFallbackTokens: 300,
+      totalFallbackCostUsd: 0.1,
+      breakdown: [
+        {
+          provider: 'ANTHROPIC',
+          model: 'claude-haiku-4-5-20251001',
+          tokens: 1200,
+          cost: 0.4,
+          requests: 12,
+          fallbackTokens: 300,
+          fallbackCost: 0.1,
+          fallbackRequests: 3,
+        },
+      ],
+    };
+    await render(<AdminAIPage />);
+    // Legenda
+    expect(container.textContent).toContain('Primary');
+    expect(container.textContent).toContain('Fallback');
+    // Row label
+    expect(container.textContent).toContain('claude-haiku-4-5-20251001');
+    // Stats extras
+    expect(container.textContent).toContain('Tokens fallback');
+    expect(container.textContent).toContain('Custo fallback');
+    // Barra primary + fallback existem
+    const primaryBar = container.querySelector('.bg-info');
+    const fallbackBar = container.querySelector('.bg-warning');
+    expect(primaryBar).toBeTruthy();
+    expect(fallbackBar).toBeTruthy();
+  });
+
+  it('Card D exibe FALLBACK_FREQUENT quando fallbackCountLast24h >= 3', async () => {
+    state.featureUsageAlerts = [
+      {
+        featureId: 'u1',
+        featureCode: 'communication-summary',
+        featureName: 'Resumos',
+        fallbackCountLast24h: 5,
+        costBrlMtd: 50,
+        costAlertBrlMonthly: null,
+      },
+    ];
+    await render(<AdminAIPage />);
+    expect(container.textContent).toContain('Resumos');
+    expect(container.textContent).toContain('fallback');
+    expect(container.textContent).toContain('5');
+  });
+
+  it('Card D exibe COST_ABOVE_THRESHOLD quando gasto ultrapassa threshold', async () => {
+    state.featureUsageAlerts = [
+      {
+        featureId: 'u2',
+        featureCode: 'semantic-search',
+        featureName: 'Busca',
+        fallbackCountLast24h: 0,
+        costBrlMtd: 250.75,
+        costAlertBrlMonthly: 200,
+      },
+    ];
+    await render(<AdminAIPage />);
+    expect(container.textContent).toContain('Busca');
+    expect(container.textContent).toContain('Limite configurado');
   });
 
   it('Card D exibe MISSING_KEY quando tenant sem chave global e feature ativa sem chave', async () => {

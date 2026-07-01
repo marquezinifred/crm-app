@@ -700,52 +700,109 @@ function CardUsoCusto() {
   const usage = trpc.aiConfig.monthlyUsage.useQuery();
   const data = usage.data;
 
+  const maxCostRow = React.useMemo(() => {
+    if (!data || data.breakdown.length === 0) return 0;
+    return Math.max(
+      ...data.breakdown.map((b) => b.cost + b.fallbackCost),
+      Number.EPSILON,
+    );
+  }, [data]);
+
   return (
     <section className="rounded-lg border border-border bg-card p-6">
-      <header className="mb-4">
-        <h2 className="text-h3 text-text-1">Uso e custo</h2>
-        <p className="text-body text-text-2 mt-1">
-          Consumo do mês corrente, agregado por provider e modelo.
-        </p>
+      <header className="mb-4 flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-h3 text-text-1">Uso e custo</h2>
+          <p className="text-body text-text-2 mt-1">
+            Consumo do mês corrente, agregado por provider e modelo.
+          </p>
+        </div>
+        <div
+          className="flex items-center gap-3 text-caption text-text-2 shrink-0"
+          aria-label="Legenda"
+        >
+          <span className="inline-flex items-center gap-1.5">
+            <span aria-hidden className="h-2 w-2 rounded-sm bg-info" />
+            Primary
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span aria-hidden className="h-2 w-2 rounded-sm bg-warning" />
+            Fallback
+          </span>
+        </div>
       </header>
 
       {usage.isLoading && <p className="text-text-2">Calculando…</p>}
 
       {data && (
         <>
-          <div className="grid grid-cols-2 gap-3 mb-4">
+          <div className="grid grid-cols-2 gap-3 mb-4 md:grid-cols-4">
             <Stat
               label="Total de tokens"
               value={data.totalTokens.toLocaleString('pt-BR')}
             />
             <Stat label="Custo (USD)" value={`$${data.costUsd.toFixed(4)}`} />
+            <Stat
+              label="Tokens fallback"
+              value={data.totalFallbackTokens.toLocaleString('pt-BR')}
+            />
+            <Stat
+              label="Custo fallback (USD)"
+              value={`$${data.totalFallbackCostUsd.toFixed(4)}`}
+            />
           </div>
 
           {data.breakdown.length > 0 ? (
-            <Table>
-              <THead>
-                <TR>
-                  <TH>Provider</TH>
-                  <TH>Modelo</TH>
-                  <TH className="text-right">Tokens</TH>
-                  <TH className="text-right">Custo (USD)</TH>
-                </TR>
-              </THead>
-              <TBody>
-                {data.breakdown.map((b, i) => (
-                  <TR key={`${b.provider}-${b.model}-${i}`}>
-                    <TD>{PROVIDER_LABEL[b.provider]}</TD>
-                    <TD className="font-mono text-caption">{b.model}</TD>
-                    <TD className="text-right tabular-nums">
-                      {b.tokens.toLocaleString('pt-BR')}
-                    </TD>
-                    <TD className="text-right tabular-nums">
-                      ${b.cost.toFixed(4)}
-                    </TD>
-                  </TR>
-                ))}
-              </TBody>
-            </Table>
+            <ul className="space-y-3" aria-label="Uso por provider e modelo">
+              {data.breakdown.map((b, i) => {
+                const total = b.cost + b.fallbackCost;
+                const primaryPct = maxCostRow > 0 ? (b.cost / maxCostRow) * 100 : 0;
+                const fallbackPct =
+                  maxCostRow > 0 ? (b.fallbackCost / maxCostRow) * 100 : 0;
+                return (
+                  <li
+                    key={`${b.provider}-${b.model}-${i}`}
+                    className="rounded border border-border p-3"
+                  >
+                    <div className="flex flex-wrap items-baseline justify-between gap-2 mb-2">
+                      <div className="min-w-0">
+                        <span className="font-medium text-text-1">
+                          {PROVIDER_LABEL[b.provider]}
+                        </span>
+                        <span className="ml-2 font-mono text-caption text-text-3">
+                          {b.model}
+                        </span>
+                      </div>
+                      <div className="text-caption text-text-2 tabular-nums">
+                        {(b.requests + b.fallbackRequests).toLocaleString('pt-BR')} req ·{' '}
+                        {(b.tokens + b.fallbackTokens).toLocaleString('pt-BR')} tk ·{' '}
+                        <span className="text-text-1 font-medium">
+                          ${total.toFixed(4)}
+                        </span>
+                      </div>
+                    </div>
+                    <div
+                      className="flex h-2 w-full items-center gap-1"
+                      role="img"
+                      aria-label={`Primary $${b.cost.toFixed(4)} — Fallback $${b.fallbackCost.toFixed(4)}`}
+                    >
+                      <span
+                        className="h-full rounded-sm bg-info"
+                        style={{ width: `${primaryPct}%` }}
+                        title={`Primary: ${b.requests} req · ${b.tokens.toLocaleString('pt-BR')} tk · $${b.cost.toFixed(4)}`}
+                      />
+                      {b.fallbackRequests > 0 && (
+                        <span
+                          className="h-full rounded-sm bg-warning"
+                          style={{ width: `${fallbackPct}%` }}
+                          title={`Fallback: ${b.fallbackRequests} req · ${b.fallbackTokens.toLocaleString('pt-BR')} tk · $${b.fallbackCost.toFixed(4)}`}
+                        />
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           ) : (
             <p className="text-text-2">Sem uso de IA neste mês.</p>
           )}
@@ -774,6 +831,7 @@ function CardAlertas() {
   const status = trpc.aiConfig.breakerStatus.useQuery();
   const cfg = trpc.aiConfig.getConfig.useQuery();
   const list = trpc.aiConfig.listFeatures.useQuery();
+  const usageAlerts = trpc.aiConfig.featureUsageForAlerts.useQuery();
 
   const clear = trpc.aiConfig.clearCircuitBreaker.useMutation({
     onSuccess: () => {
@@ -798,8 +856,9 @@ function CardAlertas() {
           effectiveStatus: f.effectiveStatus,
           hasOwnKey: f.hasOwnKey,
         })),
+        featureUsage: usageAlerts.data ?? [],
       }),
-    [status.data, cfg.data, list.data],
+    [status.data, cfg.data, list.data, usageAlerts.data],
   );
 
   return (
@@ -811,13 +870,17 @@ function CardAlertas() {
         </p>
       </header>
 
-      {(status.isLoading || cfg.isLoading || list.isLoading) && (
+      {(status.isLoading || cfg.isLoading || list.isLoading || usageAlerts.isLoading) && (
         <p className="text-text-2">Verificando…</p>
       )}
 
-      {!status.isLoading && !cfg.isLoading && !list.isLoading && alerts.length === 0 && (
-        <p className="text-text-2">Nenhum alerta ativo.</p>
-      )}
+      {!status.isLoading &&
+        !cfg.isLoading &&
+        !list.isLoading &&
+        !usageAlerts.isLoading &&
+        alerts.length === 0 && (
+          <p className="text-text-2">Nenhum alerta ativo.</p>
+        )}
 
       <ul className="space-y-2">
         {alerts.map((a) => (

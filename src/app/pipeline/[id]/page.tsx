@@ -9,6 +9,7 @@ import { STAGE_INTENT_LABEL } from '@/lib/constants/pipeline-stages';
 import { CommunicationIntake } from '@/components/pipeline/CommunicationIntake';
 import { DocumentsSection } from '@/components/pipeline/DocumentsSection';
 import { ProposalsSection } from '@/components/pipeline/ProposalsSection';
+import { TasksSection } from '@/components/pipeline/TasksSection';
 import { OpportunityLossReason } from '@prisma/client';
 
 export default function OpportunityDetailPage() {
@@ -163,7 +164,9 @@ export default function OpportunityDetailPage() {
         />
       </section>
 
-      <ActivitiesAndTasks opportunityId={opp.id} />
+      <TasksSection opportunityId={opp.id} />
+
+      <ActivitiesTimeline opportunityId={opp.id} />
 
       <ProposalsSection opportunityId={opp.id} />
 
@@ -370,69 +373,30 @@ function StageFields({
   }
 }
 
-function ActivitiesAndTasks({ opportunityId }: { opportunityId: string }) {
+function ActivitiesTimeline({ opportunityId }: { opportunityId: string }) {
   const activities = trpc.activities.list.useQuery({ opportunityId });
-  const tasks = trpc.tasks.list.useQuery({ opportunityId });
-  const utils = trpc.useUtils();
-  const updateStatus = trpc.tasks.updateStatus.useMutation({
-    onSuccess: () => utils.tasks.list.invalidate({ opportunityId }),
-  });
 
   return (
-    <>
-      <section className="mb-4 rounded-lg border border-border bg-card p-4">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-1">
-          Tarefas ({tasks.data?.length ?? 0})
-        </h2>
-        {tasks.data && tasks.data.length === 0 && (
-          <p className="text-sm text-text-2">Sem tarefas vinculadas a esta oportunidade.</p>
-        )}
-        <ul className="space-y-2">
-          {tasks.data?.map((t) => (
-            <li key={t.id} className="flex items-center justify-between gap-2 rounded border border-border p-2 text-sm">
-              <div className="flex min-w-0 items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={t.status === 'DONE'}
-                  onChange={(e) =>
-                    updateStatus.mutate({ id: t.id, status: e.target.checked ? 'DONE' : 'TODO' })
-                  }
-                />
-                <div className="min-w-0">
-                  <p className={t.status === 'DONE' ? 'line-through text-text-2' : ''}>{t.title}</p>
-                  <p className="text-xs text-text-2">
-                    {t.assignee?.fullName ?? 'sem responsável'}
-                    {t.dueDate && ` · vence ${new Date(t.dueDate).toLocaleDateString('pt-BR')}`}
-                  </p>
-                </div>
-              </div>
-              <span className="text-xs uppercase text-text-2">{t.priority}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section className="mb-4 rounded-lg border border-border bg-card p-4">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-1">
-          Linha do tempo
-        </h2>
-        {activities.data && activities.data.length === 0 && (
-          <p className="text-sm text-text-2">Sem atividades registradas.</p>
-        )}
-        <ol className="space-y-3">
-          {activities.data?.map((a) => (
-            <li key={a.id} className="border-l-2 border-border pl-3">
-              <p className="text-xs text-text-2">
-                {new Date(a.occurredAt).toLocaleString('pt-BR')} · {a.type}
-                {a.author && ` · ${a.author.fullName}`}
-              </p>
-              {a.title && <p className="text-sm font-medium">{a.title}</p>}
-              <p className="whitespace-pre-line text-sm text-text-1">{a.content}</p>
-            </li>
-          ))}
-        </ol>
-      </section>
-    </>
+    <section className="mb-4 rounded-lg border border-border bg-card p-4">
+      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-1">
+        Linha do tempo
+      </h2>
+      {activities.data && activities.data.length === 0 && (
+        <p className="text-sm text-text-2">Sem atividades registradas.</p>
+      )}
+      <ol className="space-y-3">
+        {activities.data?.map((a) => (
+          <li key={a.id} className="border-l-2 border-border pl-3">
+            <p className="text-xs text-text-2">
+              {new Date(a.occurredAt).toLocaleString('pt-BR')} · {a.type}
+              {a.author && ` · ${a.author.fullName}`}
+            </p>
+            {a.title && <p className="text-sm font-medium">{a.title}</p>}
+            <p className="whitespace-pre-line text-sm text-text-1">{a.content}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
 

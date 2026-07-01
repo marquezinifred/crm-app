@@ -729,6 +729,25 @@ foram fechados na Sprint 11.
   migrados de raw `<table>` pro Table/TH/TR/TD do design system.
   +23 testes (15 hook + 8 TH), 404/410 passing (4 falhas + 2
   skipped pré-existentes por env vars)
+- P-20 Tarefas na oportunidade sem criar/editar/deletar — a seção
+  Tarefas em `/pipeline/[id]` só permitia marcar checkbox DONE;
+  faltava criar/editar/deletar. Backend: `tasks.update` e
+  `tasks.delete` (soft delete via `deletedAt`) em
+  `src/server/trpc/routers/activities.ts`, com `findFirst` filtrando
+  por `tenantId` (defesa em profundidade), audit com
+  `tenantIdOverride` e RBAC via `withCapability('opportunity',
+  'update')`. Frontend: novo componente
+  `src/components/pipeline/TasksSection.tsx` com Modal do design
+  system (form: título, descrição, prazo, prioridade,
+  responsável), botão "+ Nova tarefa", clique na linha abre modal
+  em modo edit, botão × dispara `AlertDialog` de confirmação (não
+  usa `confirm()` nativo). Toasts Venzo em todas as mutações.
+  Timeline extraída como `ActivitiesTimeline` inline no page.tsx.
+  +10 testes em `tests/unit/tasks-router.test.ts` (NOT_FOUND
+  cross-tenant, undefined não sobrescreve, null limpa campo,
+  audit com override, Zod rejeita título curto/id inválido, soft
+  delete preenche `deletedAt`). 443/449 passing (4 falhas + 2
+  skipped pré-existentes por env vars)
 
 ---
 

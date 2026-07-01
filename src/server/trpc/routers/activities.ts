@@ -288,4 +288,72 @@ export const tasksRouter = router({
       });
       return updated;
     }),
+
+  update: canWrite
+    .input(
+      z.object({
+        id: zUuid,
+        title: z.string().min(2).max(200).optional(),
+        description: z.string().max(4000).nullable().optional(),
+        dueDate: z.coerce.date().nullable().optional(),
+        priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional(),
+        assigneeId: zUuid.nullable().optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { id, ...rest } = input;
+      const existing = await prisma.task.findFirst({
+        where: { id, tenantId: ctx.tenantId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!existing) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Tarefa não encontrada.' });
+      }
+      const data = Object.fromEntries(
+        Object.entries(rest).filter(([, v]) => v !== undefined),
+      );
+      const updated = await prisma.task.update({
+        where: { id },
+        data: { ...data, updatedBy: ctx.user.id } as Prisma.TaskUncheckedUpdateInput,
+      });
+      await audit({
+        action: 'task.update',
+        tableName: 'tasks',
+        recordId: updated.id,
+        after: updated,
+        ip: ctx.ip,
+        userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
+      });
+      return updated;
+    }),
+
+  delete: canWrite
+    .input(z.object({ id: zUuid }))
+    .mutation(async ({ input, ctx }) => {
+      const existing = await prisma.task.findFirst({
+        where: { id: input.id, tenantId: ctx.tenantId, deletedAt: null },
+        select: { id: true, title: true, opportunityId: true, status: true },
+      });
+      if (!existing) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Tarefa não encontrada.' });
+      }
+      await prisma.task.update({
+        where: { id: input.id },
+        data: {
+          deletedAt: new Date(),
+          updatedBy: ctx.user.id,
+        } as Prisma.TaskUncheckedUpdateInput,
+      });
+      await audit({
+        action: 'task.delete',
+        tableName: 'tasks',
+        recordId: input.id,
+        before: existing,
+        ip: ctx.ip,
+        userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
+      });
+      return { ok: true };
+    }),
 });

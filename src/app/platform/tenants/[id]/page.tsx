@@ -74,7 +74,13 @@ export default function PlatformTenantDetailPage({
             {isSuspended && <Badge variant="danger">Suspenso</Badge>}
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <Link href={`/platform/tenants/${tenant.id}/ai`}>
+            <Button variant="secondary">IA</Button>
+          </Link>
+          <Link href={`/platform/tenants/${tenant.id}/ai/features`}>
+            <Button variant="secondary">Features IA</Button>
+          </Link>
           <Link href={`/platform/impersonate?tenant=${tenant.id}`}>
             <Button variant="secondary">Impersonar admin</Button>
           </Link>

@@ -518,9 +518,8 @@ INSERT direto no banco.
 
 **Esforço:** ~0.5 dia.
 
-**Status:** ✅ FECHADO em 2026-07-01 (SHA a ser preenchido no
-commit `feat(platform): add feature form in ai-marketplace
-(P-24)`). Backend adicionou mutation `createFeature` em
+**Status:** ✅ FECHADO em 2026-07-01 (commit `84e6f56`
+`feat(platform): add feature form in ai-marketplace (P-24)`). Backend adicionou mutation `createFeature` em
 `src/server/trpc/routers/platform-ai-marketplace.ts` com Zod
 validando code kebab-case (regex `/^[a-z0-9-]+$/`), name,
 description, category/provider como `nativeEnum`, defaultInclusion

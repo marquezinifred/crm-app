@@ -31,12 +31,20 @@ export default function ReportsPage() {
         title="Relatórios"
         description="Análise de conversão, performance e forecast."
         secondaryAction={
-          <a
-            href="/api/v1/reports/export"
-            className="rounded border border-border-strong px-3 py-1.5 text-sm hover:bg-page"
-          >
-            ↓ Exportar Excel
-          </a>
+          <div className="flex gap-2">
+            <a
+              href="/reports/inbound-vs-outbound"
+              className="rounded border border-border-strong px-3 py-1.5 text-sm hover:bg-page"
+            >
+              Inbound × Outbound →
+            </a>
+            <a
+              href="/api/v1/reports/export"
+              className="rounded border border-border-strong px-3 py-1.5 text-sm hover:bg-page"
+            >
+              ↓ Exportar Excel
+            </a>
+          </div>
         }
       />
 

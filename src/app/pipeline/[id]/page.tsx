@@ -67,12 +67,18 @@ export default function OpportunityDetailPage() {
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border pt-3 text-sm">
-          <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-hover text-xs font-medium">
-              {initials(opp.owner.fullName)}
+          {opp.owner ? (
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-hover text-xs font-medium">
+                {initials(opp.owner.fullName)}
+              </span>
+              <span>{opp.owner.fullName}</span>
+            </div>
+          ) : (
+            <span className="rounded-full bg-warning-bg px-2 py-0.5 text-xs text-warning-text">
+              Aguardando alocação
             </span>
-            <span>{opp.owner.fullName}</span>
-          </div>
+          )}
           {opp.partnerCompany && (
             <span className="rounded-full bg-info-bg px-2 py-0.5 text-xs text-info-text">
               Parceiro: {opp.partnerCompany.razaoSocial}

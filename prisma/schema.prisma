@@ -31,6 +31,9 @@ enum UserRole {
   DIRETOR_OPERACOES
   DIRETOR_FINANCEIRO
   GESTOR
+  // Sprint 15D — role temporária pra desbloquear inbound. Sprint 15E vira
+  // permission flag (inbound.assign_prospects) atribuível a qualquer role.
+  GESTOR_INBOUND
   ANALISTA
   PARCEIRO
 }
@@ -459,6 +462,8 @@ model Tenant {
   aiFeatures              TenantAiFeature[]
   healthSnapshots         TenantHealthSnapshot[]
   trialEvents             TrialEvent[]
+  inboundCaptureConfig    InboundCaptureConfig?
+  inboundLeadsRejected    InboundLeadRejected[]
 
   @@map("tenants")
 }
@@ -813,7 +818,9 @@ model Opportunity {
   clientContactId       String?                @map("client_contact_id") @db.Uuid
   partnerCompanyId      String?                @map("partner_company_id") @db.Uuid
   partnerContactId      String?                @map("partner_contact_id") @db.Uuid
-  ownerId               String                 @map("owner_id") @db.Uuid
+  // Sprint 15D — ownerId nullable pra suportar leads inbound não-atribuídos
+  // (ficam na fila /inbox/prospects até um Gestor de Inbound alocar).
+  ownerId               String?                @map("owner_id") @db.Uuid
   stage                 OpportunityStage       @default(PROSPECT)
   status                OpportunityStatus      @default(ACTIVE)
   estimatedValue        Decimal?               @map("estimated_value") @db.Decimal(15, 2)
@@ -849,6 +856,15 @@ model Opportunity {
   // calcular "dias nesta etapa" no Kanban sem JOIN no histórico)
   currentStageEnteredAt DateTime @default(now()) @map("current_stage_entered_at")
 
+  // Sprint 15D — rastreio de origem inbound
+  isInbound             Boolean   @default(false) @map("is_inbound")
+  inboundSource         String?   @map("inbound_source")
+  inboundFormId         String?   @map("inbound_form_id")
+  inboundPayload        Json?     @map("inbound_payload")
+  inboundReceivedAt     DateTime? @map("inbound_received_at")
+  inboundParsedBy       String?   @map("inbound_parsed_by")
+  inboundConfidence     Decimal?  @map("inbound_confidence") @db.Decimal(3, 2)
+
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   createdBy String?   @map("created_by") @db.Uuid
@@ -859,7 +875,7 @@ model Opportunity {
   clientCompany  Company     @relation("OpportunityClient", fields: [clientCompanyId], references: [id])
   clientContact  Contact?    @relation("OpportunityClientContact", fields: [clientContactId], references: [id])
   partnerCompany Company?    @relation("OpportunityPartner", fields: [partnerCompanyId], references: [id])
-  owner          User        @relation("OpportunityOwner", fields: [ownerId], references: [id])
+  owner          User?       @relation("OpportunityOwner", fields: [ownerId], references: [id])
   leadSource     LeadSource? @relation(fields: [leadSourceId], references: [id])
 
   team               OpportunityTeam[]
@@ -1840,4 +1856,49 @@ model BroadcastDismissal {
   @@id([broadcastId, userId])
   @@index([userId])
   @@map("broadcast_dismissals")
+}
+
+// =====================================================================
+// Sprint 15D — Inbound Marketing Pipeline
+// =====================================================================
+
+// 1:1 com Tenant. Config dos canais de captura (email + webhook), quem
+// notificar quando chega lead novo e regras anti-spam simples.
+model InboundCaptureConfig {
+  tenantId              String   @id @map("tenant_id") @db.Uuid
+  emailEnabled          Boolean  @default(true) @map("email_enabled")
+  webhookEnabled        Boolean  @default(true) @map("webhook_enabled")
+  webhookSecret         String?  @unique @map("webhook_secret")
+  notifyOnArrival       Boolean  @default(true) @map("notify_on_arrival")
+  notifyUserIds         String[] @default([]) @map("notify_user_ids") @db.Uuid
+  blacklistDomains      String[] @default([]) @map("blacklist_domains")
+  autoAssignByTerritory Boolean  @default(false) @map("auto_assign_by_territory")
+  updatedById           String?  @map("updated_by_id") @db.Uuid
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @default(now()) @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("inbound_capture_config")
+}
+
+// Leads com confidence baixa (< 0.4), blacklisted ou rate-limited não viram
+// opportunity; ficam aqui pra revisão manual do Gestor de Inbound.
+model InboundLeadRejected {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  source       String
+  rawPayload   Json      @map("raw_payload")
+  parsedJson   Json?     @map("parsed_json")
+  confidence   Decimal?  @db.Decimal(3, 2)
+  reason       String
+  receivedAt   DateTime  @default(now()) @map("received_at")
+  reviewedById String?   @map("reviewed_by") @db.Uuid
+  reviewedAt   DateTime? @map("reviewed_at")
+  status       String    @default("pending")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status, receivedAt])
+  @@map("inbound_leads_rejected")
 }

@@ -23,6 +23,7 @@ const ASSIGNABLE_ROLES = [
   'DIRETOR_OPERACOES',
   'DIRETOR_FINANCEIRO',
   'GESTOR',
+  'GESTOR_INBOUND',
   'ANALISTA',
   'PARCEIRO',
 ] as const satisfies readonly UserRole[];

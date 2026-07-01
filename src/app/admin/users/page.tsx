@@ -15,6 +15,7 @@ const ROLE_LABEL: Record<UserRole, string> = {
   DIRETOR_OPERACOES: 'Diretor de Operações',
   DIRETOR_FINANCEIRO: 'Diretor Financeiro',
   GESTOR: 'Gestor',
+  GESTOR_INBOUND: 'Gestor de Inbound',
   ANALISTA: 'Analista',
   PARCEIRO: 'Parceiro',
 };
@@ -25,6 +26,7 @@ const ALL_ROLES: UserRole[] = [
   'DIRETOR_OPERACOES',
   'DIRETOR_FINANCEIRO',
   'GESTOR',
+  'GESTOR_INBOUND',
   'ANALISTA',
   'PARCEIRO',
 ];

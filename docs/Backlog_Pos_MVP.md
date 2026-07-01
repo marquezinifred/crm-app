@@ -582,6 +582,89 @@ dedicado sem AppShell — não recebem `PageHeader`.
 Baseline mantido: 561 passing / 10 pré-existentes (env vars) /
 2 skipped. Type-check zero. Lint zero.
 
+### P-27. `/api/v1/inbound/email` estender pra criar Lead novo
+**Severidade:** Média. Registrado ao fechar Sprint 15D.
+
+Sprint 6 (Sprint 15D preservou) trata email inbound como Activity
+vinculada à opp existente via `emailLinkService.link`. Spec §7.2
+sugeria estender: se `parseLead` reconhece um lead novo (não é
+correspondência de opp existente), enfileirar no
+`inboundLeadQueue` em vez de vincular como atividade.
+
+Escopo:
+- Detectar sender NÃO conhecido (grep em `contacts`)
+- Rodar `parseLead` → se confidence ≥ 0.7 e contact.email/company.cnpj,
+  enfileira criar opp inbound
+- Senão manter comportamento antigo (IncomingEmail + tryAutoLink)
+- Guardar bit `converted_to_lead_at` em `incoming_emails` pra evitar
+  reprocessamento
+
+**Esforço:** ~1 dia. Depende de decisão de produto (Sprint 6 comportamento
+"linka" é preservado por default — sem breaking change hoje). Vale a
+pena quando cliente pedir "recebi 1 email num endereço novo, virou
+lead automaticamente".
+
+### P-28. Integrações nativas (RD Station / HubSpot / Typeform / LinkedIn)
+**Severidade:** Média. Registrado ao fechar Sprint 15D.
+
+Webhook custom + Zapier cobre 80% dos casos. Integrações OAuth
+diretas viram chip de sustentação dedicado quando cliente pedir.
+Priorizar por demanda:
+
+| Integração | Cliente típico | Esforço |
+|---|---|---|
+| RD Station (OAuth + Webhook nativo) | empresas BR de mkt B2B | ~3d |
+| HubSpot Forms (OAuth + Workflows) | stack HubSpot | ~3d |
+| Typeform direto (sem Zapier) | landing pages premium | ~2d |
+| LinkedIn Lead Gen Forms (Marketing API) | adv pago LI | ~4d |
+| Pipedrive Forms | empresas migrando | ~2d |
+| Mautic (self-hosted) | empresas técnicas | ~2d |
+
+### P-29. Rate limit por sender em lead inbound
+**Severidade:** Baixa. Registrado ao fechar Sprint 15D.
+
+Spec §5.3 propunha limite "mesmo email mandando > 10 leads/h vira
+suspeito". Sprint 15D só implementou rate limit por IP no endpoint
+(`PUBLIC_FORM_LIMIT` 10 req/min). Falta limite por *sender email*
+que sobreviva através de IPs diferentes (Zapier envia de IPs
+rotativos).
+
+**Solução:** contador Redis chaveado por email do contact quando
+`parsed.contact.email` presente. Se > 10 leads/hora, marca como
+`inbound_leads_rejected.reason='rate_limited_per_sender'`.
+
+**Esforço:** ~3h. Reusar `checkRate` do rate-limiter service.
+
+### P-30. UI de revisão de `inbound_leads_rejected`
+**Severidade:** Baixa. Registrado ao fechar Sprint 15D.
+
+Router tRPC expõe `rejectedList` + `rejectedDiscard`, e a tab
+Histórico em `/admin/email-inbound` mostra os rejected junto com
+os created. Falta uma tela dedicada com:
+- Filtro por reason (low_confidence / blacklisted_domain / parse_error)
+- Ver o raw payload completo (útil pra debugar parser)
+- Botão "Promover" (força criar opp mesmo com confidence baixa)
+- Retry de parser em novos rejected (útil se subimos versão nova
+  do prompt IA)
+
+**Esforço:** ~4h. Não urgente porque a maioria dos rejected é spam
+que ninguém quer processar. Volta quando parser começar a ter
+falsos negativos.
+
+### P-31. Push nativo pro vendedor quando alocado (mobile)
+**Severidade:** Baixa. Registrado ao fechar Sprint 15D.
+
+`inboundRouter.assignInbound` audita e retorna sucesso mas não
+notifica o vendedor. Precisamos:
+- Chamada a `sendPushToUser(ownerId, ...)` dentro da mutation
+- Push message: "Novo prospect atribuído: {empresa}. Comece a
+  qualificação."
+- URL: `/pipeline/{opp.id}`
+
+**Esforço:** ~1h. Trivial mas foi cortado do Sprint 15D pra não
+atrasar. Baixa prioridade porque o vendedor vê o novo card no
+pipeline mesmo sem push.
+
 ### ~~P-22. Convite de usuário sem indicação do tenant de destino~~ ✅ FECHADO
 **Resolvido em 2026-06-30 pelo commit `a1affec`.** Novo router
 `src/server/trpc/routers/tenants.ts` com procedure `current`
@@ -780,33 +863,60 @@ vars). Type-check zero novo (apenas o pré-existente P-18 em
 
 ## 📅 Sprints planejados (próximas 4–6 semanas)
 
-### Sprint 15A — Platform Console
+### ~~Sprint 15A — Platform Console~~ ✅ FECHADO 2026-06-29
 Spec: `docs/Sprint_15A_Platform_Console.md`
-**5–7 dias.** Renomeação SUPER_ADMIN → PLATFORM_OWNER, `/platform/*`
-shell, CRUD de tenants, impersonação com audit trail, audit
-cross-tenant, privacy cross-tenant, feature flags Unleash.
 
-**Pré-requisito de OPERAÇÃO.**
-
-### Sprint 15B — AI Operations + Plataforma Estratégica
+### ~~Sprint 15B — AI Operations + Plataforma Estratégica~~ ✅ FECHADO 2026-06-30
 Spec: `docs/Sprint_15B_AI_Ops_Platform.md`
-**4–5 dias.** AI Ops Center (limits, anomaly, model pinning, custo R$),
-AI Marketplace (catálogo `ai_features` 3 estados), Tenant Health
-Score, Trial Pipeline, Broadcast genérico.
 
-**Pré-requisito de ESCALA.** Depende de 15A.
+### ~~Sprint 15C — Usabilidade: Forms, Listas Configuráveis e QuickCreate~~ ✅ FECHADO 2026-06-30
+Spec: `docs/Sprint_15C_Usabilidade_Forms.md`
 
-### Sprint 15C (proposto) — CRUD UI Completo
-**3–4 dias.** Fechar buracos de UI que ficaram:
+### ~~Sprint 15D — Inbound Marketing Pipeline~~ ✅ FECHADO 2026-07-01
+Spec: `docs/Sprint_15D_Inbound_Marketing.md`
 
-- P-01 (`/companies` + `/contacts` CRUD) — se não fechado antes
-- CRUD de **territórios** (sem UI dedicada hoje, só seed)
-- CRUD de **segmentos** (sem UI dedicada hoje, só seed)
-- Polish do CRUD de **produtos** (modal existe mas pode ter gaps)
-- Padronizar todos os admin pages com PageHeader + EmptyState
-  consistentes (P-02)
+Entregue em 6 fases (commits `87f5a1b` → `1747f30`):
+- Migration 0029 (UserRole ganha GESTOR_INBOUND + opportunity fields
+  is_inbound/inbound_* + owner_id nullable + inbound_capture_config +
+  inbound_leads_rejected + seed feature inbound-lead-parser)
+- Parser híbrido `src/server/services/inbound-parser.service.ts` com 5
+  matchers regex (webhook JSON / Typeform / RD Station / HTML table /
+  plain key:value) + fallback IA via `dispatchChat`. DataMaskingService
+  preservado.
+- Service `inbound-lead-creator.service.ts` + worker BullMQ
+  `inbound-lead-create` (dedup company/contact, anti-spam blacklist,
+  cria opp em PROSPECT sem owner + audit com tenantIdOverride).
+- Endpoint público POST `/api/v1/inbound/lead?secret=…` com rate limit
+  PUBLIC_FORM_LIMIT (Sprint 11).
+- Router tRPC `inbound` (getConfig, updateConfig, regenerateWebhookSecret,
+  queueList/queueCount, sellersWithLoad, assignInbound, historyList,
+  rejectedList, rejectedDiscard).
+- Novas RBAC actions: `opportunity:assign`, `opportunity:set_inbound_owner`,
+  `inbound:view_queue`, `inbound:configure`. GESTOR_INBOUND novo role.
+- UI `/inbox/prospects` (kanban lista com Popover de alocação por carga).
+- UI `/admin/email-inbound` refeita com Tabs (E-mail / Forms / Histórico).
+- Novo relatório `/reports/inbound-vs-outbound` (funil comparativo,
+  conversion rate, ticket médio, cycle time) + service puro
+  `inbound-analytics.service.ts`.
+- 38 testes novos. Baseline 619/627 passing (6 falhas pré-existentes).
 
-**Status:** sem spec dedicada; criar quando alocar.
+Pendências residuais registradas em novos débitos (P-27 a P-31 abaixo).
+
+### Sprint 15E — RBAC Granular (Permissões Configuráveis)
+Spec: `docs/Sprint_15E_RBAC_Granular.md`
+
+**~7 dias.** Refactor estrutural — roles como perfis padrão + permissions
+individuais por user. Backfill automático do GESTOR_INBOUND (Sprint 15D)
+→ ADMIN + 3 permissions. Cache em `users.cached_permissions`. UI
+`/admin/users/[id]/permissions`. ~30 procedures migradas de `withRoles`
+pra `withPermission`. Migration 0030. Depende de 15D entregue como caso
+de uso âncora.
+
+### Sprint 15F — IA Multi-Provider por Feature + Fallback ✅ BACKEND FECHADO 2026-06-30
+Spec: `docs/Sprint_15F_IA_Multi_Provider.md`
+
+Ver histórico completo no `CLAUDE.md`. Backend + UI dos 4 Cards em
+`/admin/ai` entregues; rollout gradual (`MULTI_AI_ENABLED` já ativo).
 
 ---
 

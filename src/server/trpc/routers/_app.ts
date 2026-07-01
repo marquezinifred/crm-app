@@ -33,6 +33,7 @@ import { billingRouter } from './billing';
 import { platformRouter } from './platform';
 import { broadcastsRouter } from './platform-health-trials-broadcasts';
 import { tenantsRouter } from './tenants';
+import { inboundRouter } from './inbound';
 
 export const appRouter = router({
   health: publicProcedure.query(() => ({
@@ -97,6 +98,7 @@ export const appRouter = router({
   platform: platformRouter,
   broadcasts: broadcastsRouter,
   tenants: tenantsRouter,
+  inbound: inboundRouter,
 });
 
 export type AppRouter = typeof appRouter;

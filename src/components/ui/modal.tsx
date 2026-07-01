@@ -31,6 +31,15 @@ export function Modal({
   const dialogRef = React.useRef<HTMLDivElement>(null);
   const previouslyFocused = React.useRef<HTMLElement | null>(null);
 
+  // P-12 — `onClose` é capturado por ref pra que o effect de focus/listener
+  // dependa SÓ de `open`. Sem isso, callers que passam `onClose={() => ...}`
+  // inline geravam nova função a cada render e disparavam o effect a cada
+  // keystroke, roubando foco pro primeiro input do modal.
+  const onCloseRef = React.useRef(onClose);
+  React.useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
   React.useEffect(() => {
     if (!open) return;
     previouslyFocused.current = document.activeElement as HTMLElement | null;
@@ -40,7 +49,7 @@ export function Modal({
     focusables?.[0]?.focus();
 
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') onCloseRef.current();
       if (e.key === 'Tab' && focusables && focusables.length > 0) {
         const first = focusables[0]!;
         const last = focusables[focusables.length - 1]!;
@@ -60,7 +69,8 @@ export function Modal({
       document.documentElement.style.overflow = '';
       previouslyFocused.current?.focus();
     };
-  }, [open, onClose]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onClose intencional via ref (P-12)
+  }, [open]);
 
   if (!open) return null;
 

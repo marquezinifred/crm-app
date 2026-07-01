@@ -11,6 +11,46 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 ## Sprint atual
 
+> **Fix corretivo — Modal rouba foco (P-12):
+> ✅ CONCLUÍDO em 2026-06-30**
+>
+> Bug bash em sessão real revelou que TODOS os 12 modais do app
+> (`/platform/tenants` "+ Novo tenant", `/companies` "+ Nova
+> empresa", `/admin/users` "+ Convidar", etc.) tinham o cursor
+> pulando pro primeiro input a cada keystroke. Forms intestáveis.
+>
+> Entregue:
+>  - ✅ **`src/components/ui/modal.tsx`**: `onClose` capturado em
+>    `onCloseRef` e removido das deps do `useEffect` de focus
+>    inicial / listener de ESC + Tab trap. Effect roda 1× ao
+>    montar (`open` true) e cleanup 1× ao desmontar. Callers
+>    passam `onClose={() => setOpen(false)}` inline — cada render
+>    do parent (disparado por `setForm` a cada keystroke) criava
+>    nova closure, mudando a identidade de `onClose`, disparando
+>    o cleanup+setup por completo, com `focusables[0].focus()`
+>    roubando o foco pro primeiro input do modal
+>  - ✅ **Escopo cirúrgico**: só o Modal muda. Nenhum dos 12
+>    callers (`/platform/tenants` +2, `/platform/broadcasts`,
+>    `/platform/trials` +2, `/platform/tenants/[id]`,
+>    `/admin/users` +N, `/companies`, `/contacts`, etc.) foi
+>    tocado — o fix propaga por serem consumidores da mesma
+>    função `<Modal>`
+>  - ✅ **ESC + Tab trap preservados**: ESC continua fechando
+>    via `onCloseRef.current()`; Tab cicla dentro do modal
+>    (Shift+Tab no primeiro → último; Tab no último → primeiro)
+>  - ✅ `eslint-disable-next-line react-hooks/exhaustive-deps`
+>    com comentário justificando o `onClose` intencional via ref
+>  - ✅ Testes: `tests/unit/modal.test.tsx` novo com 3 casos
+>    (re-render não rouba foco / ESC fecha / Tab cicla). Baseline
+>    378 → 381 passing (4 falhas pré-existentes por env vars
+>    ausentes em field-encryption/rate-limiter/ai-pricing/
+>    document-compare/summary-parser + 2 skipped seguem iguais).
+>    Verificação cruzada: reverter só o modal.tsx faz o teste (1)
+>    falhar, confirmando que ele captura o bug real
+>  - ✅ Type-check zero. Lint zero
+>
+> 🎉 Débito P-12 do `Backlog_Pos_MVP.md` fechado.
+
 > **Fix corretivo — 3 UX gaps de uso manual (P-08/P-09/P-10):
 > ✅ CONCLUÍDO em 2026-06-30**
 >
@@ -603,6 +643,15 @@ foram fechados na Sprint 11.
   `injectPlatformHeadersIfOwner()` chamado em paralelo aos headers
   tenant. +4 testes unitários, 372/378 passing (4 falhas + 2 skipped
   pré-existentes por env vars)
+- P-12 Modal rouba foco a cada keystroke — `src/components/ui/modal.tsx`
+  tinha `onClose` nas deps do `useEffect` que faz focus inicial
+  + Tab trap. Callers passam `onClose={() => setOpen(false)}` inline,
+  então cada render do parent (via `setForm` em cada keystroke)
+  criava nova closure → identidade de `onClose` mudava → effect
+  reciclava → `focusables[0].focus()` roubava foco pro primeiro
+  input. Fix: capturar `onClose` em `onCloseRef` e depender só
+  de `[open]`. +3 testes em `tests/unit/modal.test.tsx`,
+  381/387 passing (4 falhas + 2 skipped pré-existentes)
 
 ---
 

@@ -446,42 +446,30 @@ pro tenant errado sem perceber. Fix:
 - +5 testes em `tests/unit/tenants-current.test.ts`
 >>>>>>> e5c94ca (docs(backlog): fix commit SHA in P-22 closed entry)
 
-### P-21. Erro Zod renderizado como JSON cru na UI
-**Severidade:** Média (UX). Identificado em 2026-06-30 no
-`/admin/users` — convidar usuário com email inválido mostra:
-
-```
-[ { "code": "custom", "message": "E-mail inválido", "path": [ "email" ] } ]
-```
-
-em vez de apenas "E-mail inválido".
-
-**Causa raiz:** `src/app/admin/users/page.tsx:51` — `onError: (e) =>
-setInviteError(e.message)` renderiza `e.message` cru. Do
-`TRPCClientError`, `e.message` de erros Zod vem como JSON.stringify
-do `zodError.flatten()`.
-
-**Fix (~1h):** helper `src/lib/trpc/error-format.ts` novo:
-```ts
-export function friendlyTrpcError(err: TRPCClientErrorLike<AppRouter>): string {
-  const zod = err.data?.zodError?.fieldErrors;
-  if (zod) {
-    const first = Object.values(zod).flat()[0];
-    if (first) return String(first);
-  }
-  return err.message;
-}
-```
-
-E aplicar em todos os formulários com Zod input:
-```bash
-grep -rn "onError.*e\.message\|setError(e\.message)" src --include="*.tsx"
-```
-
-**Padrão consistente:** todo `.useMutation({onError})` deve usar
-`friendlyTrpcError(e)` em vez de `e.message`.
-
-**Esforço:** ~1h — helper + refactor de ~10-15 callers + 1 teste.
+### ~~P-21. Erro Zod renderizado como JSON cru na UI~~ ✅ FECHADO
+**Resolvido em 2026-06-30.** Helper `src/lib/trpc/error-format.ts`
+novo exporta `friendlyTrpcError(err)` que extrai a primeira mensagem
+de `err.data.zodError.fieldErrors` (com fallback pra `formErrors` e
+pra `err.message`). O `errorFormatter` em `src/server/trpc/trpc.ts`
+já expõe `zodError.flatten()` desde o Sprint 0 — só faltava o cliente
+consumir. Rollout em 20 arquivos migrando `e.message` (e
+`.error.message` em display de estado de mutation/query) pra
+`friendlyTrpcError(e)`. Rotas cobertas: `/admin/users`,
+`/admin/products`, `/admin/listas`, `/admin/alerts`, `/admin/branding`,
+`/admin/email-inbound`, `/contacts`, `/onboarding`, `/imports`,
+`/search`, `/pipeline/new`, `/pipeline/[id]`, `/pipeline/@modal`,
+`/platform/tenants`, `/platform/broadcasts`, `/platform/dashboard`,
+`/platform/impersonate`, `/p/[tenantSlug]/contact`, `/p/tc/[token]`,
++ 5 componentes (`CompanyForm`, `CommunicationIntake`,
+`PipelineKanban`, `PipelineMobile`, `TasksSection`,
+`quick-create-trigger`). Antes: usuário via `[{"code":"custom",…}]`;
+depois: "E-mail inválido" limpo. +8 testes em
+`tests/unit/friendly-trpc-error.test.ts` (fieldError único,
+múltiplos campos, formErrors puro, não-Zod, sem data, fallback vazio,
+arrays vazias intercaladas, strings vazias intercaladas). Baseline
+mantido — 533 passing (10 falhas + 2 skipped pré-existentes por env
+vars faltando em field-encryption + communication-summary-errors,
+confirmadas em HEAD antes do fix).
 
 ### ~~P-20. Tarefas na oportunidade sem criar/editar/deletar~~ ✅ FECHADO
 **Resolvido em 2026-06-30 pelo commit `030a9de`.** Backend ganhou

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { OpportunitySource } from '@prisma/client';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Field } from '@/components/ui/field';
@@ -210,7 +211,7 @@ export default function NewOpportunityPage() {
 
         {create.error && (
           <p role="alert" className="text-caption text-danger">
-            {create.error.message}
+            {friendlyTrpcError(create.error)}
           </p>
         )}
 

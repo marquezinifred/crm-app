@@ -880,6 +880,31 @@ foram fechados na Sprint 11.
   em chunks pra evitar stack overflow. +24 testes (13 dropzone +
   11 upload-router), 457/463 passing (4 falhas + 2 skipped
   pré-existentes por env vars)
+- P-21 Erro Zod renderizado como JSON cru na UI — helper
+  `src/lib/trpc/error-format.ts` novo com `friendlyTrpcError(err)`.
+  O `errorFormatter` em `src/server/trpc/trpc.ts` já expunha
+  `zodError.flatten()` desde o Sprint 0; só faltava o cliente
+  extrair. Fallback triplo: `fieldErrors[0]` → `formErrors[0]` →
+  `err.message` (compat com `TRPCError` não-Zod, ex:
+  `UNAUTHORIZED`). Rollout em 20 arquivos migrando `e.message` (e
+  `.error.message` de estado de mutation/query em display) pra
+  `friendlyTrpcError(e)`. Rotas: `/admin/users`, `/admin/products`,
+  `/admin/listas`, `/admin/alerts`, `/admin/branding`,
+  `/admin/email-inbound`, `/contacts`, `/onboarding`, `/imports`,
+  `/search`, `/pipeline/new`, `/pipeline/[id]`,
+  `/pipeline/@modal`, `/platform/tenants`, `/platform/broadcasts`,
+  `/platform/dashboard`, `/platform/impersonate`,
+  `/p/[tenantSlug]/contact`, `/p/tc/[token]`. Componentes:
+  `CompanyForm`, `CommunicationIntake`, `PipelineKanban`,
+  `PipelineMobile`, `TasksSection`, `quick-create-trigger`. Antes:
+  usuário via `[{"code":"custom","message":"E-mail
+  inválido","path":["email"]}]`; depois: "E-mail inválido" limpo.
+  +8 testes em `tests/unit/friendly-trpc-error.test.ts` (fieldError
+  único, múltiplos campos, formErrors puro, não-Zod, sem data,
+  fallback vazio, arrays vazias intercaladas, strings vazias
+  intercaladas). 533 passing (10 falhas + 2 skipped pré-existentes
+  por env vars em field-encryption + communication-summary-errors,
+  confirmadas em HEAD antes do fix)
 
 ---
 

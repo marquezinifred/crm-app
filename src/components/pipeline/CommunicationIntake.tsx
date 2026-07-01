@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { Button } from '@/components/ui/button';
 
 interface Props {
@@ -98,7 +99,7 @@ export function CommunicationIntake({ opportunityId, stageHasDirtyChanges = fals
           </p>
         )}
         {!blockedByDirty && summarize.error && (
-          <p className="mt-2 text-sm text-danger">{summarize.error.message}</p>
+          <p className="mt-2 text-sm text-danger">{friendlyTrpcError(summarize.error)}</p>
         )}
       </div>
     );

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { Button } from '@/components/ui/button';
 import type { ThemeConfig } from '@/lib/theme/types';
 import { VENZO_DEFAULTS } from '@/lib/theme/types';
@@ -236,7 +237,7 @@ export default function BrandingPage() {
               {update.isPending ? 'Publicando…' : 'Publicar tema'}
             </Button>
             {update.error && (
-              <p className="rounded bg-red-50 p-2 text-xs text-danger">{update.error.message}</p>
+              <p className="rounded bg-red-50 p-2 text-xs text-danger">{friendlyTrpcError(update.error)}</p>
             )}
             {isEnterprise && failures.length > 0 && (
               <Button
@@ -288,7 +289,7 @@ export default function BrandingPage() {
               </span>
             </label>
             {publishOverride.error && (
-              <p className="mb-2 rounded bg-red-50 p-2 text-xs text-danger">{publishOverride.error.message}</p>
+              <p className="mb-2 rounded bg-red-50 p-2 text-xs text-danger">{friendlyTrpcError(publishOverride.error)}</p>
             )}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setShowOverride(false)}>

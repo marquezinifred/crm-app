@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { Button } from '@/components/ui/button';
 
 export default function PublicTcAcceptPage() {
@@ -86,7 +87,7 @@ export default function PublicTcAcceptPage() {
         </label>
 
         {accept.error && (
-          <p className="rounded bg-red-50 p-2 text-sm text-danger">{accept.error.message}</p>
+          <p className="rounded bg-red-50 p-2 text-sm text-danger">{friendlyTrpcError(accept.error)}</p>
         )}
 
         <Button type="submit" disabled={accept.isPending || !data.partner.tcText}>

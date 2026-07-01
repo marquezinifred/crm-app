@@ -17,6 +17,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -259,7 +260,7 @@ function LeadSourcesTab() {
       utils.leadSources.list.invalidate();
       toast({ kind: 'success', title: 'Origem desligada.' });
     },
-    onError: (e) => toast({ kind: 'error', title: e.message }),
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
   const reorder = trpc.leadSources.reorder.useMutation({
     onSuccess: () => utils.leadSources.list.invalidate(),
@@ -294,7 +295,7 @@ function IndustriesTab() {
   });
   const remove = trpc.industries.remove.useMutation({
     onSuccess: () => utils.industries.list.invalidate(),
-    onError: (e) => toast({ kind: 'error', title: e.message }),
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
   const reorder = trpc.industries.reorder.useMutation({
     onSuccess: () => utils.industries.list.invalidate(),
@@ -329,7 +330,7 @@ function ContactRolesTab() {
   });
   const remove = trpc.contactRoles.remove.useMutation({
     onSuccess: () => utils.contactRoles.list.invalidate(),
-    onError: (e) => toast({ kind: 'error', title: e.message }),
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
   const reorder = trpc.contactRoles.reorder.useMutation({
     onSuccess: () => utils.contactRoles.list.invalidate(),

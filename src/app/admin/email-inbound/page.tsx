@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { Button } from '@/components/ui/button';
 
 export default function EmailInboundConfigPage() {
@@ -82,7 +83,7 @@ export default function EmailInboundConfigPage() {
             </Button>
           </form>
           {setSlugMut.error && (
-            <p className="mt-2 text-sm text-danger">{setSlugMut.error.message}</p>
+            <p className="mt-2 text-sm text-danger">{friendlyTrpcError(setSlugMut.error)}</p>
           )}
         </section>
       )}

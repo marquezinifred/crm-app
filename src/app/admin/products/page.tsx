@@ -1,6 +1,7 @@
 'use client';
 
 import { trpc, type RouterOutputs } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { useId, useMemo, useState } from 'react';
 import { ProductType } from '@prisma/client';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -58,7 +59,7 @@ export default function AdminProductsPage() {
       setForm(EMPTY);
       setError(null);
     },
-    onError: (e) => setError(e.message),
+    onError: (e) => setError(friendlyTrpcError(e)),
   });
   const update = trpc.products.update.useMutation({
     onSuccess: () => {
@@ -67,7 +68,7 @@ export default function AdminProductsPage() {
       setForm(EMPTY);
       setError(null);
     },
-    onError: (e) => setError(e.message),
+    onError: (e) => setError(friendlyTrpcError(e)),
   });
   const remove = trpc.products.remove.useMutation({
     onSuccess: () => {

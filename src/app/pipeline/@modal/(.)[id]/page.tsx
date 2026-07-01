@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { Sheet, SheetHeader, SheetBody } from '@/components/ui/sheet';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -74,7 +75,7 @@ export default function PipelineDetailSheet({ params }: { params: { id: string }
         )}
         {oppQ.error && (
           <p role="alert" className="px-5 py-4 text-body text-danger">
-            {oppQ.error.message}
+            {friendlyTrpcError(oppQ.error)}
           </p>
         )}
         {opp && (

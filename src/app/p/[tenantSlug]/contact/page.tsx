@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { Input, Textarea } from '@/components/ui/input';
@@ -98,7 +99,7 @@ export default function PublicContactRegistrationPage() {
 
           {mutation.error && (
             <p role="alert" className="rounded bg-danger-bg/40 border border-danger/30 p-2 text-caption text-danger-text">
-              {mutation.error.message}
+              {friendlyTrpcError(mutation.error)}
             </p>
           )}
 

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Field } from '@/components/ui/field';
 import { Select } from '@/components/ui/input';
@@ -114,7 +115,7 @@ export default function PlatformImpersonatePage() {
           </Field>
 
           {start.error && (
-            <p role="alert" className="text-caption text-danger">{start.error.message}</p>
+            <p role="alert" className="text-caption text-danger">{friendlyTrpcError(start.error)}</p>
           )}
 
           <Button type="submit" variant="primary" disabled={!tenantId || !userId} loading={start.isPending}>

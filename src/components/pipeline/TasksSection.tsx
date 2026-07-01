@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { trpc, type RouterOutputs } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { Button } from '@/components/ui/button';
 import { Modal, ModalFooter } from '@/components/ui/modal';
 import { AlertDialog } from '@/components/ui/alert-dialog';
@@ -50,21 +51,21 @@ export function TasksSection({ opportunityId }: { opportunityId: string }) {
       invalidate();
       toast({ kind: 'success', title: 'Tarefa criada.' });
     },
-    onError: (e) => toast({ kind: 'error', title: 'Falha ao criar tarefa.', description: e.message }),
+    onError: (e) => toast({ kind: 'error', title: 'Falha ao criar tarefa.', description: friendlyTrpcError(e) }),
   });
   const update = trpc.tasks.update.useMutation({
     onSuccess: () => {
       invalidate();
       toast({ kind: 'success', title: 'Tarefa atualizada.' });
     },
-    onError: (e) => toast({ kind: 'error', title: 'Falha ao salvar tarefa.', description: e.message }),
+    onError: (e) => toast({ kind: 'error', title: 'Falha ao salvar tarefa.', description: friendlyTrpcError(e) }),
   });
   const remove = trpc.tasks.delete.useMutation({
     onSuccess: () => {
       invalidate();
       toast({ kind: 'success', title: 'Tarefa removida.' });
     },
-    onError: (e) => toast({ kind: 'error', title: 'Falha ao remover tarefa.', description: e.message }),
+    onError: (e) => toast({ kind: 'error', title: 'Falha ao remover tarefa.', description: friendlyTrpcError(e) }),
   });
   const updateStatus = trpc.tasks.updateStatus.useMutation({ onSuccess: invalidate });
 

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { Button } from '@/components/ui/button';
 import { ImportEntity, ImportDedupStrategy, ImportStatus } from '@prisma/client';
 
@@ -207,7 +208,7 @@ export default function ImportsPage() {
               </select>
             </label>
             {confirm.error && (
-              <p className="rounded bg-red-50 p-2 text-sm text-danger">{confirm.error.message}</p>
+              <p className="rounded bg-red-50 p-2 text-sm text-danger">{friendlyTrpcError(confirm.error)}</p>
             )}
             <div className="flex justify-between">
               <Button type="button" variant="outline" onClick={() => setStep('map')}>

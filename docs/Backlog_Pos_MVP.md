@@ -459,34 +459,20 @@ grep -rn "onError.*e\.message\|setError(e\.message)" src --include="*.tsx"
 
 **Esforço:** ~1h — helper + refactor de ~10-15 callers + 1 teste.
 
-### P-20. Tarefas na oportunidade sem criar/editar/deletar
-**Severidade:** 🔴 Alta (feature incompleta). Identificado em
-2026-06-30 por Fred: "falta um botão para cadastrar ou editar as
-tarefas nas oportunidades".
-
-**Sintoma:** em `/pipeline/[id]` (detalhe da oportunidade) a seção
-"Tarefas" só permite **marcar como DONE** via checkbox. Não tem
-botão criar, não tem edit inline, não tem delete. Se você digitou
-tarefa errada, tem que ir em Prisma Studio ou aceitar.
-
-**Backend faltando:** `tasksRouter` em `src/server/trpc/routers/activities.ts`
-tem `list`, `myOpen`, `create`, `updateStatus`. **Falta `update` e
-`delete`.**
-
-**Frontend faltando:** componente `ActivitiesAndTasks` em
-`src/app/pipeline/[id]/page.tsx:373` só renderiza lista + checkbox.
-
-**Fix:**
-1. Backend: adicionar `tasks.update` (title, description, dueDate,
-   priority, assigneeId) e `tasks.delete` (soft delete via
-   `deletedAt`)
-2. Frontend: extrair `ActivitiesAndTasks` para componente próprio;
-   adicionar botão "+ Nova tarefa" no header; modal com form
-   (título, descrição, dueDate, priority, assignee); click na
-   linha abre modal em modo edit; botão × pra deletar (com
-   confirmação); audit em create/update/delete
-
-**Esforço:** ~2h (backend + UI + testes).
+### ~~P-20. Tarefas na oportunidade sem criar/editar/deletar~~ ✅ FECHADO
+**Resolvido em 2026-06-30 pelo commit `030a9de`.** Backend ganhou
+`tasks.update` e `tasks.delete` (soft delete via `deletedAt`) com
+filtro por `tenantId` no `findFirst` (defesa em profundidade),
+audit com `tenantIdOverride` e RBAC via
+`withCapability('opportunity', 'update')`. Frontend extraído para
+`src/components/pipeline/TasksSection.tsx` com Modal do design
+system (form: título, descrição, prazo, prioridade, responsável),
+botão "+ Nova tarefa", clique na linha abre modal em modo edit,
+botão × dispara `AlertDialog` de confirmação. Toasts Venzo em
+todas as mutações. `ActivitiesTimeline` extraído inline no page.tsx
+como componente separado. +10 testes em
+`tests/unit/tasks-router.test.ts`. 443/449 passing (4 falhas + 2
+skipped pré-existentes por env vars).
 
 ### P-19. Upload de documentos + templates é placeholder manual
 **Severidade:** 🔴 Alta (feature quebrada). Identificado em

@@ -385,6 +385,48 @@ Baseline 381 → 404 passing. Type-check zero. Lint zero.
   neste rollout; adicionar `sortBy`/`sortDir` na query tRPC
   quando surgir
 
+### P-13. 401 do middleware vira "Unable to transform response from server"
+**Severidade:** Média-Alta (UX). Identificado em 2026-06-30 testando
+"Resumir com IA" em `/pipeline/[id]` após sessão Clerk expirar.
+
+**Sintoma:** quando token JWT do Clerk caduca em dev (~60s TTL), o
+middleware `src/middleware.ts:78` retorna JSON custom
+`{ error: { code: 'UNAUTHORIZED', message: 'Sessão expirada ou
+ausente. Faça login novamente.' } }` com status 401 pra rotas
+`/api/trpc/*`. Bom no papel — mas o cliente tRPC espera envelope
+tRPC (`{result: ...} | {error: {json: {...}}}`), não consegue
+parsear o JSON custom e mostra mensagem genérica "Unable to
+transform response from server" em vez da mensagem real "Sessão
+expirada. Faça login novamente."
+
+**Impacto:** usuário vê erro incompreensível e não entende que
+basta recarregar a página.
+
+**Fix recomendado (~1h):** custom link no `src/lib/trpc/client.ts`
+que detecta HTTP 401, mostra toast "Sua sessão expirou.
+Recarregando…" e chama `window.location.reload()` (ou
+`signOut()` do Clerk). Cobre todas as procedures automaticamente
+sem mexer no middleware.
+
+### P-18. IA multi-provider por feature + fallback (Sprint 15F)
+**Severidade:** 🔴 Alta — design arquitetural. Identificado em
+2026-06-30 por Fred: "a tela de IA cadastra apenas 1 serviço, mas
+o design era várias IAs, cada uma específica pra um caso, com
+fallback quando uma falha".
+
+Spec completa: [Sprint_15F_IA_Multi_Provider.md](Sprint_15F_IA_Multi_Provider.md).
+
+**Escopo:** cascata de resolução `TenantAiFeature.override →
+AiFeature.default → Tenant.global`, provider adapters unificados
+(Anthropic/OpenAI/Google/Perplexity), `callAiWithFallback()`,
+circuit breaker por-(provider, tenant), UI `/admin/ai` refactor
+em 4 cards, Platform Marketplace edit, feature flag rollout
+gradual.
+
+**Depende de:** P-14 fechado (per-tenant AI key). ✅ Já fechado.
+
+**Esforço:** 5–7 dias. Sprint dedicado.
+
 ---
 
 ## 📅 Sprints planejados (próximas 4–6 semanas)

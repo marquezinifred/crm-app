@@ -388,6 +388,40 @@ Baseline 381 → 404 passing. Type-check zero. Lint zero.
   quando surgir
 
 <<<<<<< HEAD
+### P-23. Sprint 15F — UI `/admin/ai` (4 Cards) adiada
+**Severidade:** Alta (feature multi-provider inacessível pelo tenant sem UI).
+Backend do Sprint 15F completo (routers, adapters, resolução em cascata,
+fallback, testKey, breakerStatus). Falta a UI dos 4 Cards da spec §3.3:
+- Card A: Configuração padrão do tenant
+- Card B: Tabela features com override por (tenant, feature)
+- Card C: Uso e custo (últimos 7 e 30 dias)
+- Card D: Alertas ativos
+
+**Impacto:** enquanto UI não existir, feature `MULTI_AI_ENABLED=true` só é
+utilizável via Prisma Studio ou seed direto. Path legado
+(`getAnthropic()` global) continua funcional como fallback.
+
+**Esforço:** ~2 dias.
+
+### P-24. Sprint 15F — UI `/platform/ai-marketplace` form adiada
+**Severidade:** Média. Backend
+`platform.aiMarketplace.setFeature` aceita edit de
+`defaultProvider`/`defaultModel`, mas o form "Adicionar feature
+nova" na UI Platform Owner não foi entregue. Feature nova precisa
+INSERT direto no banco.
+
+**Esforço:** ~0.5 dia.
+
+### P-25. Sprint 15F — Rollout em produção pendente
+**Severidade:** Alta (bloqueia validação real). Migrations 0027 e
+0028 aplicadas em Neon dev em 2026-06-30 ✓. Falta:
+- Aplicar migrations em Neon produção
+- Ativar `MULTI_AI_ENABLED=true` pro tenant Fred (marquezini)
+  por override em `tenants.multi_ai_enabled` OU env global
+- Monitorar 3-5 dias `ai_usage_logs` (usedFallback, configured_provider)
+- Expandir pra 2-3 early adopters Enterprise
+- 30 dias sem regressão → flag global `true` em produção
+
 ### ~~P-22. Convite de usuário sem indicação do tenant de destino~~ ✅ FECHADO
 **Resolvido em 2026-06-30 pelo commit `a1affec`.** Novo router
 `src/server/trpc/routers/tenants.ts` com procedure `current`

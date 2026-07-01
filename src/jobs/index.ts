@@ -21,6 +21,8 @@ import {
   startHealthScoreRollupWorker,
   type HealthScoreRollupJobData,
 } from './health-score-rollup.worker';
+// Sprint 15D — captura de leads inbound
+import { startInboundLeadCreateWorker } from './inbound-lead-create.worker';
 
 async function main() {
   const scanWorker = startAlertsScanWorker();
@@ -28,6 +30,7 @@ async function main() {
   const importWorker = startImportRunWorker();
   const aiRollupWorker = startAiUsageRollupWorker();
   const healthRollupWorker = startHealthScoreRollupWorker();
+  const inboundLeadWorker = startInboundLeadCreateWorker();
 
   scanWorker.on('failed', (job, err) =>
     console.error(`[alerts-scan] job ${job?.id} falhou:`, err.message),
@@ -43,6 +46,9 @@ async function main() {
   );
   healthRollupWorker.on('failed', (job, err) =>
     console.error(`[health-score-rollup] job ${job?.id} falhou:`, err.message),
+  );
+  inboundLeadWorker.on('failed', (job, err) =>
+    console.error(`[inbound-lead-create] job ${job?.id} falhou:`, err.message),
   );
 
   // Agendamentos diários (BRT)
@@ -70,7 +76,7 @@ async function main() {
   });
 
   console.info(
-    '[workers] alerts-scan + email-send + import-run + ai-usage-rollup + health-score-rollup rodando',
+    '[workers] alerts-scan + email-send + import-run + ai-usage-rollup + health-score-rollup + inbound-lead-create rodando',
   );
   console.info('[workers] crons: scan 07:00 BRT · ai-rollup 00:30 BRT · health-rollup 02:00 BRT');
 
@@ -83,6 +89,7 @@ async function main() {
       importWorker.close(),
       aiRollupWorker.close(),
       healthRollupWorker.close(),
+      inboundLeadWorker.close(),
     ]);
     process.exit(0);
   };

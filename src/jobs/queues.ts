@@ -20,6 +20,8 @@ export const QUEUE_NAMES = {
   importRun: 'import-run',
   aiUsageRollup: 'ai-usage-rollup',
   healthScoreRollup: 'health-score-rollup',
+  // Sprint 15D — captura automática de leads inbound
+  inboundLeadCreate: 'inbound-lead-create',
 } as const;
 
 export function makeQueue<T = unknown>(name: string): Queue<T> {
@@ -53,4 +55,13 @@ export interface EmailSendJobData {
 
 export interface ImportRunJobData {
   importJobId: string;
+}
+
+// Sprint 15D — worker de criação de opp inbound (lê parser + persiste)
+export interface InboundLeadCreateJobData {
+  tenantId: string;
+  source: 'email' | 'webhook_custom';
+  raw: string | Record<string, unknown>;
+  receivedAt: string; // ISO string — Bull serializa datas como string
+  originIdentifier?: string;
 }

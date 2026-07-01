@@ -387,6 +387,7 @@ Baseline 381 → 404 passing. Type-check zero. Lint zero.
   neste rollout; adicionar `sortBy`/`sortDir` na query tRPC
   quando surgir
 
+<<<<<<< HEAD
 ### ~~P-22. Convite de usuário sem indicação do tenant de destino~~ ✅ FECHADO
 **Resolvido em 2026-06-30 pelo commit `a1affec`.** Novo router
 `src/server/trpc/routers/tenants.ts` com procedure `current`
@@ -395,6 +396,21 @@ em `src/app/admin/users/page.tsx` exibe "Convidando para o
 tenant: {nome}" abaixo do título; se `impersonating != null`,
 badge amarelo "⚠ Modo impersonação — confirme o destino". +6
 testes em `tests/unit/tenants-current.test.ts`.
+=======
+### ~~P-22. Convite sem indicação do tenant destino~~ ✅ FECHADO
+**Resolvido em 2026-06-30 pelo commit `a1affec`.** Modal
+"Convidar usuário" em `/admin/users` não indicava pro qual tenant
+o convite ia. Backend usava `ctx.tenantId` implicitamente. Em
+cenário de Platform Owner impersonando, risco alto de convidar
+pro tenant errado sem perceber. Fix:
+- Novo router `src/server/trpc/routers/tenants.ts` com procedure
+  `current` (id/name/slug/plan + `impersonating` flag)
+- Registrado em `_app.ts` como `tenants`
+- Modal do `/admin/users` mostra "Convidando para o tenant: X"
+  + badge "⚠ Modo impersonação — confirme o destino" quando
+  `impersonating != null` (hoje sempre null; ver P-23)
+- +5 testes em `tests/unit/tenants-current.test.ts`
+>>>>>>> e5c94ca (docs(backlog): fix commit SHA in P-22 closed entry)
 
 ### P-21. Erro Zod renderizado como JSON cru na UI
 **Severidade:** Média (UX). Identificado em 2026-06-30 no

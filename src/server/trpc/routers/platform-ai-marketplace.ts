@@ -1,10 +1,18 @@
 import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
 import { router, platformProcedure } from '@/server/trpc/trpc';
 import { prisma } from '@/server/db/client';
 import { runAsPlatform } from '@/server/db/tenant-context';
 import { platformAudit } from '@/server/services/audit-platform.service';
 import { zUuid } from '@/lib/validators';
-import { AiFeatureStatus, AIProvider } from '@prisma/client';
+import { AiFeatureCategory, AiFeatureStatus, AIProvider } from '@prisma/client';
+
+// P-24 — inclusão por plano no defaultInclusion JSON.
+// Alinhado ao seed da migration 0018 (values lowercase: disabled|included|addon).
+// `ai-config.ts` faz toUpperCase() e usa apenas 'INCLUDED' pra ativar por default,
+// então 'addon' aqui apenas sinaliza que o Platform Owner deve ligar manualmente
+// (via tenantAccessSet) — não vira ADDON_ACTIVE automático.
+const zPlanInclusion = z.enum(['disabled', 'included', 'addon']);
 
 export const platformAiMarketplaceRouter = router({
   list: platformProcedure.query(async ({ ctx }) =>
@@ -16,6 +24,69 @@ export const platformAiMarketplaceRouter = router({
       return features;
     }),
   ),
+
+  createFeature: platformProcedure
+    .input(
+      z.object({
+        code: z
+          .string()
+          .min(3)
+          .max(64)
+          .regex(/^[a-z0-9-]+$/, 'Use apenas letras minúsculas, números e hífens (ex: email-classify).'),
+        name: z.string().min(3).max(100),
+        description: z.string().min(10).max(500),
+        category: z.nativeEnum(AiFeatureCategory),
+        defaultProvider: z.nativeEnum(AIProvider),
+        defaultModel: z.string().min(2).max(80),
+        defaultInclusion: z.object({
+          TRIAL: zPlanInclusion,
+          STARTER: zPlanInclusion,
+          PRO: zPlanInclusion,
+          ENTERPRISE: zPlanInclusion,
+        }),
+        addonPriceBrlMonthly: z.number().nonnegative().finite().nullable().optional(),
+        addonPriceBrlPerUse: z.number().nonnegative().finite().nullable().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) =>
+      runAsPlatform(ctx.platformUser.id, async () => {
+        const existing = await prisma.aiFeature.findUnique({
+          where: { code: input.code },
+          select: { id: true },
+        });
+        if (existing) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'Feature com esse code já existe.',
+          });
+        }
+
+        const created = await prisma.aiFeature.create({
+          data: {
+            code: input.code,
+            name: input.name,
+            description: input.description,
+            category: input.category,
+            defaultProvider: input.defaultProvider,
+            defaultModel: input.defaultModel,
+            defaultInclusion: input.defaultInclusion,
+            addonPriceBrlMonthly: input.addonPriceBrlMonthly ?? null,
+            addonPriceBrlPerUse: input.addonPriceBrlPerUse ?? null,
+            active: true,
+          },
+        });
+
+        await platformAudit({
+          platformUserId: ctx.platformUser.id,
+          action: 'platform.aiMarketplace.createFeature',
+          tableName: 'ai_features',
+          recordId: created.id,
+          after: created,
+        });
+
+        return created;
+      }),
+    ),
 
   setFeature: platformProcedure
     .input(

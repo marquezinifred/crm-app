@@ -518,6 +518,27 @@ INSERT direto no banco.
 
 **Esforço:** ~0.5 dia.
 
+**Status:** ✅ FECHADO em 2026-07-01 (commit `84e6f56`
+`feat(platform): add feature form in ai-marketplace (P-24)`). Backend adicionou mutation `createFeature` em
+`src/server/trpc/routers/platform-ai-marketplace.ts` com Zod
+validando code kebab-case (regex `/^[a-z0-9-]+$/`), name,
+description, category/provider como `nativeEnum`, defaultInclusion
+como shape `{TRIAL, STARTER, PRO, ENTERPRISE} × disabled|included|
+addon` (alinhado ao seed 0018), addonPrices nullable. CONFLICT em
+code duplicado. `platformAudit` com `after` populado. Frontend
+adicionou botão "+ Nova feature" no PageHeader + `<Modal size="lg">`
+com form completo (fieldset de 4 selects de inclusão por plano,
+`<Textarea>` de descrição, 2 inputs de preço opcionais).
+`friendlyTrpcError` (P-21) traduz Zod. `onSuccess` invalida list e
+reseta form. Testes: +14 novos em
+`tests/unit/platform-ai-marketplace-create.test.ts` (7 validação
+Zod + 5 persistência + 2 RBAC). 563 passing / 4 falhas + 2 skipped
+pré-existentes por env vars. Type-check zero (nas mudanças). Lint
+zero. Escopo intencionalmente estreito — não implementa delete de
+feature (spawn de novo débito se necessário) nem edit inline dos
+campos já cobertos pelo `setFeature` (active/addonPriceBrlMonthly/
+defaultProvider/defaultModel).
+
 ### P-25. Sprint 15F — Rollout em produção pendente
 **Severidade:** Alta (bloqueia validação real). Migrations 0027 e
 0028 aplicadas em Neon dev em 2026-06-30 ✓. Falta:

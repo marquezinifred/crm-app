@@ -12,6 +12,13 @@ import {
   DEFAULT_CONVERSION_RATES,
   type OpportunitySnap,
 } from '@/server/services/analytics.service';
+import {
+  computeInboundFunnel,
+  compareConversionRates,
+  averageTicketByOrigin,
+  averageCycleTime,
+  type InboundOpSnap,
+} from '@/server/services/inbound-analytics.service';
 import { suggestConversionRates } from '@/server/services/conversion-rate-suggestion.service';
 import { zUuid } from '@/lib/validators';
 import { OpportunityStage, Prisma, UserRole } from '@prisma/client';
@@ -104,6 +111,41 @@ async function loadOpps(
   }));
 }
 
+// Sprint 15D — loader dedicado que inclui isInbound pra InboundOpSnap[].
+async function loadInboundOpps(
+  role: UserRole,
+  userId: string,
+  partnerCompanyId: string | null,
+  filters: FilterInput,
+): Promise<InboundOpSnap[]> {
+  const opps = await prisma.opportunity.findMany({
+    where: {
+      ...visibility(role, userId, partnerCompanyId),
+      ...whereFromFilters(filters),
+    },
+    select: {
+      id: true,
+      isInbound: true,
+      stage: true,
+      status: true,
+      estimatedValue: true,
+      closedValue: true,
+      createdAt: true,
+      actualCloseDate: true,
+    },
+  });
+  return opps.map((o) => ({
+    id: o.id,
+    isInbound: o.isInbound,
+    stage: o.stage,
+    status: o.status,
+    estimatedValue: Number(o.estimatedValue ?? 0),
+    closedValue: o.closedValue ? Number(o.closedValue) : null,
+    createdAt: o.createdAt,
+    actualCloseDate: o.actualCloseDate,
+  }));
+}
+
 const canRead = withCapability('opportunity', 'read');
 
 export const reportsRouter = router({
@@ -154,6 +196,28 @@ export const reportsRouter = router({
       (tenant?.conversionRates as Partial<Record<OpportunityStage, number>> | null) ?? {};
     return projectRevenue(opps, rates);
   }),
+
+  // ═════════════════════════════════════════════════════════════════
+  // Sprint 15D — Inbound vs Outbound
+  // ═════════════════════════════════════════════════════════════════
+
+  inboundVsOutbound: canRead
+    .input(filterInput.default({}))
+    .query(async ({ input, ctx }) => {
+      const opps = await loadInboundOpps(
+        ctx.user.role,
+        ctx.user.id,
+        ctx.user.partnerCompanyId,
+        input,
+      );
+      return {
+        funnel: computeInboundFunnel(opps),
+        conversion: compareConversionRates(opps),
+        ticket: averageTicketByOrigin(opps),
+        cycleTime: averageCycleTime(opps),
+        total: opps.length,
+      };
+    }),
 
   // ----- Conversion rates config -----
   conversionRates: protectedProcedure.query(async ({ ctx }) => {

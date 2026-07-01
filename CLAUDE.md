@@ -11,6 +11,178 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 ## Sprint atual
 
+> **Sprint 15D — Inbound Marketing Pipeline:
+> ✅ CONCLUÍDO em 2026-07-01**
+>
+> Spec: `docs/Sprint_15D_Inbound_Marketing.md`. Captura automática de
+> leads inbound via formulário público e webhook custom + qualificação
+> assistida por IA. Cada lead vira Opportunity `is_inbound=true` em
+> `PROSPECT` sem owner; Gestor de Inbound aloca em `/inbox/prospects`.
+>
+> **Entregue em 6 fases (commits `87f5a1b` → `1747f30`):**
+>
+> **Fase 1 — Schema + migration 0029** (commit `87f5a1b`):
+>  - `UserRole` enum ganha `GESTOR_INBOUND` (role temporária — Sprint
+>    15E migra pra permission granular). Recria enum pelo pattern
+>    RENAME_old + cast todas colunas escalares e array de UserRole.
+>  - `opportunities` ganha 7 campos novos: `is_inbound`, `inbound_source`,
+>    `inbound_form_id`, `inbound_payload jsonb`, `inbound_received_at`,
+>    `inbound_parsed_by`, `inbound_confidence numeric(3,2)`.
+>  - `opportunities.owner_id` vira nullable — leads inbound aguardam
+>    alocação. Manuais continuam com owner obrigatório (enforce em
+>    código). Índice parcial pra fila (WHERE is_inbound AND
+>    owner_id IS NULL AND stage='PROSPECT' AND deleted_at IS NULL).
+>  - Nova tabela `inbound_capture_config` (1:1 com tenant): webhook_secret
+>    com partial UNIQUE index, notify_user_ids, blacklist_domains,
+>    auto_assign_by_territory. RLS padrão.
+>  - Nova tabela `inbound_leads_rejected` (confidence < 0.4 / blacklisted
+>    / rate_limited vão pra revisão manual). RLS padrão.
+>  - Feature `inbound-lead-parser` seedada em `ai_features` (Haiku 4.5,
+>    ADDON R$ 49/mês STARTER, INCLUDED TRIAL/PRO/ENTERPRISE).
+>  - RBAC: novas actions `opportunity:assign`, `opportunity:set_inbound_owner`,
+>    `inbound:view_queue`, `inbound:configure`. GESTOR_INBOUND lê +
+>    aloca inbound. ADMIN e DIRETOR_COMERCIAL veem a fila.
+>
+> **Fase 2 — Parser híbrido** (commit `968f1ca`):
+>  - `src/server/services/inbound-parser.service.ts` com 5 matchers
+>    regex por ordem de especificidade:
+>    1. `webhook-custom-json` (JSON estruturado, confidence 0.99)
+>    2. `typeform-v1` (detecta "typeform", confidence 0.95)
+>    3. `rd-station-v1` (detecta "RD Station" / "resultados digitais", 0.9)
+>    4. `html-table-form` (Contact Form 7 / Cal.com <tr><td>, 0.9)
+>    5. `plain-key-value` (genérico "Campo: Valor", 0.85)
+>  - Fallback IA via `dispatchChat('inbound-lead-parser', tenantId,
+>    ...)` quando nenhum regex bate ≥ 0.85. Confidence 0.65 no fallback.
+>  - **DataMaskingService preservado** — regra crítica: `masking.mask()`
+>    ANTES de dispatchChat + `masking.unmask()` DEPOIS. Provider nunca
+>    vê PII em texto claro (tokens `[EMAIL_1]` / `[CNPJ_1]` etc).
+>  - `logAiUsage` grava consumo com feature=`inbound_lead_parse`,
+>    `used_fallback` e `configured_provider` (Sprint 15F).
+>  - Utilities exportados: `extractKeyValuePairs`, `buildFromKeyValueDict`
+>    (com KEY_ALIASES mapeando "nome"/"empresa"/"telefone"/etc),
+>    `parseCurrencyBrl` (heurística "R$ 12.000" thousands vs "12.50"
+>    decimal), `normalizeCnpj`, `parseIsoDate`.
+>  - 14 testes puros: cada matcher com contract shape + PII masking
+>    verificado (email real não aparece no payload que chega ao provider).
+>
+> **Fase 3 — Worker + endpoint público + router tRPC** (commit `a7e0803`):
+>  - `src/server/services/inbound-lead-creator.service.ts`:
+>    - `createInboundLead` orquestra parser → dedup company/contact →
+>      criar opp OR rejected. Sempre em `runAsSystem` (worker não tem
+>      userId autenticado).
+>    - `findOrCreateCompany` dedup por CNPJ senão razaoSocial/nomeFantasia
+>      case-insensitive; cria como CLIENT type.
+>    - `findOrCreateContact` dedup por email dentro da company; vincula
+>      contato órfão se existente; placeholder email em caso raro sem email.
+>    - `isBlacklisted` suporta 3 formatos: domínio exato ("spam.com"),
+>      sufixo @ ("@evil.com"), endereço completo ("abuse@x.com").
+>    - `deriveOpportunityTitle` usa mensagem truncada 60 chars OU
+>      contact.name OU placeholder "Empresa (inbound)".
+>    - **Audit com tenantIdOverride obrigatório** — worker fora do tRPC
+>      não tem AsyncLocalStorage do tRPC context (bug audit-trpc-context-loss).
+>  - `src/jobs/inbound-lead-create.worker.ts` + queue
+>    `QUEUE_NAMES.inboundLeadCreate` + payload
+>    `InboundLeadCreateJobData`. Registrado no `jobs/index.ts` com
+>    listener .on('failed', ...) e close no shutdown gracioso.
+>    `notifyInboundManagers` best-effort — push falha não falha o job.
+>  - Endpoint POST `/api/v1/inbound/lead?secret=<x>` (ou header
+>    X-Webhook-Secret). Rate limit por IP via `PUBLIC_FORM_LIMIT`
+>    (Sprint 11 — 10 req/min). Lookup config pelo webhook_secret
+>    (partial UNIQUE index). 401 se inválido, 403 se webhookEnabled=false.
+>    Retorna 202 { status: 'queued' }.
+>  - Router `inbound.ts`:
+>    - `getConfig` — lazy defaults se ainda não persistido.
+>    - `updateConfig` (canConfigure) — upsert com whitelist Zod, redact
+>      `webhook_secret` no audit log.
+>    - `regenerateWebhookSecret` — `randomBytes(32).toString('hex')` com
+>      prefixo 'whs_'. NUNCA loga secret real no audit — só "rotatedAt".
+>    - `queueList` / `queueCount` — feed de `/inbox/prospects` com
+>      filtros opcionais (source, minConfidence).
+>    - `sellersWithLoad` — ADMIN/DIRETOR_COMERCIAL/GESTOR/ANALISTA
+>      ordenados por opps ativas asc. `groupBy` em batch pra evitar N+1.
+>    - `assignInbound` (canAssignInbound) — mutation dedicada, valida
+>      opp isInbound=true + ownerId=null antes de alocar.
+>    - `historyList`, `rejectedList`, `rejectedDiscard` pra tab histórico.
+>  - Testes puros: `isBlacklisted` (6 casos), `deriveOpportunityTitle`
+>    (4 casos), MIN_CONFIDENCE = 0.4.
+>
+> **Fase 4 — UI `/inbox/prospects`** (commit `0e04b67`):
+>  - PageHeader dinâmico "Prospects inbound (N)". Filtros: source
+>    dropdown dinâmico + confiança (alta ≥ 0.8 / média 0.4-0.79).
+>  - Cards por lead: razão social + contato + tempo relativo (`há
+>    12min`), badge IA (primary) ou regex (success) + confidence %,
+>    valor estimado em gold/tabular-nums com tooltip completo, data
+>    prev., email clicável, source pill.
+>  - Botão "Alocar" abre Popover Radix com vendedores ordenados por
+>    carga asc. Cada linha mostra role + count de opps ativas.
+>  - `?highlight={id}` na URL destaca o card (push notification landing).
+>  - Toasts Venzo em success/error usando `useToast` (kind: success/error).
+>  - Empty state Venzo: "Sem leads aguardando alocação. Bom trabalho,
+>    fila zerada."
+>  - Sidebar ganha item "Fila inbound" na seção Operação (IconInbox).
+>  - Testes shape do router (3 casos).
+>
+> **Fase 5 — Tabs em `/admin/email-inbound`** (commit `a7f3ef1`):
+>  - Refactor com Tabs Radix — 3 tabs:
+>    - "E-mail inbound" (Sprint 6 preservado + AlertDialog do design
+>      system substituindo `confirm()` nativo).
+>    - "Forms de captura" (Sprint 15D novo) — 3 cards: Webhook (URL
+>      completa + Copiar + AlertDialog danger pra Regenerar secret),
+>      Notificação (toggle + UserPicker multi-select — sem seleção
+>      default GESTOR_INBOUND), Blacklist (textarea 1 domínio por linha
+>      com formatos documentados em `<code>`).
+>    - "Histórico" — lista unificada de leads created + rejected com
+>      Badge success/danger e confidence %.
+>  - Componente auxiliar `UserPicker` estilo checklist.
+>
+> **Fase 6 — Relatório inbound × outbound + testes** (commit `1747f30`):
+>  - `src/server/services/inbound-analytics.service.ts` puro:
+>    - `computeInboundFunnel` — funil comparativo por estágio (só
+>      ACTIVE).
+>    - `compareConversionRates` — winRate = won / (won + lost) por
+>      origem; 0 se nada decidido.
+>    - `averageTicketByOrigin` — média de closedValue OR estimatedValue
+>      só das ganhas (WON).
+>    - `averageCycleTime` — dias entre createdAt e actualCloseDate;
+>      retorna null quando sem opps fechadas (evita "0 dias" enganoso).
+>  - `reports.inboundVsOutbound` no router com `loadInboundOpps`
+>    dedicado (só campos do `InboundOpSnap`).
+>  - UI `/reports/inbound-vs-outbound`:
+>    - PageHeader + filtros de período.
+>    - 3 KPI cards comparativos side-by-side (conversion, ticket,
+>      cycle time). Inbound em brand-primary, outbound em text-1.
+>    - Funis lado a lado (2 colunas). Barras proporcionais ao maior
+>      count. Valor em BRL compacto com tooltip.
+>    - Alternativa textual em `<dl class="sr-only">` pra a11y.
+>  - Link "Inbound × Outbound →" adicionado em `/reports` topo.
+>  - 10 testes puros pro analytics service.
+>
+> **Testes:** 619/627 passing (baseline 581 + 38 novos do Sprint 15D).
+> 6 falhas pré-existentes em communication-summary-errors por env
+> vars — não regridem. Type-check zero. Lint zero.
+>
+> **Segurança validada:**
+>  - Endpoint público rate-limitado por IP (`PUBLIC_FORM_LIMIT` — Sprint 11)
+>  - Secret rotacionável via UI; audit log grava apenas "rotatedAt",
+>    nunca o valor
+>  - `updateConfig` audit redacta `webhookSecret` como 'REDACTED'
+>  - Blacklist domain bloqueia lead antes de criar opp
+>  - Confidence < 0.4 vai pra `inbound_leads_rejected` (não vira opp)
+>
+> **Pendências residuais (P-27 a P-31 no backlog):**
+>  - P-27: `/api/v1/inbound/email` estender pra criar Lead novo (Sprint 6
+>    preservado — Sprint 15D só cobre webhook explícito)
+>  - P-28: Integrações OAuth nativas (RD Station / HubSpot / Typeform /
+>    LinkedIn / Pipedrive / Mautic) — só quando cliente pedir
+>  - P-29: Rate limit por sender (não só por IP)
+>  - P-30: UI dedicada de revisão de rejected (tab histórico já mostra)
+>  - P-31: Push nativo pro vendedor quando alocado (best-effort worker
+>    notifica gestores; vendedor alocado precisa de push extra)
+>
+> 🎉 Sprint 15D fechado — inbound marketing pipeline funcional.
+> Próximo: Sprint 15E (RBAC granular — migra GESTOR_INBOUND pra
+> permission `inbound.assign_prospects`).
+
 > **Sprint 15F — IA Multi-Provider por Feature + Fallback:
 > ✅ BACKEND CONCLUÍDO em 2026-06-30**
 >

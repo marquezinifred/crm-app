@@ -28,12 +28,20 @@ export default function ReportsPage() {
     <main className="mx-auto max-w-5xl p-4 md:p-6">
       <header className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold">Relatórios</h1>
-        <a
-          href="/api/v1/reports/export"
-          className="rounded border border-border-strong px-3 py-1.5 text-sm hover:bg-page"
-        >
-          ↓ Exportar Excel
-        </a>
+        <div className="flex gap-2">
+          <a
+            href="/reports/inbound-vs-outbound"
+            className="rounded border border-border-strong px-3 py-1.5 text-sm hover:bg-page"
+          >
+            Inbound × Outbound →
+          </a>
+          <a
+            href="/api/v1/reports/export"
+            className="rounded border border-border-strong px-3 py-1.5 text-sm hover:bg-page"
+          >
+            ↓ Exportar Excel
+          </a>
+        </div>
       </header>
 
       <section className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-3">

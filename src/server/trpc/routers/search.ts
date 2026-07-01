@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { router, protectedProcedure } from '@/server/trpc/trpc';
 import { prisma } from '@/server/db/client';
-import { hasPermission } from '@/lib/auth/rbac';
+import { hasCapability } from '@/lib/auth/rbac';
 import type { Prisma } from '@prisma/client';
 
 /**
@@ -30,14 +30,14 @@ export const searchRouter = router({
     .input(globalSearchInput)
     .query(async ({ input, ctx }) => {
       const q = input.query.trim();
-      const canReadCompany = hasPermission(ctx.user.role, 'company', 'read');
-      const canReadContact = hasPermission(ctx.user.role, 'contact', 'read');
-      const canReadOpportunity = hasPermission(
+      const canReadCompany = hasCapability(ctx.user.role, 'company', 'read');
+      const canReadContact = hasCapability(ctx.user.role, 'contact', 'read');
+      const canReadOpportunity = hasCapability(
         ctx.user.role,
         'opportunity',
         'read',
       );
-      const canReadUser = hasPermission(ctx.user.role, 'user', 'read');
+      const canReadUser = hasCapability(ctx.user.role, 'user', 'read');
 
       const digits = q.replace(/\D/g, '');
 

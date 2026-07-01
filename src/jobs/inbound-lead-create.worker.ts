@@ -62,13 +62,22 @@ async function notifyInboundManagers(tenantId: string, opportunityId: string) {
         select: { id: true, email: true, fullName: true },
       });
     } else {
-      // Default: todos GESTOR_INBOUND ativos do tenant
+      // Sprint 15E — GESTOR_INBOUND removido do enum. Default agora:
+      // users com `inbound:view_queue` no cache. Fallback pra role ADMIN/
+      // DIRETOR_COMERCIAL (que têm a permission por default) quando o
+      // cache ainda não foi populado (pré-`npm run rbac:backfill-cache`).
       recipients = await prisma.user.findMany({
         where: {
           tenantId,
-          role: 'GESTOR_INBOUND',
           active: true,
           deletedAt: null,
+          OR: [
+            { cachedPermissions: { has: 'inbound:view_queue' } },
+            {
+              cachedPermissionsAt: null,
+              role: { in: ['ADMIN', 'DIRETOR_COMERCIAL'] },
+            },
+          ],
         },
         select: { id: true, email: true, fullName: true },
       });

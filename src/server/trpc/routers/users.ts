@@ -23,10 +23,12 @@ const ASSIGNABLE_ROLES = [
   'DIRETOR_OPERACOES',
   'DIRETOR_FINANCEIRO',
   'GESTOR',
-  'GESTOR_INBOUND',
   'ANALISTA',
   'PARCEIRO',
 ] as const satisfies readonly UserRole[];
+// GESTOR_INBOUND removido no Sprint 15E — Admin agora concede permissions
+// individuais (inbound:view_queue + inbound:assign_prospects) via
+// override em `permissions.grant`. Migration 0030 backfilla users antigos.
 
 const inviteInput = z.object({
   email: zEmail,

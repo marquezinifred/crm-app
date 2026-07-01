@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hasPermission, requirePermission, ForbiddenError } from '@/lib/auth/rbac';
+import { hasCapability as hasPermission, requireCapability as requirePermission, ForbiddenError } from '@/lib/auth/rbac';
 
 describe('RBAC', () => {
   it('ADMIN tem acesso amplo dentro do tenant', () => {

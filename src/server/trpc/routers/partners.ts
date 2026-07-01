@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure, publicProcedure } from '@/server/trpc/trpc';
-import { adminOnlyProcedure, withCapability } from '@/server/trpc/middlewares';
+import { adminOnlyProcedure, withPermission } from '@/server/trpc/middlewares';
 import { prisma } from '@/server/db/client';
 import { runAsSystem } from '@/server/db/tenant-context';
 import { audit } from '@/server/services/audit.service';
@@ -141,7 +141,7 @@ export const partnersRouter = router({
     }),
 
   // Aceite formal por oportunidade — bloqueia engajamento APPROVED até existir
-  registerTcAcceptance: withCapability('partner', 'invite')
+  registerTcAcceptance: withPermission('partner:invite')
     .input(
       z.object({
         opportunityId: zUuid,

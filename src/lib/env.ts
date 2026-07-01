@@ -79,6 +79,15 @@ const envSchema = z.object({
   // true: consumidores usam callAiWithFallback() (path novo).
   // Ver docs/Sprint_15F_IA_Multi_Provider.md.
   MULTI_AI_ENABLED: z.coerce.boolean().default(false),
+
+  // Sprint 15E — Feature flag do RBAC granular (permissions individuais).
+  // false (default): procedures antigas seguem usando `withCapability`
+  // legado (ROLE_CAPABILITIES). Novas UIs de admin (/admin/users/[id]/
+  // permissions) ficam desabilitadas.
+  // true: procedures novas com `withPermission` respeitam grants/revokes
+  // individuais; UI de permissions granulares acessível ao Admin.
+  // Ver docs/Sprint_15E_RBAC_Granular.md — §5.4 rollout ordenado.
+  RBAC_GRANULAR_ENABLED: z.coerce.boolean().default(false),
 });
 
 const parsed = envSchema.safeParse(process.env);

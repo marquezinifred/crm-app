@@ -11,6 +11,168 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 ## Sprint atual
 
+> **Sprint 15E — RBAC Granular (Permissões Configuráveis):
+> ✅ CONCLUÍDO em 2026-07-01**
+>
+> Spec: `docs/Sprint_15E_RBAC_Granular.md` v3 + `docs/permission-matrix.md`
+> (validada célula a célula). Refactor estrutural — roles como perfis
+> padrão + overrides individuais de permission por user. Resolve a
+> proliferação de roles (Sprint 15D `GESTOR_INBOUND` virou permission
+> override neste sprint).
+>
+> **Entregue em 4 fases (commits `c91ff3e` → Fase 4):**
+>
+> **Fase 1 — Fundação** (commit `c91ff3e`):
+>  - `src/lib/auth/permissions-catalog.ts` — **61 permissions** distintas
+>    em 17 categorias (spec header mencionou "65"; contagem real é 61 e
+>    per-role counts batem célula a célula na matrix).
+>  - `src/lib/auth/rbac.ts` com dupla API:
+>    * Nova: `ROLE_DEFAULT_PERMISSIONS`, `hasPermissionByRole` (sync UI),
+>      `computeEffectivePermissions` (puro).
+>    * Legada: `ACTIONS`, `ROLE_CAPABILITIES`, `hasCapability`,
+>      `requireCapability` (compat pra `withCapability` seguir funcionando).
+>    Contagens: ADMIN=60, DIRETOR_C=39, DIRETOR_O=25, DIRETOR_F=18,
+>    GESTOR=31, ANALISTA=23, PARCEIRO=5.
+>  - `src/server/services/permissions.service.ts` com `hasPermission`
+>    async (cache-aware, Platform Owner bypass),
+>    `computeAndCacheUserPermissions`, `invalidateUserPermissionsCache`.
+>  - `withPermission(permission)` middleware tRPC.
+>  - Migration 0030 (pattern migration-pitfalls #1 cast enum via text
+>    intermediário + #3 sanitizar approver_roles + CHECK XOR):
+>    `user_permission_overrides` tabela + colunas `cached_permissions`
+>    (default `{}`) + `cached_permissions_at` (nullable — a distinção
+>    NULL vs `[]` evita loop de recompute pra PARCEIRO com todas revogadas).
+>    Backfill `GESTOR_INBOUND` → `ADMIN` + 4 overrides inbound
+>    (ON CONFLICT DO NOTHING). Enum `UserRole` sem `GESTOR_INBOUND`.
+>  - `env.ts` ganha `RBAC_GRANULAR_ENABLED=false` default.
+>  - Referências residuais de `GESTOR_INBOUND` limpas em 8 arquivos.
+>    Worker de notificação inbound migrou de `role: 'GESTOR_INBOUND'`
+>    pra filtro por `cachedPermissions: { has: 'inbound:view_queue' }`
+>    com fallback ADMIN/DIRETOR_COMERCIAL enquanto cache não populado.
+>
+> **Fase 2 — Refactor 34 procedures** (commit `8ca438b`):
+>  - Todas as 34 declarações `withCapability(resource, action)` +
+>    `withRoles(...)` em 13 router files migradas pra
+>    `withPermission('resource:action')`. Baseline "47" mencionado na
+>    spec era grep bruto (13 imports + 34 usos).
+>  - 13 rename mecânico puro (companies/contacts/contracts/proposals
+>    core, opps core, inbox, partners.registerTcAcceptance, partner-engagements.request,
+>    inbound.getConfig+queueList).
+>  - 7 semantic splits — permissions mais estreitas:
+>    * `tasks.create/update/delete`: `task:*` (antes proxy via
+>      `opportunity:update`). Matrix concede a DIRETOR_OPERACOES tasks
+>      mas não `opportunity:update` — padrão "handoff/pós-venda gerencia
+>      tarefas mas não edita pipeline".
+>    * `documents`: `document:read/upload` (antes `opportunity:read/update`).
+>    * `imports`: `import:run` (antes proxy via `company:create`).
+>    * `reports`: `reports:read` (antes `opportunity:read`).
+>    * `inbound.assignInbound`: `inbound:assign_prospects` (antes
+>      `opportunity:set_inbound_owner`).
+>    * `partner-engagements.decide`: `partner:approve_engagement`
+>      (antes `withRoles`).
+>  - 2 procedures com enforcement adicional via `hasPermission` async:
+>    * `opportunities.list/kanban/byId` — `visibilityWhere()` virou async
+>      e chama `hasPermission(userId, 'opportunity:read_others')` pra
+>      decidir se retorna `{}` ou `OR: [ownerId, team.some]`. PARCEIRO
+>      segue com row-level filter.
+>    * `reports.*` — mesma lógica em `visibility()` dentro de `loadOpps`
+>      + `loadInboundOpps`. ANALISTA vê só própria linha em
+>      `performanceByOwner` (Sprint 5 preservado).
+>  - 🔴 **Breaking change consciente**:
+>    - ANALISTA perde `opportunity:read_others` — passa a ver **só as
+>      próprias opps**. Admin pode conceder override individual sem
+>      mudar role.
+>    - GESTOR perde `partner:approve_engagement` — antes `withRoles`
+>      incluía ele, matrix agora só ADMIN/DIRETOR_C/DIRETOR_O. Override
+>      também disponível caso a caso.
+>    - DIRETOR_OPERACOES ganha `task:*` explícito (antes precisava de
+>      `opportunity:update` que ele não tem).
+>  - Compat preservado: `adminOnlyProcedure` (74 usos) segue com
+>    `withRoles('ADMIN')`. ADMIN tem todas permissions do catálogo por
+>    default (exceto `audit:read_platform` Platform Owner only). Débito
+>    Sprint 15G.
+>  - Mapping doc `docs/rbac-migration-map.md` novo — tabela old→new
+>    por router destacando os 7 semantic splits.
+>
+> **Fase 3 — Permissions router + UI** (commit `174bc5d`):
+>  - `src/server/trpc/routers/permissions.ts` com 5 procedures:
+>    * `listCatalog` (protected) — 61 permissions + labels PT-BR + ordem
+>      de categoria.
+>    * `forUser` (user:read) — defaults do role + overrides individuais
+>      (com quem/quando/por quê) + array efetivo final + counts.
+>    * `grant`/`revoke`/`restore` (user:grant_permissions) — mutations
+>      com **guard anti-escalada §6.5**: caller (não-Platform Owner)
+>      só delega o que ele próprio tem, senão 403. Aplica em grant,
+>      revoke E restore. Platform Owner é exceção legítima. Audit em
+>      cada mudança com `tenantIdOverride`.
+>    * `whoHas` (user:read) — lista users do tenant com permission no
+>      cache. ⚠️ Depende de cache populado — se cache NULL, retorna [].
+>  - `_app.ts` registra `permissions: permissionsRouter`.
+>  - `src/app/admin/users/[id]/permissions/page.tsx` — UI conforme §7:
+>    * PageHeader (nome/role/email do target)
+>    * Card com contagem transparente (efetivo = defaults + granted −
+>      revoked)
+>    * Campo texto pra motivo opcional aplicado à próxima ação
+>    * Permissions agrupadas por categoria em `<details>` colapsáveis
+>      (todas abertas por default)
+>    * Cada linha: emoji (✅/❌/☐) + badge (Padrão/Concedida/Revogada)
+>      + histórico inline "concedida em DD/MM por Fulano — motivo"
+>    * 3 botões contextuais (Conceder/Revogar/Restaurar padrão). Revogar
+>      dispara `AlertDialog` do design system (P-12 pattern, não
+>      `confirm()` nativo).
+>  - `/admin/users` — link "Permissões" em cada linha da tabela.
+>  - Sidebar (§9.2 spec): items ganham campo `permission?` opcional.
+>    3 items gated: `/inbox/prospects` (inbound:view_queue),
+>    `/admin/email-inbound` (inbound:configure), `/imports` (import:run).
+>    `useMemo` + `trpc.users.me` + `hasPermissionByRole` filtram
+>    SECTIONS. Hooks colocados ANTES do early return (`HIDDEN_ON`) pra
+>    respeitar rules-of-hooks.
+>
+> **Fase 4 — Compat + rollout + validation**:
+>  - `approval-engine.service.ts` refatorado: dual approver spec.
+>    `RuleMatch` agora tem `approverRoles: UserRole[]` OU
+>    `approverPermission: string | null` (CHECK XOR em SQL).
+>    `createApprovalsForProposalVersion` consulta `cachedPermissions:
+>    { has: rule.approverPermission }` quando permission-based; fallback
+>    pra pattern antigo com `approverRoles` mantido. Rules existentes
+>    seguem funcionando (backward compat).
+>  - `scripts/rbac-backfill-cache.ts` novo + `npm run rbac:backfill-cache`
+>    no `package.json`. Idempotente, ~30s pra 1000 users. Roda
+>    `computeAndCacheUserPermissions` pra todos users ativos.
+>    ⚠️ **OBRIGATÓRIO no rollout** — sem isso `whoHas` retorna [].
+>  - Memory `rbac-granular-pattern.md` salva no MEMORY index —
+>    regras "permission nova > role nova", pattern `X:read_others`,
+>    guard anti-escalada, cache 2 colunas, backfill obrigatório.
+>
+> **Rollout ordenado em produção (spec §5.4):**
+>  1. Deploy código com `RBAC_GRANULAR_ENABLED=false`
+>  2. `npx prisma migrate deploy` (0030)
+>  3. `npm run rbac:backfill-cache` (**obrigatório**)
+>  4. Ativar `RBAC_GRANULAR_ENABLED=true`
+>  5. Monitorar `audit_logs` 24h
+>
+> **Rollback rápido:** setar `RBAC_GRANULAR_ENABLED=false` volta pro
+> path legado. Tabela `user_permission_overrides` fica no banco.
+>
+> **Testes:** 27 novos (permissions-catalog +7, role-default-permissions
+> +21, permissions-router +11, approval-rules-by-permission +4,
+> tasks-router mock ajustado). Total 615/621 passing (baseline
+> preservado — 4 falhas + 6 file-import env-vars pré-existentes + 2
+> skipped). Type-check zero. Lint zero.
+>
+> **Segurança validada:**
+>  - Guard anti-escalada em grant/revoke/restore — testes cobrindo
+>    ADMIN sem `audit:read` NÃO consegue conceder `audit:read` a outro
+>    user (retorna 403).
+>  - Platform Owner bypass total mesmo sem permission — testes cobrindo.
+>  - Audit log preservado com `tenantIdOverride` em toda mutation.
+>  - Same-tenant guard em `forUser`/`grant`/`revoke`/`restore` (404 em
+>    cross-tenant, não 403 — evita enumeration).
+>
+> 🎉 Sprint 15E fechado — RBAC granular com breaking changes documentadas.
+> Próximo: Sprint 15G (hardening + audit UI + custom roles + delegação
+> temporária + row-level permissions), ou hardening produção (Sentry+Axiom).
+>
 > **Sprint 15D — Inbound Marketing Pipeline:
 > ✅ CONCLUÍDO em 2026-07-01**
 >

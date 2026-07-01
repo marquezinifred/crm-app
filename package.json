@@ -22,6 +22,7 @@
     "db:reset": "prisma migrate reset --force",
     "worker": "tsx src/jobs/index.ts",
     "worker:scan-now": "tsx -e \"import('./src/jobs/queues').then(async ({makeQueue,QUEUE_NAMES})=>{const q=makeQueue(QUEUE_NAMES.alertsScan);await q.add('manual',{});console.log('enfileirado');process.exit(0)})\"",
+    "rbac:backfill-cache": "tsx scripts/rbac-backfill-cache.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {

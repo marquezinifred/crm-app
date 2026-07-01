@@ -1,7 +1,7 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { router } from '@/server/trpc/trpc';
-import { withCapability } from '@/server/trpc/middlewares';
+import { withPermission } from '@/server/trpc/middlewares';
 import { prisma } from '@/server/db/client';
 import { audit } from '@/server/services/audit.service';
 import { zUuid } from '@/lib/validators';
@@ -12,10 +12,10 @@ import {
 } from '@/lib/validators/company';
 import { ImportantDateEntityType, Prisma } from '@prisma/client';
 
-const canRead = withCapability('company', 'read');
-const canCreate = withCapability('company', 'create');
-const canUpdate = withCapability('company', 'update');
-const canDelete = withCapability('company', 'delete');
+const canRead = withPermission('company:read');
+const canCreate = withPermission('company:create');
+const canUpdate = withPermission('company:update');
+const canDelete = withPermission('company:delete');
 
 export const companiesRouter = router({
   list: canRead.input(companyListInput).query(async ({ input }) => {

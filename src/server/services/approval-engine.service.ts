@@ -28,7 +28,10 @@ export interface RuleMatch {
   ruleId: string;
   ruleName: string;
   criteria: ApprovalRuleCriteria;
+  // Sprint 15E — dual approver spec: uma regra tem approverRoles
+  // (não-vazio) OU approverPermission (não-null). CHECK XOR em SQL.
   approverRoles: UserRole[];
+  approverPermission: string | null;
 }
 
 /** Função pura: decide quais regras se aplicam. Não toca em banco. */
@@ -40,6 +43,7 @@ export function selectApplicableRules(
     criteria: ApprovalRuleCriteria;
     thresholdNumeric: number | null;
     approverRoles: UserRole[];
+    approverPermission: string | null;
     enabled: boolean;
   }>,
 ): RuleMatch[] {
@@ -62,6 +66,7 @@ export function selectApplicableRules(
       ruleName: r.name,
       criteria: r.criteria,
       approverRoles: r.approverRoles,
+      approverPermission: r.approverPermission,
     }));
 }
 
@@ -106,6 +111,7 @@ export async function createApprovalsForProposalVersion(
       criteria: true,
       thresholdNumeric: true,
       approverRoles: true,
+      approverPermission: true,
       enabled: true,
     },
   });
@@ -122,26 +128,56 @@ export async function createApprovalsForProposalVersion(
   );
   result.rulesMatched = matches.length;
 
-  // Coleciona roles únicos a aprovar
-  const rolesNeeded = new Set<UserRole>();
-  for (const m of matches) for (const r of m.approverRoles) rolesNeeded.add(r);
+  // Sprint 15E — cada rule gera aprovadores por 1 de 2 caminhos:
+  //   1. approverRoles (legado) — 1 aprovador por role, primeiro user ativo
+  //   2. approverPermission (novo) — TODOS os users com cached_permissions
+  //      contendo a permission viram aprovadores
+  //
+  // Rules migradas do Sprint 15D usam approverRoles; rules novas podem
+  // apontar direto pra permission (`proposal:approve`) e abranger overrides
+  // individuais.
+  const approverIds = new Set<string>();
 
-  for (const role of rolesNeeded) {
-    const approver = await prisma.user.findFirst({
-      where: { tenantId, role, active: true, deletedAt: null },
-      select: { id: true },
-      orderBy: { createdAt: 'asc' },
-    });
-    if (!approver) {
-      result.noApproverFor.push(role);
-      continue;
+  for (const m of matches) {
+    if (m.approverPermission) {
+      const users = await prisma.user.findMany({
+        where: {
+          tenantId,
+          active: true,
+          deletedAt: null,
+          cachedPermissions: { has: m.approverPermission },
+        },
+        select: { id: true },
+        orderBy: { createdAt: 'asc' },
+      });
+      if (users.length === 0) {
+        result.noApproverFor.push(m.approverPermission as UserRole);
+      } else {
+        for (const u of users) approverIds.add(u.id);
+      }
+    } else {
+      for (const role of m.approverRoles) {
+        const approver = await prisma.user.findFirst({
+          where: { tenantId, role, active: true, deletedAt: null },
+          select: { id: true },
+          orderBy: { createdAt: 'asc' },
+        });
+        if (!approver) {
+          result.noApproverFor.push(role);
+          continue;
+        }
+        approverIds.add(approver.id);
+      }
     }
+  }
+
+  for (const approverId of approverIds) {
     // Idempotência: não duplica Approval para mesmo (proposalVersionId, approver)
     const existing = await prisma.approval.findFirst({
       where: {
         tenantId,
         proposalVersionId,
-        approverId: approver.id,
+        approverId,
       },
     });
     if (existing) continue;
@@ -150,7 +186,7 @@ export async function createApprovalsForProposalVersion(
       data: {
         tenantId,
         proposalVersionId,
-        approverId: approver.id,
+        approverId,
         status: ApprovalStatus.PENDING,
       } as Prisma.ApprovalUncheckedCreateInput,
     });

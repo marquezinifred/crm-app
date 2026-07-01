@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '@/server/trpc/trpc';
-import { withCapability } from '@/server/trpc/middlewares';
+import { withPermission } from '@/server/trpc/middlewares';
 import { prisma } from '@/server/db/client';
 import { audit } from '@/server/services/audit.service';
 import { summarizeCommunication } from '@/server/services/communication-summary.service';
@@ -16,9 +16,16 @@ import {
 import { zUuid } from '@/lib/validators';
 import { ActivityType, Prisma } from '@prisma/client';
 
-const canRead = withCapability('opportunity', 'read');
-const canWrite = withCapability('opportunity', 'update');
-const canUseAI = withCapability('ai', 'use_summary');
+const canRead = withPermission('opportunity:read');
+const canWrite = withPermission('opportunity:update');
+const canUseAI = withPermission('ai:use_summary');
+// Sprint 15E — split de tasks (P-20): task:create/update/delete separados
+// de opportunity:update. Matriz concede a DIRETOR_OPERACOES tasks mas não
+// opp:update (padrão "handoff/pós-venda pode gerenciar tarefas, não editar
+// pipeline"). Mesmo pra ANALISTA.
+const canCreateTask = withPermission('task:create');
+const canUpdateTask = withPermission('task:update');
+const canDeleteTask = withPermission('task:delete');
 
 export const activitiesRouter = router({
   list: canRead
@@ -226,7 +233,7 @@ export const tasksRouter = router({
     }),
   ),
 
-  create: canWrite
+  create: canCreateTask
     .input(
       z.object({
         opportunityId: zUuid.optional().nullable(),
@@ -262,7 +269,7 @@ export const tasksRouter = router({
       return t;
     }),
 
-  updateStatus: canWrite
+  updateStatus: canUpdateTask
     .input(
       z.object({
         id: zUuid,
@@ -293,7 +300,7 @@ export const tasksRouter = router({
       return updated;
     }),
 
-  update: canWrite
+  update: canUpdateTask
     .input(
       z.object({
         id: zUuid,
@@ -332,7 +339,7 @@ export const tasksRouter = router({
       return updated;
     }),
 
-  delete: canWrite
+  delete: canDeleteTask
     .input(z.object({ id: zUuid }))
     .mutation(async ({ input, ctx }) => {
       const existing = await prisma.task.findFirst({

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { router, publicProcedure } from '@/server/trpc/trpc';
-import { withCapability } from '@/server/trpc/middlewares';
+import { withPermission } from '@/server/trpc/middlewares';
 import { prisma } from '@/server/db/client';
 import { audit } from '@/server/services/audit.service';
 import { registerPublicContact } from '@/server/services/contact-self-register.service';
@@ -15,10 +15,10 @@ import {
 } from '@/lib/validators/contact';
 import { ContactApprovalStatus, ImportantDateEntityType, Prisma } from '@prisma/client';
 
-const canRead = withCapability('contact', 'read');
-const canCreate = withCapability('contact', 'create');
-const canUpdate = withCapability('contact', 'update');
-const canDelete = withCapability('contact', 'delete');
+const canRead = withPermission('contact:read');
+const canCreate = withPermission('contact:create');
+const canUpdate = withPermission('contact:update');
+const canDelete = withPermission('contact:delete');
 
 export const contactsRouter = router({
   list: canRead.input(contactListInput).query(async ({ input }) => {

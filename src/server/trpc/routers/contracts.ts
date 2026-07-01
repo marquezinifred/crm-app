@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { router } from '@/server/trpc/trpc';
-import { withCapability } from '@/server/trpc/middlewares';
+import { withPermission } from '@/server/trpc/middlewares';
 import { prisma } from '@/server/db/client';
 import { audit } from '@/server/services/audit.service';
 import { dispatchHandoff } from '@/server/services/contract-handoff.service';
@@ -14,9 +14,9 @@ import {
 } from '@/lib/validators/contract';
 import { Prisma } from '@prisma/client';
 
-const canRead = withCapability('contract', 'read');
-const canCreate = withCapability('contract', 'create');
-const canUpdate = withCapability('contract', 'update');
+const canRead = withPermission('contract:read');
+const canCreate = withPermission('contract:create');
+const canUpdate = withPermission('contract:update');
 
 export const contractsRouter = router({
   list: canRead

@@ -902,15 +902,37 @@ Entregue em 6 fases (commits `87f5a1b` → `1747f30`):
 
 Pendências residuais registradas em novos débitos (P-27 a P-31 abaixo).
 
-### Sprint 15E — RBAC Granular (Permissões Configuráveis)
-Spec: `docs/Sprint_15E_RBAC_Granular.md`
+### Sprint 15E — RBAC Granular (Permissões Configuráveis) ✅ FECHADO 2026-07-01
+Spec: `docs/Sprint_15E_RBAC_Granular.md` v3 + `docs/permission-matrix.md`
 
-**~7 dias.** Refactor estrutural — roles como perfis padrão + permissions
-individuais por user. Backfill automático do GESTOR_INBOUND (Sprint 15D)
-→ ADMIN + 3 permissions. Cache em `users.cached_permissions`. UI
-`/admin/users/[id]/permissions`. ~30 procedures migradas de `withRoles`
-pra `withPermission`. Migration 0030. Depende de 15D entregue como caso
-de uso âncora.
+**4 fases entregues.** Refactor estrutural — roles como perfis padrão
++ 61 permissions granulares individuais por user + cache em
+`users.cached_permissions`/`cached_permissions_at`. Migration 0030
+backfilla `GESTOR_INBOUND` → `ADMIN` + 4 overrides inbound (com
+ON CONFLICT DO NOTHING). 34 procedures migradas de `withCapability`/
+`withRoles` pra `withPermission`. Router `permissions.*` novo com
+grant/revoke/restore + guard anti-escalada §6.5 (caller só delega o
+que tem; Platform Owner é exceção). UI `/admin/users/[id]/permissions`
+com 3 estados visuais + contagem transparente + histórico inline.
+Sidebar condicional em 3 items (Fila inbound / E-mail inbound /
+Importação) via `hasPermissionByRole`.
+
+**Breaking changes conscientes:**
+- ANALISTA perde `opportunity:read_others` → só vê próprias opps
+- GESTOR perde `partner:approve_engagement` → matrix agora só admin+diretor
+- DIRETOR_OPERACOES ganha `task:*` explícito
+
+**approval_rules** ganha `approver_permission` (alternativa a
+`approver_roles` com CHECK XOR) — dual approver preserva compat.
+
+**Rollout ordenado obrigatório:** migrate 0030 → `npm run
+rbac:backfill-cache` → ativar `RBAC_GRANULAR_ENABLED=true`. Sem
+backfill, `permissions.whoHas` retorna [] (bloqueia notificações
+inbound).
+
+Ver `CLAUDE.md` pra histórico completo (4 commits `c91ff3e` →
+Fase 4). Memory `rbac-granular-pattern.md` salva com regras pra
+futuras features ("permission nova > role nova").
 
 ### Sprint 15F — IA Multi-Provider por Feature + Fallback ✅ BACKEND FECHADO 2026-06-30
 Spec: `docs/Sprint_15F_IA_Multi_Provider.md`

@@ -8,6 +8,7 @@ const rule = (overrides: Partial<{
   criteria: ApprovalRuleCriteria;
   thresholdNumeric: number | null;
   approverRoles: UserRole[];
+  approverPermission: string | null;
   enabled: boolean;
 }>) => ({
   id: overrides.id ?? '1',
@@ -15,6 +16,7 @@ const rule = (overrides: Partial<{
   criteria: overrides.criteria ?? ('UNIVERSAL' as ApprovalRuleCriteria),
   thresholdNumeric: overrides.thresholdNumeric ?? null,
   approverRoles: (overrides.approverRoles ?? ['DIRETOR_COMERCIAL']) as UserRole[],
+  approverPermission: overrides.approverPermission ?? null,
   enabled: overrides.enabled ?? true,
 });
 

@@ -31,11 +31,12 @@ enum UserRole {
   DIRETOR_OPERACOES
   DIRETOR_FINANCEIRO
   GESTOR
-  // Sprint 15D — role temporária pra desbloquear inbound. Sprint 15E vira
-  // permission flag (inbound.assign_prospects) atribuível a qualquer role.
-  GESTOR_INBOUND
   ANALISTA
   PARCEIRO
+  // GESTOR_INBOUND removido no Sprint 15E — users antigos backfilled em
+  // migration 0030 pra ADMIN + 4 permission overrides (inbound:view_queue,
+  // inbound:assign_prospects, inbound:configure, inbound:view_reports).
+  // Ver docs/Sprint_15E_RBAC_Granular.md §5.1.
 }
 
 enum PlatformRole {
@@ -464,6 +465,7 @@ model Tenant {
   trialEvents             TrialEvent[]
   inboundCaptureConfig    InboundCaptureConfig?
   inboundLeadsRejected    InboundLeadRejected[]
+  userPermissionOverrides UserPermissionOverride[]
 
   @@map("tenants")
 }
@@ -498,6 +500,17 @@ model User {
   tenant         Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   partnerCompany Company? @relation("UserPartnerCompany", fields: [partnerCompanyId], references: [id])
 
+  // Sprint 15E — cache de permissions efetivas (defaults do role ∪ granted
+  // − revoked). `cachedPermissionsAt` NULL = não computado; não-null =
+  // computado (então `cachedPermissions` reflete o resultado, incluindo
+  // array vazio pra PARCEIRO com todas as defaults revogadas).
+  //
+  // Duas colunas porque Prisma não suporta `String[]?` — sem essa separação,
+  // não conseguimos distinguir "não computado" de "computado vazio" e
+  // PARCEIRO com [] rodaria recompute em loop. Ver docs/Sprint_15E_RBAC_Granular.md §6.6.
+  cachedPermissions          String[]                  @default([]) @map("cached_permissions")
+  cachedPermissionsAt        DateTime?                 @map("cached_permissions_at")
+
   ownedOpportunities         Opportunity[]             @relation("OpportunityOwner")
   teamMemberships            OpportunityTeam[]
   assignedTasks              Task[]                    @relation("TaskAssignee")
@@ -511,6 +524,10 @@ model User {
   stageMovements             OpportunityStageHistory[] @relation("StageMover")
   aiUsageLogs                AIUsageLog[]
   auditLogs                  AuditLog[]
+
+  // Sprint 15E — overrides individuais + histórico de quem concedeu.
+  permissionOverrides        UserPermissionOverride[]  @relation("PermissionForUser")
+  grantedPermissionOverrides UserPermissionOverride[]  @relation("PermissionGrantedBy")
 
   @@unique([tenantId, email])
   // Sprint 15A débito — migration 0026: UNIQUE composto. A constraint
@@ -1388,7 +1405,12 @@ model ApprovalRule {
   name             String
   criteria         ApprovalRuleCriteria
   thresholdNumeric Decimal?             @map("threshold_numeric") @db.Decimal(15, 2)
-  approverRoles    UserRole[]           @map("approver_roles")
+  // Sprint 15E — approverRoles OR approverPermission (mutuamente exclusivos
+  // via CHECK constraint em migration 0030). Rules antigas continuam com
+  // approverRoles preenchido; rules novas podem apontar pra uma permission
+  // granular (ex: 'proposal:approve') pra abranger overrides individuais.
+  approverRoles       UserRole[]         @map("approver_roles")
+  approverPermission  String?            @map("approver_permission")
   enabled          Boolean              @default(true)
   createdAt        DateTime             @default(now()) @map("created_at")
   updatedAt        DateTime             @updatedAt @map("updated_at")
@@ -1400,6 +1422,32 @@ model ApprovalRule {
 
   @@index([tenantId, enabled])
   @@map("approval_rules")
+}
+
+// ---------------------------------------------------------------------
+// User Permission Overrides — Sprint 15E
+//   Overrides individuais por (user, permission). Precedência:
+//   revoked > granted > default do role.
+// ---------------------------------------------------------------------
+
+model UserPermissionOverride {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  permission String
+  action     String   // 'granted' | 'revoked' — validado em app (CHECK no SQL)
+  grantedBy  String?  @map("granted_by") @db.Uuid
+  grantedAt  DateTime @default(now()) @map("granted_at")
+  reason     String?  @db.Text
+
+  user          User    @relation("PermissionForUser", fields: [userId], references: [id], onDelete: Cascade)
+  tenant        Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  grantedByUser User?   @relation("PermissionGrantedBy", fields: [grantedBy], references: [id], onDelete: SetNull)
+
+  @@unique([userId, permission], name: "user_permission_unique")
+  @@index([userId])
+  @@index([tenantId])
+  @@map("user_permission_overrides")
 }
 
 // ---------------------------------------------------------------------

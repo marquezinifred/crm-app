@@ -5,7 +5,7 @@ import { promises as fs } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { router, protectedProcedure } from '@/server/trpc/trpc';
-import { adminOnlyProcedure, withCapability } from '@/server/trpc/middlewares';
+import { adminOnlyProcedure, withPermission } from '@/server/trpc/middlewares';
 import { prisma } from '@/server/db/client';
 import { audit } from '@/server/services/audit.service';
 import { compareDocumentVersions } from '@/server/services/document-compare.service';
@@ -45,8 +45,11 @@ const LOCAL_UPLOAD_ROOT = join(tmpdir(), 'venzo-uploads');
  * (S3/Drive/Dropbox externos). Sprint 11 endurece com presigned URLs.
  */
 
-const canRead = withCapability('opportunity', 'read');
-const canWrite = withCapability('opportunity', 'update');
+// Sprint 15E — antes: `opportunity:read` / `opportunity:update` (proxy grosso
+// via opp). Agora: permissions granulares (P-19). Matriz concede
+// `document:upload/read` amplamente; `document:delete` só ADMIN.
+const canRead = withPermission('document:read');
+const canWrite = withPermission('document:upload');
 
 export const documentsRouter = router({
   // P-19 — cliente pede intent de upload. Server gera storageKey com

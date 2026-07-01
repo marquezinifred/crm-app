@@ -23,6 +23,16 @@ vi.mock('@/server/db/tenant-context', () => ({
   SYSTEM_TENANT_SENTINEL: '__system__',
 }));
 
+// Sprint 15E — withPermission chama hasPermission do permissions.service;
+// stubamos default true pra isolar os testes de tasks router. Testes de
+// permission ficam em permissions-router.test.ts / rbac.test.ts.
+vi.mock('@/server/services/permissions.service', () => ({
+  hasPermission: vi.fn(async () => true),
+  computeAndCacheUserPermissions: vi.fn(async () => new Set()),
+  invalidateUserPermissionsCache: vi.fn(async () => undefined),
+  defaultsForRole: vi.fn(() => []),
+}));
+
 // Audit stub — captura chamadas pra verificação
 const auditSpy = vi.fn();
 vi.mock('@/server/services/audit.service', () => ({
@@ -152,8 +162,11 @@ describe('tasksRouter.update (P-20)', () => {
     expect(mockTask.findFirst).not.toHaveBeenCalled();
   });
 
-  it('rejeita usuário sem capability opportunity:update (ANALISTA tem, PARCEIRO não)', async () => {
-    // ANALISTA tem opportunity:update pela matriz — smoke test que caller funciona
+  it('smoke test que ANALISTA passa pelo withPermission("task:update")', async () => {
+    // Sprint 15E — tasks agora usam permission granular `task:update`
+    // (antes: `opportunity:update`). ANALISTA tem `task:update` pela
+    // matrix. Guard real testado no permissions-router — aqui só verifica
+    // que caller funciona.
     mockTask.findFirst.mockResolvedValueOnce({ id: 't1' });
     mockTask.update.mockResolvedValueOnce({ id: 't1' });
     const caller = await makeCaller('ANALISTA');

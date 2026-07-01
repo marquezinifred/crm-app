@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { router } from '@/server/trpc/trpc';
-import { withRoles, withCapability } from '@/server/trpc/middlewares';
+import { withPermission } from '@/server/trpc/middlewares';
 import { prisma } from '@/server/db/client';
 import { audit } from '@/server/services/audit.service';
 import { zUuid } from '@/lib/validators';
@@ -15,8 +15,11 @@ import { PartnerEngagementStatus, Prisma } from '@prisma/client';
  *   3. Após APPROVED, o parceiro passa a ter visibilidade da oportunidade
  */
 
-const canRequest = withCapability('partner', 'invite');
-const canApprove = withRoles('ADMIN', 'DIRETOR_COMERCIAL', 'DIRETOR_OPERACOES', 'GESTOR');
+const canRequest = withPermission('partner:invite');
+// Sprint 15E — antes: `withRoles('ADMIN', 'DIRETOR_COMERCIAL',
+// 'DIRETOR_OPERACOES', 'GESTOR')`. Simplificado pra permission granular
+// (matriz não concede a GESTOR por default — decisão da revisão PO).
+const canApprove = withPermission('partner:approve_engagement');
 
 export const partnerEngagementsRouter = router({
   request: canRequest

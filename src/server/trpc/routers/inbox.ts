@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '@/server/trpc/trpc';
-import { withCapability, adminOnlyProcedure } from '@/server/trpc/middlewares';
+import { withPermission, adminOnlyProcedure } from '@/server/trpc/middlewares';
 import { prisma } from '@/server/db/client';
 import { audit } from '@/server/services/audit.service';
 import { naturalQuery } from '@/server/services/semantic-search.service';
@@ -10,7 +10,7 @@ import { zUuid } from '@/lib/validators';
 import { ActivityType, IncomingEmailStatus, Prisma } from '@prisma/client';
 import { nanoid } from 'nanoid';
 
-const canRead = withCapability('opportunity', 'read');
+const canRead = withPermission('opportunity:read');
 
 export const inboxRouter = router({
   list: canRead

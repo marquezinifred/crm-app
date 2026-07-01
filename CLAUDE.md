@@ -813,6 +813,20 @@ foram fechados na Sprint 11.
   migrados de raw `<table>` pro Table/TH/TR/TD do design system.
   +23 testes (15 hook + 8 TH), 404/410 passing (4 falhas + 2
   skipped pré-existentes por env vars)
+- P-13 401 do middleware vira "Unable to transform response from server" —
+  `src/lib/trpc/session-guard.ts` novo com `sessionAwareFetch`
+  interceptor injetado no `httpBatchLink` do `provider.tsx`. Detecta
+  HTTP 401 na resposta do batch tRPC, loga `console.warn` com a
+  mensagem do body do middleware ("Sessão expirada ou ausente. Faça
+  login novamente."), agenda `window.location.reload()` em 800ms.
+  Flag `handling401` estática garante idempotência num batch com N
+  procedures (N × 401 → 1 reload). No-op em rotas públicas
+  (`/sign-in`, `/sign-up`, `/onboarding`, `/privacy`, `/terms`,
+  `/p/…`, `/`) via `isPublicPath` — evita reload em loop quando
+  usuário já está no login. Middleware `src/middleware.ts` não foi
+  tocado (formato JSON custom preservado pra debug em Network tab).
+  +17 testes em `tests/unit/session-guard.test.ts`, 450/456 passing
+  (4 falhas + 2 skipped pré-existentes por env vars)
 
 ---
 

@@ -546,28 +546,17 @@ direto do cliente (opcional — pode usar upload via backend).
 (anexos em Activity? Attachments em Contract? Investigar durante
 o refactor e listar como P-20+ se surgirem).
 
-### P-13. 401 do middleware vira "Unable to transform response from server"
-**Severidade:** Média-Alta (UX). Identificado em 2026-06-30 testando
-"Resumir com IA" em `/pipeline/[id]` após sessão Clerk expirar.
-
-**Sintoma:** quando token JWT do Clerk caduca em dev (~60s TTL), o
-middleware `src/middleware.ts:78` retorna JSON custom
-`{ error: { code: 'UNAUTHORIZED', message: 'Sessão expirada ou
-ausente. Faça login novamente.' } }` com status 401 pra rotas
-`/api/trpc/*`. Bom no papel — mas o cliente tRPC espera envelope
-tRPC (`{result: ...} | {error: {json: {...}}}`), não consegue
-parsear o JSON custom e mostra mensagem genérica "Unable to
-transform response from server" em vez da mensagem real "Sessão
-expirada. Faça login novamente."
-
-**Impacto:** usuário vê erro incompreensível e não entende que
-basta recarregar a página.
-
-**Fix recomendado (~1h):** custom link no `src/lib/trpc/client.ts`
-que detecta HTTP 401, mostra toast "Sua sessão expirou.
-Recarregando…" e chama `window.location.reload()` (ou
-`signOut()` do Clerk). Cobre todas as procedures automaticamente
-sem mexer no middleware.
+### ~~P-13. 401 do middleware vira "Unable to transform response from server"~~ ✅ FECHADO
+**Resolvido em 2026-06-30 pelo commit `4fcf4f6`.** Custom
+`sessionAwareFetch` em `src/lib/trpc/session-guard.ts` intercepta
+responses no `httpBatchLink`; num HTTP 401, loga `console.warn`
+com a mensagem do body e chama `window.location.reload()` em
+800ms. Flag `handling401` estática garante que batch tRPC com
+N procedures só dispara um reload. No-op em rotas públicas
+(`/sign-in`, `/sign-up`, `/onboarding`, `/privacy`, `/terms`,
+`/p/…`, `/`). +17 testes em `tests/unit/session-guard.test.ts`.
+Middleware `src/middleware.ts` não foi tocado — formato JSON
+custom preservado pra facilitar debug em Network tab.
 
 ### P-18. IA multi-provider por feature + fallback (Sprint 15F)
 **Severidade:** 🔴 Alta — design arquitetural. Identificado em

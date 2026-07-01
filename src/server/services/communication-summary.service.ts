@@ -1,5 +1,7 @@
+import { TRPCError } from '@trpc/server';
 import { masking } from '@/lib/ai/masking';
 import { getAnthropicForTenant, MODELS } from '@/lib/ai/claude';
+import { mapAnthropicError } from '@/lib/ai/anthropic-errors';
 import {
   callAiFeature,
   AiLimitExceededError,
@@ -116,6 +118,7 @@ export async function summarizeCommunication(
   let errorCode: string | null = null;
   let rawResponse = '';
   let gateError: FeatureNotAvailableError | AiLimitExceededError | null = null;
+  let providerError: TRPCError | null = null;
 
   try {
     const completion = await callAiFeature(
@@ -147,7 +150,13 @@ export async function summarizeCommunication(
     ) {
       gateError = err;
     } else {
-      breaker.recordFailure();
+      const mapped = mapAnthropicError(err);
+      if (mapped) {
+        errorCode = `anthropic_${(err as { status?: number }).status ?? 'unknown'}`;
+        providerError = mapped;
+      } else {
+        breaker.recordFailure();
+      }
     }
   } finally {
     const latencyMs = Date.now() - t0;
@@ -167,6 +176,10 @@ export async function summarizeCommunication(
 
   if (gateError) {
     throw gateError;
+  }
+
+  if (providerError) {
+    throw providerError;
   }
 
   if (!success) {

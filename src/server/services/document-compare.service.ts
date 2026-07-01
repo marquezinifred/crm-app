@@ -1,5 +1,7 @@
+import { TRPCError } from '@trpc/server';
 import { masking } from '@/lib/ai/masking';
 import { getAnthropicForTenant, MODELS } from '@/lib/ai/claude';
+import { mapAnthropicError } from '@/lib/ai/anthropic-errors';
 import { callAiFeature } from '@/lib/ai/feature-gate';
 import { logAiUsage } from './ai-usage.service';
 import { CircuitBreaker } from './ai-circuit-breaker';
@@ -91,6 +93,7 @@ ${toMasked}
   let completionTokens = 0;
   let raw = '';
   let success = true;
+  let providerError: TRPCError | null = null;
   try {
     const completion = await callAiFeature(
       'proposal-version-diff',
@@ -112,9 +115,14 @@ ${toMasked}
       .map((c) => c.text)
       .join('\n');
     breaker.recordSuccess();
-  } catch {
+  } catch (err) {
     success = false;
-    breaker.recordFailure();
+    const mapped = mapAnthropicError(err);
+    if (mapped) {
+      providerError = mapped;
+    } else {
+      breaker.recordFailure();
+    }
   } finally {
     await logAiUsage({
       tenantId: input.tenantId,
@@ -129,6 +137,7 @@ ${toMasked}
     });
   }
 
+  if (providerError) throw providerError;
   if (!success) return emptyResult('metadata');
 
   try {

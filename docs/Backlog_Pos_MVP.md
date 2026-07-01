@@ -385,6 +385,93 @@ Baseline 381 → 404 passing. Type-check zero. Lint zero.
   neste rollout; adicionar `sortBy`/`sortDir` na query tRPC
   quando surgir
 
+### P-20. Tarefas na oportunidade sem criar/editar/deletar
+**Severidade:** 🔴 Alta (feature incompleta). Identificado em
+2026-06-30 por Fred: "falta um botão para cadastrar ou editar as
+tarefas nas oportunidades".
+
+**Sintoma:** em `/pipeline/[id]` (detalhe da oportunidade) a seção
+"Tarefas" só permite **marcar como DONE** via checkbox. Não tem
+botão criar, não tem edit inline, não tem delete. Se você digitou
+tarefa errada, tem que ir em Prisma Studio ou aceitar.
+
+**Backend faltando:** `tasksRouter` em `src/server/trpc/routers/activities.ts`
+tem `list`, `myOpen`, `create`, `updateStatus`. **Falta `update` e
+`delete`.**
+
+**Frontend faltando:** componente `ActivitiesAndTasks` em
+`src/app/pipeline/[id]/page.tsx:373` só renderiza lista + checkbox.
+
+**Fix:**
+1. Backend: adicionar `tasks.update` (title, description, dueDate,
+   priority, assigneeId) e `tasks.delete` (soft delete via
+   `deletedAt`)
+2. Frontend: extrair `ActivitiesAndTasks` para componente próprio;
+   adicionar botão "+ Nova tarefa" no header; modal com form
+   (título, descrição, dueDate, priority, assignee); click na
+   linha abre modal em modo edit; botão × pra deletar (com
+   confirmação); audit em create/update/delete
+
+**Esforço:** ~2h (backend + UI + testes).
+
+### P-19. Upload de documentos + templates é placeholder manual
+**Severidade:** 🔴 Alta (feature quebrada). Identificado em
+2026-06-30 por Fred: "os campos de anexar documentos devem
+permitir clicar e abrir a janela de seleção de arquivo".
+
+**Sintoma real (bem pior que o descrito):** dois pontos da UI
+pedem o gestor **digitar manualmente**:
+- **`/pipeline/[id]` → Anexar documento**
+  (`src/components/pipeline/DocumentsSection.tsx`): usuário
+  digita URL/path do arquivo, tamanho em bytes e SHA-256 hex
+  de 64 chars. Não tem `<input type="file">`.
+- **`/admin/templates`** (`src/app/admin/templates/page.tsx`):
+  idem — `storageKey` textual manual.
+
+Referência de código que funciona: `/admin/branding`
+(`src/app/admin/branding/page.tsx:747`) tem dropzone
+funcional com `<input type="file" hidden>` + ref + drop
+handler + `handleFile()` que faz upload via tRPC.
+
+**Backend já existe** em `src/server/services/storage-s3.service.ts`:
+- `uploadObject(key, body, contentType)` — upload server-side
+- `presignDownload(key, expires)` — URL temporária
+- `s3Enabled()` — check credenciais
+- Fallback pra inline base64 quando S3 não configurado (dev)
+
+**Falta:** `presignUpload(key, contentType, expires)` para PUT
+direto do cliente (opcional — pode usar upload via backend).
+
+**Fix escopo cheio (end-to-end):**
+1. Adicionar `presignUpload()` ao `storage-s3.service.ts` (opcional
+   — decisão do implementador)
+2. Router tRPC novo `documents.getUploadIntent` (retorna
+   `{storageKey, uploadUrl?}` ou `{storageKey, mode: 'proxy'}`)
+3. Componente `<FileDropzone>` reusável em
+   `src/components/ui/file-dropzone.tsx` (extraído do padrão
+   Branding) com: click abre picker, drag-drop, progress bar,
+   validação size/mime, cálculo SHA-256 via Web Crypto API
+4. Refactor `DocumentsSection.tsx`: substitui form manual por
+   `<FileDropzone>`; após upload, chama `documents.confirmUpload`
+   com `{storageKey, filename, sizeBytes, sha256, category}`
+5. Refactor `/admin/templates`: idem, categoria fixa TEMPLATE
+6. Fallback dev sem S3: aceita upload direto no backend + salva
+   em `/tmp/venzo-uploads/<tenant>/<uuid>` (só dev; produção
+   exige S3)
+
+**Escopo:**
+- 2 componentes novos (`FileDropzone`, tRPC `documents.getUploadIntent`)
+- Refactor de 2 telas (`DocumentsSection`, `admin/templates`)
+- 1 método novo no service S3 (opcional)
+- Testes: dropzone renderiza, click dispara picker, mime/size
+  validation, SHA-256 calculado, fallback dev sem S3
+
+**Esforço:** ~1.5-2 dias.
+
+**Débitos residuais possíveis:** upload em outros lugares
+(anexos em Activity? Attachments em Contract? Investigar durante
+o refactor e listar como P-20+ se surgirem).
+
 ### P-13. 401 do middleware vira "Unable to transform response from server"
 **Severidade:** Média-Alta (UX). Identificado em 2026-06-30 testando
 "Resumir com IA" em `/pipeline/[id]` após sessão Clerk expirar.

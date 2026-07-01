@@ -324,6 +324,67 @@ modificações mínimas (`_app.ts` merge, `inbox.ts` rename export,
 enquanto tenant tem <100k contatos. Escala vira P-XX se surgir
 demanda.
 
+### ~~P-17. Tabelas sem ordenamento clicável~~ ✅ FECHADO
+**Resolvido em 2026-06-30 pelos commits `e269325` (infra) +
+`7e4949f` (rollout).** Sintoma: as 8 tabelas do app mostravam
+dados na ordem que o backend devolveu. Clicar no header não
+fazia nada.
+
+**Causa:** `src/components/ui/table.tsx` — `TH` era wrapper mudo
+de `<th>` sem prop `sortable`. Consumidores mostravam apenas
+título sem controle de ordem.
+
+**Fix:**
+1. **`src/components/ui/table.tsx`** — `TH` ganhou `sortable`,
+   `sortState`, `onSort`. Chevron dupla (null), single up (asc),
+   single down (desc). `aria-sort`, `role="columnheader"`,
+   `tabIndex={0}`, Enter/Space dispara `onSort()`. Focus ring
+   Venzo. Comportamento sem `sortable` inalterado — não regride
+   consumidores existentes
+2. **`src/lib/hooks/useTableSort.ts`** — Hook com toggle
+   asc → desc → null (volta ordem original). Null-safe
+   (null/undefined ao fim em asc, ao início em desc). Strings
+   usam `localeCompare('pt-BR', {sensitivity:'base', numeric:true})`.
+   Accessor pode ser `keyof T` OU função pra valor computado
+   (ex: `(t) => t._count.users`). Helpers puros expostos
+   (`compareSortValues`, `resolveValue`, `nextSortState`) para
+   testabilidade sem `@testing-library`
+3. **`src/lib/trpc/client.ts`** — expõe `RouterOutputs` via
+   `inferRouterOutputs<AppRouter>` para tipar linhas nas pages
+   sem redeclarar
+
+**Rollout aplicado em 7 tabelas + 1 lista de cards:**
+- `/companies`: Razão social, Tipo, CNPJ, Cidade/UF
+- `/contacts`: Nome, E-mail, Cargo, Área, Relacionamento
+- `/admin/users`: Nome, E-mail, Papel, Último login, Status
+- `/admin/products`: Nome, Tipo, SKU, Margem mín., Status
+- `/admin/partners`: card list — select "Ordenar por" (Nome,
+  Comissão, Contratos abertos), mesma matemática via helpers
+  puros. Não é tabela; conversão pra tabela seria mudança maior
+  fora do escopo P-17
+- `/platform/tenants`: Nome, Plano, Status, Users, Opps, Criado
+- `/platform/trials`: Tenant, Source, Termina em, Setup,
+  Estendido
+
+`/contacts`, `/admin/users` e `/admin/products` também migradas
+de raw HTML `<table>` para `Table/THead/TH/TR/TD` do design
+system Venzo por consistência visual.
+
+**Testes:** 23 novos (15 em `use-table-sort.test.ts` cobrindo
+helpers puros; 8 em `table-th-sortable.test.tsx` cobrindo
+click/keyboard/aria-sort/chevrons via react-dom + act).
+Baseline 381 → 404 passing. Type-check zero. Lint zero.
+
+**Fora do escopo (registrar como P-18 se necessário):**
+- Dashboard não tem `<table>` — usa `<ul>` de alertas
+- Outras tabelas platform (`/platform/audit`, `/platform/broadcasts`,
+  `/platform/ai-marketplace`, `/platform/ai-ops`, `/platform/privacy`)
+  usam design-system Table mas não estavam listadas na P-17;
+  aplicar em rollout separado se pedido
+- Server-side sort para listas > 200 rows — nenhuma detectada
+  neste rollout; adicionar `sortBy`/`sortDir` na query tRPC
+  quando surgir
+
 ---
 
 ## 📅 Sprints planejados (próximas 4–6 semanas)

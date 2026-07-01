@@ -1,8 +1,8 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
-import { trpc } from '@/lib/trpc/client';
+import { useMemo, useState } from 'react';
+import { trpc, type RouterOutputs } from '@/lib/trpc/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -19,6 +19,7 @@ import {
   TableEmpty,
   TableSkeleton,
 } from '@/components/ui/table';
+import { useTableSort, type SortKey } from '@/lib/hooks/useTableSort';
 import type { TenantPlan } from '@prisma/client';
 
 const PLAN_VARIANT: Record<TenantPlan, 'default' | 'primary' | 'success' | 'gold'> = {
@@ -27,6 +28,15 @@ const PLAN_VARIANT: Record<TenantPlan, 'default' | 'primary' | 'success' | 'gold
   PRO: 'success',
   ENTERPRISE: 'gold',
 };
+
+type TenantRow = RouterOutputs['platform']['tenantsList'][number];
+
+const SORT_T_NAME: SortKey<TenantRow> = 'name';
+const SORT_T_PLAN: SortKey<TenantRow> = 'plan';
+const SORT_T_STATUS: SortKey<TenantRow> = (t) => t.subscriptionStatus ?? null;
+const SORT_T_USERS: SortKey<TenantRow> = (t) => t._count.users;
+const SORT_T_OPPS: SortKey<TenantRow> = (t) => t._count.opportunities;
+const SORT_T_CREATED: SortKey<TenantRow> = (t) => new Date(t.createdAt);
 
 export default function PlatformTenantsPage() {
   const router = useRouter();
@@ -42,6 +52,8 @@ export default function PlatformTenantsPage() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const rows = useMemo(() => list.data ?? [], [list.data]);
+  const { sorted, toggleSort, getSortState } = useTableSort<TenantRow>(rows);
   const [form, setForm] = useState({
     name: '',
     slug: '',
@@ -68,24 +80,36 @@ export default function PlatformTenantsPage() {
       <Table>
         <THead>
           <tr>
-            <TH>Nome</TH>
-            <TH>Plano</TH>
-            <TH>Status</TH>
-            <TH>Users</TH>
-            <TH>Opps</TH>
-            <TH>Criado</TH>
+            <TH sortable sortState={getSortState(SORT_T_NAME)} onSort={() => toggleSort(SORT_T_NAME)}>
+              Nome
+            </TH>
+            <TH sortable sortState={getSortState(SORT_T_PLAN)} onSort={() => toggleSort(SORT_T_PLAN)}>
+              Plano
+            </TH>
+            <TH sortable sortState={getSortState(SORT_T_STATUS)} onSort={() => toggleSort(SORT_T_STATUS)}>
+              Status
+            </TH>
+            <TH sortable sortState={getSortState(SORT_T_USERS)} onSort={() => toggleSort(SORT_T_USERS)}>
+              Users
+            </TH>
+            <TH sortable sortState={getSortState(SORT_T_OPPS)} onSort={() => toggleSort(SORT_T_OPPS)}>
+              Opps
+            </TH>
+            <TH sortable sortState={getSortState(SORT_T_CREATED)} onSort={() => toggleSort(SORT_T_CREATED)}>
+              Criado
+            </TH>
           </tr>
         </THead>
         {list.isLoading ? (
           <TableSkeleton cols={6} rows={6} />
         ) : (
           <TBody>
-            {list.data && list.data.length === 0 && (
+            {list.data && sorted.length === 0 && (
               <TableEmpty colSpan={6}>
                 Nenhum tenant ainda. Crie o primeiro para começar.
               </TableEmpty>
             )}
-            {list.data?.map((t) => (
+            {sorted.map((t) => (
               <TR
                 key={t.id}
                 role="button"

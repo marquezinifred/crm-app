@@ -1,10 +1,12 @@
 'use client';
 
-import { trpc } from '@/lib/trpc/client';
-import { useId, useState } from 'react';
+import { trpc, type RouterOutputs } from '@/lib/trpc/client';
+import { useId, useMemo, useState } from 'react';
 import { ProductType } from '@prisma/client';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { useToast } from '@/components/ui/toast';
+import { Table, THead, TBody, TH, TR, TD, TableEmpty } from '@/components/ui/table';
+import { useTableSort, type SortKey } from '@/lib/hooks/useTableSort';
 
 const TYPE_LABEL: Record<ProductType, string> = {
   ALOCACAO: 'Alocação',
@@ -13,6 +15,14 @@ const TYPE_LABEL: Record<ProductType, string> = {
   PRODUTO: 'Produto',
   OUTRO: 'Outro',
 };
+
+type ProductRow = RouterOutputs['products']['list'][number];
+
+const SORT_PROD_NAME: SortKey<ProductRow> = 'name';
+const SORT_PROD_TYPE: SortKey<ProductRow> = (p) => TYPE_LABEL[p.type];
+const SORT_PROD_SKU: SortKey<ProductRow> = 'sku';
+const SORT_PROD_MARGIN: SortKey<ProductRow> = (p) => Number(p.minMarginPct);
+const SORT_PROD_STATUS: SortKey<ProductRow> = 'active';
 
 type FormState = {
   id?: string;
@@ -65,6 +75,9 @@ export default function AdminProductsPage() {
       toast({ kind: 'success', title: 'Produto desativado.' });
     },
   });
+
+  const rows = useMemo(() => list.data ?? [], [list.data]);
+  const { sorted, toggleSort, getSortState } = useTableSort<ProductRow>(rows);
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -186,45 +199,47 @@ export default function AdminProductsPage() {
         </form>
       </section>
 
-      <section aria-label="Lista de produtos" className="border rounded-lg bg-card overflow-x-auto">
-        <table className="w-full text-sm">
+      <section aria-label="Lista de produtos">
+        <Table>
           <caption className="sr-only">Produtos e serviços cadastrados</caption>
-          <thead className="bg-page">
+          <THead>
             <tr>
-              <th scope="col" className="text-left px-4 py-2 font-medium">Nome</th>
-              <th scope="col" className="text-left px-4 py-2 font-medium">Tipo</th>
-              <th scope="col" className="text-left px-4 py-2 font-medium">SKU</th>
-              <th scope="col" className="text-right px-4 py-2 font-medium">Margem mín.</th>
-              <th scope="col" className="text-left px-4 py-2 font-medium">Status</th>
-              <th scope="col" className="text-right px-4 py-2 font-medium">Ações</th>
+              <TH sortable sortState={getSortState(SORT_PROD_NAME)} onSort={() => toggleSort(SORT_PROD_NAME)}>
+                Nome
+              </TH>
+              <TH sortable sortState={getSortState(SORT_PROD_TYPE)} onSort={() => toggleSort(SORT_PROD_TYPE)}>
+                Tipo
+              </TH>
+              <TH sortable sortState={getSortState(SORT_PROD_SKU)} onSort={() => toggleSort(SORT_PROD_SKU)}>
+                SKU
+              </TH>
+              <TH sortable sortState={getSortState(SORT_PROD_MARGIN)} onSort={() => toggleSort(SORT_PROD_MARGIN)} className="text-right">
+                Margem mín.
+              </TH>
+              <TH sortable sortState={getSortState(SORT_PROD_STATUS)} onSort={() => toggleSort(SORT_PROD_STATUS)}>
+                Status
+              </TH>
+              <TH className="text-right">Ações</TH>
             </tr>
-          </thead>
-          <tbody>
+          </THead>
+          <TBody>
             {list.isLoading && (
-              <tr>
-                <td colSpan={6} className="p-6 text-center text-text-2">
-                  Carregando...
-                </td>
-              </tr>
+              <TableEmpty colSpan={6}>Carregando...</TableEmpty>
             )}
-            {!list.isLoading && list.data?.length === 0 && (
-              <tr>
-                <td colSpan={6} className="p-6 text-center text-text-2">
-                  Seu portfólio começa aqui. Cadastre o primeiro produto.
-                </td>
-              </tr>
+            {!list.isLoading && sorted.length === 0 && (
+              <TableEmpty colSpan={6}>
+                Seu portfólio começa aqui. Cadastre o primeiro produto.
+              </TableEmpty>
             )}
-            {list.data?.map((p) => (
-              <tr key={p.id} className="border-t">
-                <td className="px-4 py-2 font-medium">{p.name}</td>
-                <td className="px-4 py-2 text-text-2">{TYPE_LABEL[p.type]}</td>
-                <td className="px-4 py-2 text-text-2 font-mono text-xs">
-                  {p.sku ?? '—'}
-                </td>
-                <td className="px-4 py-2 text-right">
+            {sorted.map((p) => (
+              <TR key={p.id}>
+                <TD className="font-medium">{p.name}</TD>
+                <TD className="text-text-2">{TYPE_LABEL[p.type]}</TD>
+                <TD className="text-text-2 font-mono text-xs">{p.sku ?? '—'}</TD>
+                <TD className="text-right">
                   {Number(p.minMarginPct).toFixed(1)}%
-                </td>
-                <td className="px-4 py-2">
+                </TD>
+                <TD>
                   {p.active ? (
                     <span className="text-xs px-2 py-0.5 rounded-full bg-success-bg text-success-text">
                       Ativo
@@ -234,8 +249,8 @@ export default function AdminProductsPage() {
                       Inativo
                     </span>
                   )}
-                </td>
-                <td className="px-4 py-2 text-right">
+                </TD>
+                <TD className="text-right">
                   <button
                     onClick={() =>
                       setForm({
@@ -260,11 +275,11 @@ export default function AdminProductsPage() {
                   >
                     Remover
                   </button>
-                </td>
-              </tr>
+                </TD>
+              </TR>
             ))}
-          </tbody>
-        </table>
+          </TBody>
+        </Table>
       </section>
 
       <style jsx>{`

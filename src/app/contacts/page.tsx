@@ -1,8 +1,8 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { trpc } from '@/lib/trpc/client';
-import { useState, useId } from 'react';
+import { trpc, type RouterOutputs } from '@/lib/trpc/client';
+import { useState, useId, useMemo } from 'react';
 import {
   ContactRelationshipType,
   ContactSeniority,
@@ -10,6 +10,8 @@ import {
 } from '@prisma/client';
 import { useToast } from '@/components/ui/toast';
 import { QuickCreateTrigger } from '@/components/ui/quick-create-trigger';
+import { useTableSort, type SortKey } from '@/lib/hooks/useTableSort';
+import { Table, THead, TBody, TH, TR, TD, TableEmpty } from '@/components/ui/table';
 
 const RT_LABEL: Record<ContactRelationshipType, string> = {
   COLABORADOR: 'Colaborador',
@@ -52,6 +54,15 @@ const EMPTY: FormState = {
   notes: '',
 };
 
+type Contact = RouterOutputs['contacts']['list']['rows'][number];
+
+const SORT_NAME: SortKey<Contact> = 'fullName';
+const SORT_EMAIL: SortKey<Contact> = 'email';
+const SORT_POSITION: SortKey<Contact> = 'position';
+const SORT_WORK_AREA: SortKey<Contact> = (c) =>
+  c.workArea ? WA_LABEL[c.workArea] : null;
+const SORT_RELATIONSHIP: SortKey<Contact> = (c) => RT_LABEL[c.relationshipType];
+
 export default function ContactsPage() {
   const router = useRouter();
   const utils = trpc.useUtils();
@@ -91,11 +102,18 @@ export default function ContactsPage() {
     },
   });
 
-  const visibleContacts = (contacts.data?.rows ?? []).filter((c) => {
-    if (workAreaFilter && c.workArea !== workAreaFilter) return false;
-    if (rtFilter && c.relationshipType !== rtFilter) return false;
-    return true;
-  });
+  const visibleContacts = useMemo(
+    () =>
+      (contacts.data?.rows ?? []).filter((c) => {
+        if (workAreaFilter && c.workArea !== workAreaFilter) return false;
+        if (rtFilter && c.relationshipType !== rtFilter) return false;
+        return true;
+      }),
+    [contacts.data, workAreaFilter, rtFilter],
+  );
+  const { sorted: sortedContacts, toggleSort, getSortState } = useTableSort<Contact>(
+    visibleContacts,
+  );
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -321,95 +339,93 @@ export default function ContactsPage() {
           </Field>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <caption className="sr-only">
-              Lista de contatos do tenant atual
-            </caption>
-            <thead className="bg-page">
-              <tr>
-                <th scope="col" className="text-left px-4 py-2 font-medium">Nome</th>
-                <th scope="col" className="text-left px-4 py-2 font-medium">E-mail</th>
-                <th scope="col" className="text-left px-4 py-2 font-medium">Cargo</th>
-                <th scope="col" className="text-left px-4 py-2 font-medium">Área</th>
-                <th scope="col" className="text-left px-4 py-2 font-medium">Relacionamento</th>
-                <th scope="col" className="text-right px-4 py-2 font-medium">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {contacts.isLoading && (
-                <tr>
-                  <td colSpan={6} className="p-6 text-center text-text-2">
-                    Carregando...
-                  </td>
-                </tr>
-              )}
-              {!contacts.isLoading && visibleContacts.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="p-6 text-center text-text-2">
-                    Ninguém com esses filtros. Ajuste a busca ou cadastre um contato.
-                  </td>
-                </tr>
-              )}
-              {visibleContacts.map((c) => (
-                <tr
-                  key={c.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => router.push(`/contacts/${c.id}`)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      router.push(`/contacts/${c.id}`);
-                    }
-                  }}
-                  className="border-t cursor-pointer hover:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
-                >
-                  <td className="px-4 py-2 font-medium">{c.fullName}</td>
-                  <td className="px-4 py-2 text-text-2">{c.email}</td>
-                  <td className="px-4 py-2 text-text-2">{c.position ?? '—'}</td>
-                  <td className="px-4 py-2 text-text-2">
-                    {c.workArea ? WA_LABEL[c.workArea] : '—'}
-                  </td>
-                  <td className="px-4 py-2 text-text-2">
-                    {RT_LABEL[c.relationshipType]}
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setForm({
-                          id: c.id,
-                          fullName: c.fullName,
-                          email: c.email,
-                          phone: c.phone ?? '',
-                          position: c.position ?? '',
-                          workArea: c.workArea ?? '',
-                          seniority: c.seniority ?? '',
-                          relationshipType: c.relationshipType,
-                          companyId: c.companyId ?? '',
-                          notes: '',
-                        });
-                      }}
-                      className="px-2 py-1 text-xs rounded border hover:bg-page focus-visible:ring-2 focus-visible:ring-brand-primary"
-                    >
-                      Editar
-                    </button>{' '}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (confirm(`Remover ${c.fullName}?`)) remove.mutate({ id: c.id });
-                      }}
-                      className="px-2 py-1 text-xs rounded border text-danger hover:bg-danger-bg focus-visible:ring-2 focus-visible:ring-danger"
-                    >
-                      Remover
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <caption className="sr-only">Lista de contatos do tenant atual</caption>
+          <THead>
+            <tr>
+              <TH sortable sortState={getSortState(SORT_NAME)} onSort={() => toggleSort(SORT_NAME)}>
+                Nome
+              </TH>
+              <TH sortable sortState={getSortState(SORT_EMAIL)} onSort={() => toggleSort(SORT_EMAIL)}>
+                E-mail
+              </TH>
+              <TH sortable sortState={getSortState(SORT_POSITION)} onSort={() => toggleSort(SORT_POSITION)}>
+                Cargo
+              </TH>
+              <TH sortable sortState={getSortState(SORT_WORK_AREA)} onSort={() => toggleSort(SORT_WORK_AREA)}>
+                Área
+              </TH>
+              <TH sortable sortState={getSortState(SORT_RELATIONSHIP)} onSort={() => toggleSort(SORT_RELATIONSHIP)}>
+                Relacionamento
+              </TH>
+              <TH className="text-right">Ações</TH>
+            </tr>
+          </THead>
+          <TBody>
+            {contacts.isLoading && (
+              <TableEmpty colSpan={6}>Carregando...</TableEmpty>
+            )}
+            {!contacts.isLoading && sortedContacts.length === 0 && (
+              <TableEmpty colSpan={6}>
+                Ninguém com esses filtros. Ajuste a busca ou cadastre um contato.
+              </TableEmpty>
+            )}
+            {sortedContacts.map((c) => (
+              <TR
+                key={c.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => router.push(`/contacts/${c.id}`)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    router.push(`/contacts/${c.id}`);
+                  }
+                }}
+                className="cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
+              >
+                <TD className="font-medium">{c.fullName}</TD>
+                <TD className="text-text-2">{c.email}</TD>
+                <TD className="text-text-2">{c.position ?? '—'}</TD>
+                <TD className="text-text-2">
+                  {c.workArea ? WA_LABEL[c.workArea] : '—'}
+                </TD>
+                <TD className="text-text-2">{RT_LABEL[c.relationshipType]}</TD>
+                <TD className="text-right">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setForm({
+                        id: c.id,
+                        fullName: c.fullName,
+                        email: c.email,
+                        phone: c.phone ?? '',
+                        position: c.position ?? '',
+                        workArea: c.workArea ?? '',
+                        seniority: c.seniority ?? '',
+                        relationshipType: c.relationshipType,
+                        companyId: c.companyId ?? '',
+                        notes: '',
+                      });
+                    }}
+                    className="px-2 py-1 text-xs rounded border hover:bg-page focus-visible:ring-2 focus-visible:ring-brand-primary"
+                  >
+                    Editar
+                  </button>{' '}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (confirm(`Remover ${c.fullName}?`)) remove.mutate({ id: c.id });
+                    }}
+                    className="px-2 py-1 text-xs rounded border text-danger hover:bg-danger-bg focus-visible:ring-2 focus-visible:ring-danger"
+                  >
+                    Remover
+                  </button>
+                </TD>
+              </TR>
+            ))}
+          </TBody>
+        </Table>
       </section>
 
       <style jsx>{`

@@ -1,8 +1,8 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
-import { trpc } from '@/lib/trpc/client';
+import { useMemo, useState } from 'react';
+import { trpc, type RouterOutputs } from '@/lib/trpc/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -19,6 +19,15 @@ import {
   TableEmpty,
   TableSkeleton,
 } from '@/components/ui/table';
+import { useTableSort, type SortKey } from '@/lib/hooks/useTableSort';
+
+type Company = RouterOutputs['companies']['list']['rows'][number];
+
+const SORT_NAME: SortKey<Company> = (c) => c.nomeFantasia ?? c.razaoSocial;
+const SORT_TYPE: SortKey<Company> = 'type';
+const SORT_CNPJ: SortKey<Company> = 'cnpj';
+const SORT_CITY: SortKey<Company> = (c) =>
+  [c.city, c.state].filter(Boolean).join(' / ') || null;
 
 export default function CompaniesPage() {
   const router = useRouter();
@@ -27,6 +36,9 @@ export default function CompaniesPage() {
     pageSize: 50,
   });
   const [createOpen, setCreateOpen] = useState(false);
+
+  const rows = useMemo(() => data?.rows ?? [], [data]);
+  const { sorted, toggleSort, getSortState } = useTableSort<Company>(rows);
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -50,17 +62,25 @@ export default function CompaniesPage() {
       <Table>
         <THead>
           <tr>
-            <TH>Razão social</TH>
-            <TH>Tipo</TH>
-            <TH>CNPJ</TH>
-            <TH>Cidade / UF</TH>
+            <TH sortable sortState={getSortState(SORT_NAME)} onSort={() => toggleSort(SORT_NAME)}>
+              Razão social
+            </TH>
+            <TH sortable sortState={getSortState(SORT_TYPE)} onSort={() => toggleSort(SORT_TYPE)}>
+              Tipo
+            </TH>
+            <TH sortable sortState={getSortState(SORT_CNPJ)} onSort={() => toggleSort(SORT_CNPJ)}>
+              CNPJ
+            </TH>
+            <TH sortable sortState={getSortState(SORT_CITY)} onSort={() => toggleSort(SORT_CITY)}>
+              Cidade / UF
+            </TH>
           </tr>
         </THead>
         {isLoading ? (
           <TableSkeleton cols={4} rows={6} />
         ) : (
           <TBody>
-            {data && data.rows.length === 0 && (
+            {data && sorted.length === 0 && (
               <TableEmpty colSpan={4}>
                 <EmptyState
                   title="Sua base de empresas começa aqui."
@@ -73,7 +93,7 @@ export default function CompaniesPage() {
                 />
               </TableEmpty>
             )}
-            {data?.rows.map((c) => (
+            {sorted.map((c) => (
               <TR
                 key={c.id}
                 role="button"

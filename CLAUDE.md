@@ -2327,6 +2327,30 @@ Sprint atual: **verificar no topo deste arquivo qual sprint está em andamento.*
 
 ---
 
+## Deploy staging (Vercel)
+
+Guia completo em `docs/DEPLOY_Vercel_Guide.md`. Config commitada:
+`vercel.json` (region `gru1`, `maxDuration` estendido para tRPC/IA/upload)
++ `scripts/setup-vercel-env.sh` (imprime a lista de `vercel env add`
+na ordem correta, sem ler `.env.local`).
+
+Fluxo resumido pra Fred rodar (~20min):
+
+1. Criar Neon branch `staging` + rodar `prisma migrate deploy` e
+   `npm run rbac:backfill-cache` contra a nova connection string
+2. (Opcional) Upstash Redis grátis pra workers BullMQ
+3. `vercel login && vercel link && vercel`
+4. Colar as vars imprimidas por `bash scripts/setup-vercel-env.sh`
+5. Adicionar o domínio Vercel no Clerk (Domains + Webhook endpoint)
+6. `vercel --prod` e smoke test
+
+⚠️ `RBAC_GRANULAR_ENABLED=false` no 1º deploy até smoke test passar;
+ligar depois de confirmar backfill do cache. Nunca reusar
+`TENANT_FIELD_ENCRYPTION_KEY` do dev em staging (chaves criptografadas
+ficam isoladas por ambiente).
+
+---
+
 ## Checklist antes de cada deploy (PR → staging)
 
 - [ ] `npm run test` passa

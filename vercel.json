@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "regions": ["gru1"],
+  "buildCommand": "prisma generate && next build",
+  "installCommand": "npm ci",
+  "functions": {
+    "src/app/api/trpc/[trpc]/route.ts": { "maxDuration": 30 },
+    "src/app/api/v1/inbound/lead/route.ts": { "maxDuration": 20 },
+    "src/app/api/v1/inbound/email/route.ts": { "maxDuration": 20 },
+    "src/app/api/v1/reports/export/route.ts": { "maxDuration": 60 },
+    "src/app/api/v1/imports/upload/route.ts": { "maxDuration": 60 },
+    "src/app/api/clerk/webhook/route.ts": { "maxDuration": 15 },
+    "src/app/api/stripe/webhook/route.ts": { "maxDuration": 15 }
+  },
+  "crons": []
+}

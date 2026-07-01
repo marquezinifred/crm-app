@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { trpc, type RouterOutputs } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { useState, useId, useMemo } from 'react';
 import {
   ContactRelationshipType,
@@ -84,7 +85,7 @@ export default function ContactsPage() {
       setForm(EMPTY);
       setErrors({});
     },
-    onError: (e) => setErrors({ form: e.message }),
+    onError: (e) => setErrors({ form: friendlyTrpcError(e) }),
   });
   const update = trpc.contacts.update.useMutation({
     onSuccess: (c) => {
@@ -93,7 +94,7 @@ export default function ContactsPage() {
       setForm(EMPTY);
       setErrors({});
     },
-    onError: (e) => setErrors({ form: e.message }),
+    onError: (e) => setErrors({ form: friendlyTrpcError(e) }),
   });
   const remove = trpc.contacts.remove.useMutation({
     onSuccess: () => {

@@ -1,6 +1,7 @@
 'use client';
 
 import { trpc, type RouterOutputs } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { useId, useMemo, useState } from 'react';
 import type { UserRole } from '@prisma/client';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -49,7 +50,7 @@ export default function AdminUsersPage() {
       setInviteForm({ email: '', fullName: '', role: 'ANALISTA' });
       setInviteError(null);
     },
-    onError: (e) => setInviteError(e.message),
+    onError: (e) => setInviteError(friendlyTrpcError(e)),
   });
   const updateRole = trpc.users.updateRole.useMutation({
     onSuccess: () => utils.users.list.invalidate(),

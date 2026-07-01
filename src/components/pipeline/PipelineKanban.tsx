@@ -12,6 +12,7 @@ import {
   useDroppable,
 } from '@dnd-kit/core';
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { formatBRL, formatBRLCompact } from '@/lib/utils/format';
 import { OpportunityCard } from './OpportunityCard';
 import { Badge } from '@/components/ui/badge';
@@ -29,7 +30,7 @@ export function PipelineKanban({ onCardClick, onAdvanceError }: Props) {
   const advance = trpc.opportunities.advanceStage.useMutation({
     onSuccess: () => utils.opportunities.kanban.invalidate(),
     onError: (err, vars) => {
-      onAdvanceError?.(err.message, vars.id);
+      onAdvanceError?.(friendlyTrpcError(err), vars.id);
     },
   });
   const [draggingId, setDraggingId] = useState<string | null>(null);

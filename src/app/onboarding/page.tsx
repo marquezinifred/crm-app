@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -25,7 +26,7 @@ export default function OnboardingPage() {
       router.refresh();
       router.push('/onboarding/setup');
     },
-    onError: (err) => setError(err.message),
+    onError: (err) => setError(friendlyTrpcError(err)),
   });
 
   if (!isLoaded) {

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { brl } from '@/lib/utils/hooks';
 import { OpportunityCard } from './OpportunityCard';
 import { STAGES, STAGE_LABELS } from './types';
@@ -18,7 +19,7 @@ export function PipelineMobile({ onCardClick, onAdvanceError }: Props) {
   const { data, isLoading, error } = trpc.opportunities.kanban.useQuery({});
   const advance = trpc.opportunities.advanceStage.useMutation({
     onSuccess: () => utils.opportunities.kanban.invalidate(),
-    onError: (err, vars) => onAdvanceError?.(err.message, vars.id),
+    onError: (err, vars) => onAdvanceError?.(friendlyTrpcError(err), vars.id),
   });
 
   if (isLoading) return <p className="p-4 text-sm text-text-2">Carregando…</p>;

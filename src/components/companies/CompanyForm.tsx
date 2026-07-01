@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CompanyType } from '@prisma/client';
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { Field } from '@/components/ui/field';
 import { Input, Select, Textarea } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -268,7 +269,7 @@ export function CompanyForm({
       });
       onSuccess?.(created.id);
     },
-    onError: (e) => setError(e.message),
+    onError: (e) => setError(friendlyTrpcError(e)),
   });
   const update = trpc.companies.update.useMutation({
     onSuccess: () => {
@@ -277,7 +278,7 @@ export function CompanyForm({
       toast({ kind: 'success', title: `Dados de ${form.razaoSocial} atualizados.` });
       onSuccess?.(companyId!);
     },
-    onError: (e) => setError(e.message),
+    onError: (e) => setError(friendlyTrpcError(e)),
   });
 
   const busy = create.isPending || update.isPending;

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -20,7 +21,7 @@ export default function PlatformBroadcastsPage() {
       setOpen(false);
       setError(null);
     },
-    onError: (e) => setError(e.message),
+    onError: (e) => setError(friendlyTrpcError(e)),
   });
   const remove = trpc.platform.broadcasts.delete.useMutation({
     onSuccess: () => utils.platform.broadcasts.list.invalidate(),

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { brl, initials } from '@/lib/utils/hooks';
 import { STAGES, STAGE_LABELS } from '@/components/pipeline/types';
 import { STAGE_INTENT_LABEL } from '@/lib/constants/pipeline-stages';
@@ -118,7 +119,7 @@ export default function OpportunityDetailPage() {
 
         {advance.error && (
           <p className="mt-3 rounded bg-warning-bg p-2 text-sm text-warning-text">
-            {advance.error.message}
+            {friendlyTrpcError(advance.error)}
           </p>
         )}
       </header>

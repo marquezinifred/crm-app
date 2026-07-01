@@ -1,6 +1,7 @@
 'use client';
 
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Badge } from '@/components/ui/badge';
 import { formatBRL, formatBRLCompact } from '@/lib/utils/format';
@@ -26,7 +27,7 @@ export default function PlatformDashboardPage() {
       {data.isLoading && <p className="text-body text-text-2">Carregando métricas…</p>}
       {data.error && (
         <p role="alert" className="text-body text-danger">
-          {data.error.message}
+          {friendlyTrpcError(data.error)}
         </p>
       )}
 

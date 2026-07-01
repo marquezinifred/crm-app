@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -65,7 +66,7 @@ export default function SearchPage() {
       )}
 
       {search.error && (
-        <p className="rounded bg-red-50 p-2 text-sm text-danger">{search.error.message}</p>
+        <p className="rounded bg-red-50 p-2 text-sm text-danger">{friendlyTrpcError(search.error)}</p>
       )}
 
       {search.data && (

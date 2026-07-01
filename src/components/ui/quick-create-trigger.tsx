@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { useToast } from './toast';
 import { Modal, ModalFooter } from './modal';
 import { Button } from './button';
@@ -120,7 +121,7 @@ function CompanyQuickCreate({
       toast({ kind: 'success', title: `${data.razaoSocial} adicionada ao seu portfólio.` });
       onCreated(data.id, data.razaoSocial);
     },
-    onError: (e) => setError(e.message),
+    onError: (e) => setError(friendlyTrpcError(e)),
   });
 
   return (
@@ -232,7 +233,7 @@ function ContactQuickCreate({
       toast({ kind: 'success', title: `${data.fullName} adicionado como contato.` });
       onCreated(data.id, data.fullName);
     },
-    onError: (e) => setError(e.message),
+    onError: (e) => setError(friendlyTrpcError(e)),
   });
   const allowRecursion = recursionDepth < 1;
 
@@ -345,7 +346,7 @@ function ProductQuickCreate({
       toast({ kind: 'success', title: `${data.name} adicionado ao catálogo.` });
       onCreated(data.id, data.name);
     },
-    onError: (e) => setError(e.message),
+    onError: (e) => setError(friendlyTrpcError(e)),
   });
 
   return (

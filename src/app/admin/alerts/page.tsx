@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { Button } from '@/components/ui/button';
 
 export default function AdminAlertsPage() {
@@ -97,7 +98,7 @@ export default function AdminAlertsPage() {
         </label>
 
         {save.error && (
-          <p className="rounded bg-red-50 p-2 text-sm text-danger">{save.error.message}</p>
+          <p className="rounded bg-red-50 p-2 text-sm text-danger">{friendlyTrpcError(save.error)}</p>
         )}
 
         <Button type="submit" disabled={save.isLoading || leadDays.length === 0}>

@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { trpc, type RouterOutputs } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -47,7 +48,7 @@ export default function PlatformTenantsPage() {
       utils.platform.tenantsList.invalidate();
       setCreateOpen(false);
     },
-    onError: (e) => setCreateError(e.message),
+    onError: (e) => setCreateError(friendlyTrpcError(e)),
   });
 
   const [createOpen, setCreateOpen] = useState(false);

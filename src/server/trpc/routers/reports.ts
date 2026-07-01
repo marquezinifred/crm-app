@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { router, protectedProcedure } from '@/server/trpc/trpc';
-import { adminOnlyProcedure, withCapability } from '@/server/trpc/middlewares';
+import { adminOnlyProcedure, withPermission } from '@/server/trpc/middlewares';
+import { hasPermission } from '@/server/services/permissions.service';
 import { prisma } from '@/server/db/client';
 import { audit } from '@/server/services/audit.service';
 import {
@@ -39,30 +40,25 @@ type FilterInput = z.infer<typeof filterInput>;
  * tudo. Para PERFORMANCE, ANALISTA enxerga próprias linhas + média anônima
  * do time (sem detalhe individual de outros).
  */
-function visibility(
+// Sprint 15E — refatorado. Antes: role-based hardcoded. Agora: gate por
+// `opportunity:read_others`. PARCEIRO segue com row-level engagement filter.
+async function visibility(
   role: UserRole,
   userId: string,
   partnerCompanyId: string | null,
-): Prisma.OpportunityWhereInput {
-  if (
-    role === 'ADMIN' ||
-    role === 'DIRETOR_COMERCIAL' ||
-    role === 'DIRETOR_OPERACOES' ||
-    role === 'DIRETOR_FINANCEIRO' ||
-    role === 'GESTOR'
-  ) {
-    return {};
+): Promise<Prisma.OpportunityWhereInput> {
+  if (role === 'PARCEIRO') {
+    if (partnerCompanyId) {
+      return {
+        partnerCompanyId,
+        partnerEngagements: { some: { partnerCompanyId, status: 'APPROVED' } },
+      };
+    }
+    return { id: '00000000-0000-0000-0000-000000000000' };
   }
-  if (role === 'ANALISTA') {
-    return { OR: [{ ownerId: userId }, { team: { some: { userId } } }] };
-  }
-  if (role === 'PARCEIRO' && partnerCompanyId) {
-    return {
-      partnerCompanyId,
-      partnerEngagements: { some: { partnerCompanyId, status: 'APPROVED' } },
-    };
-  }
-  return { id: '00000000-0000-0000-0000-000000000000' };
+  const canSeeAll = await hasPermission(userId, 'opportunity:read_others');
+  if (canSeeAll) return {};
+  return { OR: [{ ownerId: userId }, { team: { some: { userId } } }] };
 }
 
 function whereFromFilters(f: FilterInput): Prisma.OpportunityWhereInput {
@@ -91,7 +87,7 @@ async function loadOpps(
 ): Promise<OpportunitySnap[]> {
   const opps = await prisma.opportunity.findMany({
     where: {
-      ...visibility(role, userId, partnerCompanyId),
+      ...(await visibility(role, userId, partnerCompanyId)),
       ...whereFromFilters(filters),
     },
     include: { owner: { select: { fullName: true } } },
@@ -120,7 +116,7 @@ async function loadInboundOpps(
 ): Promise<InboundOpSnap[]> {
   const opps = await prisma.opportunity.findMany({
     where: {
-      ...visibility(role, userId, partnerCompanyId),
+      ...(await visibility(role, userId, partnerCompanyId)),
       ...whereFromFilters(filters),
     },
     select: {
@@ -146,7 +142,11 @@ async function loadInboundOpps(
   }));
 }
 
-const canRead = withCapability('opportunity', 'read');
+// Sprint 15E — antes: `opportunity:read` (proxy grosso). Agora:
+// `reports:read` como gate mínimo. Cada procedure aplica filtro adicional
+// via `hasPermission(userId, 'opportunity:read_others')` pra reduzir o
+// escopo dos dados ao próprio user quando não pode ver dos outros.
+const canRead = withPermission('reports:read');
 
 export const reportsRouter = router({
   funnel: canRead.input(filterInput.default({})).query(async ({ input, ctx }) => {

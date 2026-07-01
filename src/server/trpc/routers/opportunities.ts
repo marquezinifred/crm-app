@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { router } from '@/server/trpc/trpc';
-import { withCapability } from '@/server/trpc/middlewares';
+import { withPermission } from '@/server/trpc/middlewares';
+import { hasPermission } from '@/server/services/permissions.service';
 import { prisma } from '@/server/db/client';
 import { audit } from '@/server/services/audit.service';
 import {
@@ -22,59 +23,59 @@ import {
 import { zUuid } from '@/lib/validators';
 import { Prisma } from '@prisma/client';
 
-const canRead = withCapability('opportunity', 'read');
-const canCreate = withCapability('opportunity', 'create');
-const canUpdate = withCapability('opportunity', 'update');
-const canAdvance = withCapability('opportunity', 'advance_stage');
-const canCancel = withCapability('opportunity', 'cancel');
+const canRead = withPermission('opportunity:read');
+const canCreate = withPermission('opportunity:create');
+const canUpdate = withPermission('opportunity:update');
+const canAdvance = withPermission('opportunity:advance_stage');
+const canCancel = withPermission('opportunity:cancel');
 
 /**
- * Filtro de visibilidade por perfil (§7.4 do spec):
- *   - SUPER_ADMIN / ADMIN / DIRETOR_* : todas oportunidades
- *   - GESTOR : todas (visão consolidada do time)
- *   - ANALISTA : apenas próprias (owner) + onde é membro do time
- *   - PARCEIRO : apenas oportunidades onde partnerCompanyId = User.partnerCompanyId
- *     E existe PartnerEngagement(status=APPROVED) para o par
+ * Filtro de visibilidade — refatorado no Sprint 15E (§6.4 spec).
+ *
+ * Antes: gate role-based hardcoded (ADMIN/DIRETOR/GESTOR viam tudo,
+ * ANALISTA só própria, PARCEIRO row-level).
+ *
+ * Agora: gate por permission `opportunity:read_others`. Como a matrix
+ * concede essa permission a ADMIN, DIRETOR_COMERCIAL, DIRETOR_OPERACOES,
+ * DIRETOR_FINANCEIRO e GESTOR por default, comportamento pra elas segue
+ * idêntico. **Breaking change**: ANALISTA passa a ver só as próprias —
+ * admin pode conceder override individual de `opportunity:read_others`
+ * sem mudar role. PARCEIRO segue com row-level filter (não é
+ * permission-based).
  */
-function visibilityWhere(
+async function visibilityWhere(
   userId: string,
   role: string,
   partnerCompanyId: string | null,
-): Prisma.OpportunityWhereInput {
-  if (
-    role === 'SUPER_ADMIN' ||
-    role === 'ADMIN' ||
-    role === 'DIRETOR_COMERCIAL' ||
-    role === 'DIRETOR_FINANCEIRO' ||
-    role === 'GESTOR'
-  ) {
-    return {};
+): Promise<Prisma.OpportunityWhereInput> {
+  if (role === 'PARCEIRO') {
+    if (partnerCompanyId) {
+      return {
+        partnerCompanyId,
+        partnerEngagements: {
+          some: { partnerCompanyId, status: 'APPROVED' },
+        },
+      };
+    }
+    // PARCEIRO sem partnerCompany resolvido → nada
+    return { id: '00000000-0000-0000-0000-000000000000' };
   }
-  if (role === 'ANALISTA') {
-    return {
-      OR: [
-        { ownerId: userId },
-        { team: { some: { userId } } },
-      ],
-    };
-  }
-  if (role === 'PARCEIRO' && partnerCompanyId) {
-    return {
-      partnerCompanyId,
-      partnerEngagements: {
-        some: { partnerCompanyId, status: 'APPROVED' },
-      },
-    };
-  }
-  // PARCEIRO sem partnerCompany resolvido → nada
-  return { id: '00000000-0000-0000-0000-000000000000' };
+
+  const canSeeAll = await hasPermission(userId, 'opportunity:read_others');
+  if (canSeeAll) return {};
+  return {
+    OR: [
+      { ownerId: userId },
+      { team: { some: { userId } } },
+    ],
+  };
 }
 
 export const opportunitiesRouter = router({
   list: canRead.input(opportunityListInput).query(async ({ input, ctx }) => {
     const where: Prisma.OpportunityWhereInput = {
       deletedAt: null,
-      ...visibilityWhere(ctx.user.id, ctx.user.role, ctx.user.partnerCompanyId),
+      ...(await visibilityWhere(ctx.user.id, ctx.user.role, ctx.user.partnerCompanyId)),
       ...(input.stage ? { stage: input.stage } : {}),
       ...(input.status ? { status: input.status } : {}),
       ...(input.ownerId ? { ownerId: input.ownerId } : {}),
@@ -114,7 +115,7 @@ export const opportunitiesRouter = router({
     const where: Prisma.OpportunityWhereInput = {
       deletedAt: null,
       status: 'ACTIVE',
-      ...visibilityWhere(ctx.user.id, ctx.user.role, ctx.user.partnerCompanyId),
+      ...(await visibilityWhere(ctx.user.id, ctx.user.role, ctx.user.partnerCompanyId)),
       ...(input.ownerId ? { ownerId: input.ownerId } : {}),
       ...(input.segmentId ? { clientCompany: { segmentId: input.segmentId } } : {}),
       ...(input.territoryId ? { clientCompany: { territoryId: input.territoryId } } : {}),
@@ -149,7 +150,7 @@ export const opportunitiesRouter = router({
       where: {
         id: input.id,
         deletedAt: null,
-        ...visibilityWhere(ctx.user.id, ctx.user.role, ctx.user.partnerCompanyId),
+        ...(await visibilityWhere(ctx.user.id, ctx.user.role, ctx.user.partnerCompanyId)),
       },
       include: {
         clientCompany: true,

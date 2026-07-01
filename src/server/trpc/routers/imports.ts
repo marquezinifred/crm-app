@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '@/server/trpc/trpc';
-import { withCapability } from '@/server/trpc/middlewares';
+import { withPermission } from '@/server/trpc/middlewares';
 import { prisma } from '@/server/db/client';
 import { audit } from '@/server/services/audit.service';
 import { IMPORT_FIELDS } from '@/server/services/import-engine.service';
@@ -18,7 +18,9 @@ import { ImportDedupStrategy, ImportEntity, ImportStatus, Prisma } from '@prisma
  *   3. Worker processa, atualiza processedRows, status=DONE com resultJson
  */
 
-const canImport = withCapability('company', 'create');
+// Sprint 15E — antes: `withCapability('company', 'create')` (proxy grosso).
+// Agora: permission granular `import:run` (só ADMIN + GESTOR por default).
+const canImport = withPermission('import:run');
 
 export const importsRouter = router({
   fields: protectedProcedure

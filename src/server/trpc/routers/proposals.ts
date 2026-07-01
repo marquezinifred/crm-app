@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { router } from '@/server/trpc/trpc';
-import { withCapability } from '@/server/trpc/middlewares';
+import { withPermission } from '@/server/trpc/middlewares';
 import { prisma } from '@/server/db/client';
 import { audit } from '@/server/services/audit.service';
 import { createApprovalsForProposalVersion, getApprovalState } from '@/server/services/approval-engine.service';
@@ -9,10 +9,10 @@ import { compareDocumentVersions } from '@/server/services/document-compare.serv
 import { zUuid } from '@/lib/validators';
 import { ApprovalStatus, Prisma } from '@prisma/client';
 
-const canRead = withCapability('proposal', 'read');
-const canCreate = withCapability('proposal', 'create');
-const canUpdate = withCapability('proposal', 'update');
-const canApprove = withCapability('proposal', 'approve');
+const canRead = withPermission('proposal:read');
+const canCreate = withPermission('proposal:create');
+const canUpdate = withPermission('proposal:update');
+const canApprove = withPermission('proposal:approve');
 
 export const proposalsRouter = router({
   listByOpportunity: canRead

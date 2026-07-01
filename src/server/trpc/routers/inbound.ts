@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { randomBytes } from 'node:crypto';
 import { TRPCError } from '@trpc/server';
 import { router } from '@/server/trpc/trpc';
-import { withCapability } from '@/server/trpc/middlewares';
+import { withPermission } from '@/server/trpc/middlewares';
 import { prisma } from '@/server/db/client';
 import { audit } from '@/server/services/audit.service';
 import { zUuid } from '@/lib/validators';
@@ -39,9 +39,11 @@ function generateWebhookSecret(): string {
   return `whs_${randomBytes(32).toString('hex')}`;
 }
 
-const canConfigure = withCapability('inbound', 'configure');
-const canViewQueue = withCapability('inbound', 'view_queue');
-const canAssignInbound = withCapability('opportunity', 'set_inbound_owner');
+const canConfigure = withPermission('inbound:configure');
+const canViewQueue = withPermission('inbound:view_queue');
+// Sprint 15E — antes: `opportunity:set_inbound_owner` (Sprint 15D).
+// Agora: permission granular `inbound:assign_prospects`.
+const canAssignInbound = withPermission('inbound:assign_prospects');
 
 export const inboundRouter = router({
   // ═════════════════════════════════════════════════════════════════

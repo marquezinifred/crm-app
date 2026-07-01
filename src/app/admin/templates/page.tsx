@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
 import { Button } from '@/components/ui/button';
+import { FileDropzone, type FileMetadata } from '@/components/ui/file-dropzone';
 import { DocumentCategory } from '@prisma/client';
 
 const CATEGORIES: DocumentCategory[] = [
@@ -29,23 +30,70 @@ const CATEGORY_LABELS: Record<DocumentCategory, string> = {
   OUTRO: 'Outro',
 };
 
+const TEMPLATE_ACCEPT =
+  '.pdf,.docx,.xlsx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const TEMPLATE_MAX_BYTES = 20 * 1024 * 1024;
+
+async function fileToBase64(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunk = 8192;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
 export default function AdminTemplatesPage() {
   const utils = trpc.useUtils();
   const { data } = trpc.templates.list.useQuery({ activeOnly: false });
 
-  const [form, setForm] = useState({
-    category: 'PROPOSTA_TECNICA' as DocumentCategory,
-    name: '',
-    description: '',
-    storageKey: '',
-  });
+  const [category, setCategory] = useState<DocumentCategory>('PROPOSTA_TECNICA');
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [pendingKey, setPendingKey] = useState<string | null>(null);
+  const [pendingFilename, setPendingFilename] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
+  const getUploadIntent = trpc.documents.getUploadIntent.useMutation();
+  const uploadProxy = trpc.documents.uploadProxy.useMutation();
   const create = trpc.templates.create.useMutation({
     onSuccess: () => {
-      setForm({ ...form, name: '', description: '', storageKey: '' });
+      setName('');
+      setDescription('');
+      setPendingKey(null);
+      setPendingFilename(null);
       utils.templates.list.invalidate();
     },
   });
+
+  async function handleFileSelected(meta: FileMetadata) {
+    setError(null);
+    setUploading(true);
+    try {
+      const { storageKey } = await getUploadIntent.mutateAsync({
+        filename: meta.filename,
+        mimeType: meta.mimeType,
+        sizeBytes: meta.sizeBytes,
+      });
+      const contentBase64 = await fileToBase64(meta.file);
+      await uploadProxy.mutateAsync({
+        storageKey,
+        contentBase64,
+        mimeType: meta.mimeType,
+      });
+      setPendingKey(storageKey);
+      setPendingFilename(meta.filename);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Falha ao enviar arquivo.',
+      );
+    } finally {
+      setUploading(false);
+    }
+  }
 
   const grouped = CATEGORIES.map((cat) => ({
     category: cat,
@@ -65,20 +113,20 @@ export default function AdminTemplatesPage() {
           onSubmit={(e) => {
             e.preventDefault();
             create.mutate({
-              category: form.category,
-              name: form.name,
-              description: form.description || undefined,
-              storageKey: form.storageKey || undefined,
+              category,
+              name,
+              description: description || undefined,
+              storageKey: pendingKey ?? undefined,
             });
           }}
         >
           <div className="grid grid-cols-2 gap-2">
             <label>
-              <span className="mb-0.5 block text-xs">Categoria</span>
+              <span className="mb-0.5 block text-xs text-text-2">Categoria</span>
               <select
-                value={form.category}
-                onChange={(e) => setForm({ ...form, category: e.target.value as DocumentCategory })}
-                className="w-full rounded border px-2 py-1"
+                value={category}
+                onChange={(e) => setCategory(e.target.value as DocumentCategory)}
+                className="w-full rounded border border-border bg-card px-2 py-1"
               >
                 {CATEGORIES.map((c) => (
                   <option key={c} value={c}>
@@ -88,34 +136,52 @@ export default function AdminTemplatesPage() {
               </select>
             </label>
             <label>
-              <span className="mb-0.5 block text-xs">Nome</span>
+              <span className="mb-0.5 block text-xs text-text-2">Nome</span>
               <input
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
                 required
                 minLength={2}
-                className="w-full rounded border px-2 py-1"
+                className="w-full rounded border border-border bg-card px-2 py-1"
               />
             </label>
           </div>
           <label className="block">
-            <span className="mb-0.5 block text-xs">Descrição</span>
+            <span className="mb-0.5 block text-xs text-text-2">Descrição</span>
             <input
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              className="w-full rounded border px-2 py-1"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full rounded border border-border bg-card px-2 py-1"
             />
           </label>
-          <label className="block">
-            <span className="mb-0.5 block text-xs">URL ou path do arquivo</span>
-            <input
-              value={form.storageKey}
-              onChange={(e) => setForm({ ...form, storageKey: e.target.value })}
-              placeholder="https://drive.google.com/… ou s3://bucket/path"
-              className="w-full rounded border px-2 py-1"
+
+          <div>
+            <span className="mb-1 block text-xs text-text-2">
+              Arquivo do template (opcional)
+            </span>
+            <FileDropzone
+              accept={TEMPLATE_ACCEPT}
+              maxSizeBytes={TEMPLATE_MAX_BYTES}
+              disabled={uploading || create.isPending}
+              hint="PDF, DOCX ou XLSX até 20 MB"
+              onFileSelected={handleFileSelected}
             />
-          </label>
-          <Button type="submit" disabled={create.isPending}>
+            {uploading && (
+              <p className="mt-1 text-xs text-text-2">Enviando arquivo…</p>
+            )}
+            {pendingKey && pendingFilename && !uploading && (
+              <p className="mt-1 text-xs text-success-text">
+                ✓ {pendingFilename} pronto para salvar
+              </p>
+            )}
+            {error && (
+              <p role="alert" className="mt-1 rounded bg-danger/10 p-2 text-xs text-danger">
+                {error}
+              </p>
+            )}
+          </div>
+
+          <Button type="submit" disabled={create.isPending || uploading}>
             {create.isPending ? 'Criando…' : 'Adicionar'}
           </Button>
         </form>
@@ -140,14 +206,9 @@ export default function AdminTemplatesPage() {
                       <p className="text-xs text-text-2">{t.description}</p>
                     )}
                     {t.currentVersionStorageKey && (
-                      <a
-                        href={t.currentVersionStorageKey}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-info-text hover:underline"
-                      >
-                        ↓ v{t.currentVersionNumber}
-                      </a>
+                      <p className="font-mono text-[10px] text-text-3" title={t.currentVersionStorageKey}>
+                        v{t.currentVersionNumber} · {t.currentVersionStorageKey.slice(-32)}
+                      </p>
                     )}
                   </div>
                   <span className="text-xs text-text-2">

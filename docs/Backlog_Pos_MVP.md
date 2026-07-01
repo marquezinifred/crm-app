@@ -129,8 +129,19 @@ em string inválida (ex: futuro `PLATFORM_SUPPORT`), e coexistência
 com headers tenant existentes. Total 372 passing (368 baseline +
 4 novos), zero regressão.
 
-### P-07. Migration pitfalls — lições aprendidas
-**Severidade:** Documental. Bug do `UNIQUE(clerk_id)` na migration
+### ~~P-07. Migration pitfalls — lições aprendidas~~ ✅ FECHADO
+**Resolvido em 2026-06-30.** Memory `migration-pitfalls.md` criada
+em `~/.claude/projects/-Users-fredmarqueziniyahoo-com-br-Claude-crm-app/memory/`
+com 5 padrões recorrentes de bugs em migrações Postgres (cast
+enum_old[]→text[]→enum_new[], sanitizar antes de DROP enum,
+partial UNIQUE pra coluna nullable, CHECK XOR + UNIQUE global =
+bloqueio dual identity, NULLS NOT DISTINCT armadilha). Indexado
+em `MEMORY.md`. Padrões referenciados diretamente pelo backend
+Sprint 15A + 15F durante as migrations 0026, 0027 e 0028.
+
+**Contexto original (referência histórica):**
+
+Bug do `UNIQUE(clerk_id)` na migration
 0016 (Sprint 15A) e bug do cast `_UserRole_old → _UserRole` direto
 sem rota via `text[]` (descoberto durante deploy do 0016 também)
 mostraram 2 padrões recorrentes em migrações de enum + arrays no

@@ -972,6 +972,50 @@ foram fechados na Sprint 11.
   summary-parser, communication-summary-errors — todos falham
   no import por env vars ausentes; irrelevante a este chip).
   Type-check zero. Lint zero. Sem alterações no backend.
+  - **P-23 refino** (mesmo débito, complementar) — Card C ganhou
+    breakdown primary vs fallback e Card D ganhou 2 tipos novos de
+    alerta:
+    - `getMonthlyUsage` agora agrega por `(provider, model,
+      usedFallback)` e pivota devolvendo `requests/tokens/cost` +
+      `fallbackRequests/fallbackTokens/fallbackCost` por linha, além
+      de `totalFallbackTokens/totalFallbackCostUsd`
+    - Nova query `aiConfig.featureUsageForAlerts` retorna por
+      feature: `fallbackCountLast24h` (rows com `used_fallback=true`
+      últimas 24h) e `costBrlMtd` (soma `cost_usd` do mês corrente ×
+      `env.USD_BRL_RATE`, sem margem — tenant traz própria chave).
+      Mapa `FEATURE_CODE_TO_REQUEST_TYPE` conecta `feature.code` ao
+      `requestType` que cada service loga
+    - `admin-alerts.ts` estendido: `FALLBACK_FREQUENT`
+      (constante `FALLBACK_ALERT_THRESHOLD = 3` em janela 24h) e
+      `COST_ABOVE_THRESHOLD` (dispara quando `costBrlMtd >
+      costAlertBrlMonthly`, comparação estrita). Ambos severity
+      `yellow`, sem CTA — só informativo. Assinatura de
+      `AlertInputs.featureUsage` é opcional pra compat com callers
+      antigos
+    - UI Card C substituiu `Table` por lista de rows com barras
+      lado-a-lado (info primary + warning fallback) via CSS puro,
+      largura proporcional ao maior custo da tela; header ganhou
+      legenda "Primary · Fallback"; grid de stats subiu de 2 pra
+      4 cards (adiciona Tokens fallback + Custo fallback USD)
+    - UI Card D consome `featureUsageForAlerts` e o rendering
+      atual já cobre severity yellow com border/bg warning — sem
+      botão de ação nos 2 novos tipos
+    - Testes: +7 em `admin-ai-alerts.test.ts` (FALLBACK ≥3, <3,
+      COST > threshold, threshold null, comparação estrita,
+      ordem CIRCUIT→MISSING→FALLBACK→COST, compat sem
+      featureUsage) + 3 smoke em `admin-ai-page.test.tsx`
+      (breakdown com barras primary+fallback, alerta
+      FALLBACK_FREQUENT visível, alerta COST_ABOVE_THRESHOLD com
+      "Limite configurado"). Total 549 passing / 4 falhas + 2
+      skipped pré-existentes (mesmo baseline). Type-check zero.
+      Lint zero
+    - Débitos residuais registrados: (1) conversão USD→BRL usa
+      `env.USD_BRL_RATE` estático (sem cotação viva) — subir pra
+      Sprint 15G se importar; (2) `FALLBACK_ALERT_THRESHOLD = 3`
+      hardcoded, não exposto na UI de admin (P-XX se admin pedir);
+      (3) mapa `FEATURE_CODE_TO_REQUEST_TYPE` manual — cada nova
+      feature IA precisa adicionar entrada explícita, débito
+      arquitetural pra registry central em Sprint 15G
 
 ---
 

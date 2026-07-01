@@ -76,15 +76,9 @@ prontos. Bloqueador: `vars.STAGING_URL` no GitHub Secrets.
 
 **Esforço:** ~3h (quando staging existir).
 
-### P-06. Drilldowns AI por tenant (Sprint 15B residual)
-**Severidade:** Baixa. Routers tRPC `platform.aiOps.byTenant` e
-`platform.aiMarketplace.tenantAccess.*` estão prontos do Sprint 15B
-mas as 2 telas drilldown faltam:
-- `/platform/tenants/[id]/ai` — form pra editar `tenant_ai_limits`,
-  uso vs limite, provider breakdown, histórico, modelos pinados,
-  anomalies do tenant
-- `/platform/tenants/[id]/ai/features` — gerenciamento dos 3
-  estados (DISABLED/INCLUDED/ADDON_ACTIVE) por tenant
+### ~~P-06. Drilldowns AI por tenant (Sprint 15B residual)~~ ✅ FECHADO
+**Resolvido em 2026-06-30 pelos commits `b8b95b7` (tela 1) +
+`27b5519` (tela 2).** Ver entrada completa mais abaixo.
 
 ### ~~Platform Owner setup~~ ✅ FECHADO
 **Resolvido em 2026-06-30** após migration `0026_clerk_id_per_scope`:
@@ -136,21 +130,70 @@ Postgres. Salvar memory `migration-pitfalls.md` com:
 **Esforço:** ~30min (escrever memory). Recomendado pra evitar 4ª
 ocorrência do mesmo padrão.
 
-### P-06. Drilldowns AI por tenant (Sprint 15B residual)
-**Severidade:** Baixa. Routers tRPC `platform.aiOps.byTenant` e
-`platform.aiMarketplace.tenantAccess.*` estão prontos do Sprint 15B
-mas as 2 telas drilldown faltam:
-- `/platform/tenants/[id]/ai` — form pra editar `tenant_ai_limits`,
-  uso vs limite, provider breakdown, histórico, modelos pinados,
-  anomalies do tenant
-- `/platform/tenants/[id]/ai/features` — gerenciamento dos 3
-  estados (DISABLED/INCLUDED/ADDON_ACTIVE) por tenant
+### ~~P-06. Drilldowns AI por tenant (Sprint 15B residual)~~ ✅ FECHADO
+**Resolvido em 2026-06-30 pelos commits `b8b95b7` (tela 1) +
+`27b5519` (tela 2).** Backend do Sprint 15B (`platform.aiOps.byTenant`
+e `platform.aiMarketplace.tenantAccess.*`) ficou sem UI drilldown até
+agora. Entregue:
 
-Sem essas telas o Platform Owner só vê agregação cross-tenant em
-`/platform/ai-ops` — pra ajustar tenant específico precisa fazer
-via Prisma Studio.
+- **Tela 1 — `/platform/tenants/[id]/ai`** (`src/app/platform/tenants/[id]/ai/page.tsx`):
+  header com nome do tenant + link "voltar". 5 seções empilhadas:
+  (A) Métricas do mês (tokens/requests/custo) + progress bar quando
+  `monthlyTokenLimit` configurado (verde <80% / âmbar 80-99% / vermelho ≥100%)
+  + `<details>` colapsável com form de edição dos 5 campos de
+  `tenant_ai_limits` (monthlyTokenLimit, dailyRequestLimit, pinnedModelHaiku,
+  pinnedModelSonnet, anomalyThresholdMultiplier); (B) Breakdown por
+  `(provider, model)` do mês em barras horizontais proporcionais;
+  (C) Histórico diário — bar chart 30 pts + tabela com data/provider/model/
+  reqs/tokens/custo; (D) Modelos pinados (Haiku + Sonnet); (E) Anomalias
+  detectadas (últimas 20) com badge de tipo, detalhes de `today vs avg7d`
+  e botão "Reconhecer" (dispara `acknowledgeAlert`).
+- **Tela 2 — `/platform/tenants/[id]/ai/features`** (`src/app/platform/tenants/[id]/ai/features/page.tsx`):
+  contador "N/M ativas" no header. Uma seção por `AiFeatureCategory`
+  (Sumarização/Scoring/Busca/Classificação/Geração/Extração) com tabela:
+  feature (name + description + code em fonte mono) / provider default /
+  add-on R$/mês / status atual (badge Add-on/Incluída/Desativada) /
+  `<Select>` para trocar entre 3 estados (dispara `tenantAccessSet`) /
+  data de ativação do add-on quando aplicável.
+- **Entrypoints** — 2 botões novos ("IA" e "Features IA") no header
+  de `/platform/tenants/[id]/page.tsx`, ao lado de "Impersonar admin".
+  Tela 1 tem link cruzado pra tela 2 no header e vice-versa.
+- **RBAC** — ambas as telas rodam sob `platformProcedure` (router já
+  gera 403 pra caller sem `platformRole=PLATFORM_OWNER`). Audit fica
+  a cargo dos routers (`setLimits`/`acknowledgeAlert` no `aiOps`,
+  `tenantAccessSet` no `aiMarketplace`), com `tenantIdOverride` já
+  presente do Sprint 15B/P-04.
 
-**Esforço:** ~2h. **Status:** mecânico, chip de sustentação resolve.
+**Testes:** +12 em `tests/unit/platform-ai-drilldown.test.tsx` cobrindo
+render (header + link voltar), empty states (breakdown/daily/anomalies
+vazios), progress bar (aria-valuenow=40 pra 40k/100k), botão Reconhecer
+dispara ackMutate, anomalia com `acknowledgedAt` esconde botão e mostra
+badge Reconhecida, salvar limites parseia string vazia como null e
+número inteiro correto, erro do `tenantById` gera `role=alert`. Screen
+2: agrupamento por categoria, empty state, `onChange` do select
+dispara `tenantAccessSet({tenantId, featureId, status})`, contador
+"1/3 ativa" no header. Baseline 537 passing (+12 novos), 10 falhas
+pré-existentes por env vars ausentes em field-encryption/rate-limiter/
+ai-pricing/document-compare/summary-parser/communication-summary-errors,
+2 skipped.
+
+**Débitos residuais:** ver P-06-A abaixo.
+
+### P-06-A. Pequenos débitos das telas P-06 (opcional)
+**Severidade:** Muito baixa. Nada bloqueia o uso das telas, mas polish
+opcional:
+- Bar chart do histórico diário (tela 1 card C) é HTML puro. Se
+  virar componente reutilizável (Sparkline), pode ir pra
+  `src/components/ui/sparkline.tsx`.
+- Tela 2 não expõe as colunas Sprint 15F em `tenant_ai_features`
+  (providerOverride, modelOverride, fallbackProvider, costAlertBrlMonthly,
+  apiKeyEncrypted). Router `tenantAccessSet` só aceita `status` + `notes`.
+  Se a UI Sprint 15F em `/admin/ai` for adiada, faz sentido expor
+  esses campos por tenant aqui também — mas depende da UI dos 4 Cards
+  do Sprint 15F (P-23) ainda não implementada.
+- Toast de sucesso quando `setLimits`/`tenantAccessSet` completa
+  (hoje mostra "Limites atualizados." e nada, respectivamente).
+  `ToastProvider` está disponível via `useToast`.
 
 ### ~~P-08. Logout missing no AppShell~~ ✅ FECHADO
 **Resolvido em 2026-06-30** — `<UserButton afterSignOutUrl="/sign-in"/>`

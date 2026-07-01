@@ -744,13 +744,34 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 | P-02 | Sprint 14.5 | PageHeader em 13 rotas `/admin/*` restantes (~3h, mecânico) | auditar se Sprint 15C fechou parcialmente |
 | P-03 | Sprint 14.5 | Visual baseline `scripts/visual-baseline.ts` (script pronto, ~1.5h) | depende app local + seed E2E |
 | P-05 | Sprint 14.5 | Lighthouse audit ≥ 90 (script + workflow prontos) | depende `vars.STAGING_URL` no GitHub |
-| P-06 | Sprint 15B | Drilldowns `/platform/tenants/[id]/ai` e `/ai/features` — routers prontos (~2h UI) | chip de sustentação |
 | P-07 | Sprint 15A | Memory `migration-pitfalls.md` salvo: 5 padrões recorrentes em migrações Postgres | ✅ documental, salvo em 2026-06-30 |
 
 Detalhes em `docs/Backlog_Pos_MVP.md`. Débitos antigos (Sprints 1 e 2)
 foram fechados na Sprint 11.
 
 **Débitos zerados em 2026-06-30:**
+- P-06 Drilldowns AI por tenant — commits `b8b95b7` (tela 1) +
+  `27b5519` (tela 2). Sprint 15B entregou o backend + a agregação
+  cross-tenant (`/platform/ai-ops`, `/platform/ai-marketplace`), mas
+  as 2 telas drilldown por tenant faltavam. Fix:
+  `src/app/platform/tenants/[id]/ai/page.tsx` (uso + limites + breakdown
+  + histórico 30d + models pinados + anomalias com botão Reconhecer;
+  editor de limites em `<details>` colapsável dispara `aiOps.setLimits`)
+  e `src/app/platform/tenants/[id]/ai/features/page.tsx` (features
+  agrupadas por `AiFeatureCategory` com `<Select>` alternando
+  DISABLED/INCLUDED/ADDON_ACTIVE via `aiMarketplace.tenantAccessSet`).
+  Header de tenant detail ganhou 2 botões "IA" e "Features IA" como
+  entrypoint. Backend não mexeu — routers `platform.aiOps.byTenant`,
+  `setLimits`, `acknowledgeAlert` e `aiMarketplace.tenantAccessList`,
+  `tenantAccessSet` já existiam do Sprint 15B com audit + `tenantIdOverride`.
+  +12 testes em `tests/unit/platform-ai-drilldown.test.tsx` (render,
+  empty states, progress bar aria-valuenow, ackMutate, esconde botão
+  quando reconhecida, salvar limites parseia null/int, agrupar por
+  categoria, select dispara mutation, contador ativas/total). Total
+  **537/549 passing** (baseline mantido; 10 falhas pré-existentes por
+  env vars ausentes em field-encryption/rate-limiter/ai-pricing/
+  document-compare/summary-parser/communication-summary-errors + 2
+  skipped). Type-check zero. Lint zero
 - P-01 Fix `/companies/new` + `/contacts/new` 404 — commit `54dab90`
 - Sprint 15A débito UNIQUE(clerk_id) — commit `62ea353` (migration 0026 + dual identity)
 - Platform Owner setup completo (JWT template + public_metadata + seed)

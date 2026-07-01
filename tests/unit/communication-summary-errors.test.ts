@@ -1,4 +1,11 @@
+// @vitest-environment node
+process.env.DATABASE_URL ??= 'postgresql://test:test@localhost:5432/test';
+process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ??= 'pk_test_stub';
+process.env.CLERK_SECRET_KEY ??= 'sk_test_stub';
+
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import Anthropic from '@anthropic-ai/sdk';
+import { TRPCError } from '@trpc/server';
 import { AiLimitExceededError, FeatureNotAvailableError } from '@/lib/ai/feature-gate';
 
 vi.mock('@/lib/ai/feature-gate', async () => {
@@ -13,6 +20,7 @@ vi.mock('@/lib/ai/feature-gate', async () => {
 
 vi.mock('@/lib/ai/claude', () => ({
   getAnthropic: () => ({ messages: { create: vi.fn() } }),
+  getAnthropicForTenant: async () => ({ messages: { create: vi.fn() } }),
   MODELS: { HAIKU: 'claude-haiku-4-5', SONNET: 'claude-sonnet-4-6' },
 }));
 
@@ -82,5 +90,126 @@ describe('summarizeCommunication — propagação de erros', () => {
     expect(result.aiGenerated).toBe(false);
     expect(result.themes).toEqual([]);
     expect(result.nextSteps).toEqual([]);
+  });
+
+  it('400 credit balance vira PRECONDITION_FAILED com msg de créditos', async () => {
+    vi.mocked(callAiFeature).mockImplementation(async () => {
+      throw new Anthropic.APIError(
+        400,
+        { error: { type: 'invalid_request_error', message: 'Your credit balance is too low to access the Anthropic API.' } },
+        'Your credit balance is too low to access the Anthropic API.',
+        undefined,
+      );
+    });
+
+    await expect(
+      summarizeCommunication({
+        text: 'texto suficientemente grande para passar a validação',
+        tenantId: 'tenant-1',
+        userId: 'user-1',
+      }),
+    ).rejects.toSatisfy((err: unknown) => {
+      return (
+        err instanceof TRPCError &&
+        err.code === 'PRECONDITION_FAILED' &&
+        /créditos/i.test(err.message) &&
+        /console\.anthropic\.com/.test(err.message)
+      );
+    });
+  });
+
+  it('401 vira UNAUTHORIZED com msg apontando /admin/ai', async () => {
+    vi.mocked(callAiFeature).mockImplementation(async () => {
+      throw new Anthropic.APIError(
+        401,
+        { error: { type: 'authentication_error', message: 'invalid x-api-key' } },
+        'invalid x-api-key',
+        undefined,
+      );
+    });
+
+    await expect(
+      summarizeCommunication({
+        text: 'texto suficientemente grande para passar a validação',
+        tenantId: 'tenant-1',
+        userId: 'user-1',
+      }),
+    ).rejects.toSatisfy((err: unknown) => {
+      return (
+        err instanceof TRPCError &&
+        err.code === 'UNAUTHORIZED' &&
+        /admin\/ai/.test(err.message)
+      );
+    });
+  });
+
+  it('429 sem retry-after vira TOO_MANY_REQUESTS com msg genérica', async () => {
+    vi.mocked(callAiFeature).mockImplementation(async () => {
+      throw new Anthropic.APIError(
+        429,
+        { error: { type: 'rate_limit_error', message: 'rate limit' } },
+        'rate limit',
+        {},
+      );
+    });
+
+    await expect(
+      summarizeCommunication({
+        text: 'texto suficientemente grande para passar a validação',
+        tenantId: 'tenant-1',
+        userId: 'user-1',
+      }),
+    ).rejects.toSatisfy((err: unknown) => {
+      return (
+        err instanceof TRPCError &&
+        err.code === 'TOO_MANY_REQUESTS' &&
+        /alguns segundos/i.test(err.message)
+      );
+    });
+  });
+
+  it('429 com retry-after: 30 formata a mensagem com o tempo', async () => {
+    vi.mocked(callAiFeature).mockImplementation(async () => {
+      throw new Anthropic.APIError(
+        429,
+        { error: { type: 'rate_limit_error', message: 'rate limit' } },
+        'rate limit',
+        { 'retry-after': '30' },
+      );
+    });
+
+    await expect(
+      summarizeCommunication({
+        text: 'texto suficientemente grande para passar a validação',
+        tenantId: 'tenant-1',
+        userId: 'user-1',
+      }),
+    ).rejects.toSatisfy((err: unknown) => {
+      return (
+        err instanceof TRPCError &&
+        err.code === 'TOO_MANY_REQUESTS' &&
+        /30s/.test(err.message)
+      );
+    });
+  });
+
+  it('5xx mantém fallback silencioso (aiGenerated:false + circuit breaker)', async () => {
+    vi.mocked(callAiFeature).mockImplementation(async () => {
+      throw new Anthropic.APIError(
+        500,
+        { error: { type: 'api_error', message: 'internal' } },
+        'internal',
+        undefined,
+      );
+    });
+
+    const result = await summarizeCommunication({
+      text: 'texto suficientemente grande para passar a validação',
+      tenantId: 'tenant-1',
+      userId: 'user-1',
+    });
+
+    expect(result.aiGenerated).toBe(false);
+    expect(result.themes).toEqual([]);
   });
 });

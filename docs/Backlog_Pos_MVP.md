@@ -211,6 +211,66 @@ Tab do último → primeiro). Baseline 378 → 381 passing.
 Verificação cruzada: reverter só o modal.tsx faz o teste (1)
 falhar, confirmando que ele captura o bug real.
 
+### ~~P-14. IA usa env global em vez de key por tenant~~ ✅ FECHADO
+**Resolvido em 2026-06-30 pelo commit `a80564f`.** Sintoma: Fred
+cadastrou chave Anthropic em `/admin/ai` (salva encriptada em
+`tenants.ai_api_key_encrypted`), mas todo consumo de IA (resumo de
+comunicação, comparação de docs, sugestão de conversão, etc.) saía
+da conta da Plataforma via `env.ANTHROPIC_API_KEY`. Custo e rate
+limit misturados entre tenants.
+
+**Causa raiz:** `src/lib/ai/claude.ts` expunha só `getAnthropic()`
+— singleton global sem contexto de tenant.
+
+**Fix:** novo `getAnthropicForTenant(tenantId)` decripta
+`aiApiKeyEncrypted` via `decryptField` e retorna client dedicado.
+Cache Map com TTL 10min por tenant (evita re-decrypt em rajada, com
+risco cross-tenant nulo). Fallback pra `env.ANTHROPIC_API_KEY` com
+warn quando tenant sem key; throw claro apontando `/admin/ai` quando
+ambos ausentes. Cache invalidado automaticamente quando Admin troca
+a key via `ai-config.updateConfig`.
+
+**Consumidores migrados (5):** communication-summary, document-compare,
+conversion-rate-suggestion, semantic-search, email-link. `getAnthropic()`
+legacy mantido como `@deprecated`.
+
+**Testes:** `tests/unit/claude-per-tenant.test.ts` novo com 6 casos:
+key do tenant usada, tenants distintos → clients distintos, cache
+hit, fallback + warn, throw apontando /admin/ai, invalidate força
+re-fetch. Total 387/393 passing (baseline 381 + 6 novos).
+
+### ~~P-15. Mensagem "IA indisponível" engole erros estruturados~~ ✅ FECHADO
+**Resolvido em 2026-06-30 pelo commit `be5f244`.** Sintoma: quando a
+conta Anthropic ficava sem créditos, HTTP 400 com corpo `{"error":
+{"type":"invalid_request_error","message":"Your credit balance is
+too low..."}}`. Service capturava como Error genérico → UI mostrava
+"IA indisponível no momento" e o usuário ficava tateando.
+
+**Causa raiz:** `communication-summary.service.ts` catch tratava só
+`FeatureNotAvailableError`/`AiLimitExceededError`; qualquer outro
+erro caía em `aiGenerated:false`. Ignorava `Anthropic.APIError` do
+SDK que expõe `.status` e `.message` estruturados.
+
+**Fix:** helper reusável `mapAnthropicError(err)` em
+`src/lib/ai/anthropic-errors.ts` converte `Anthropic.APIError` em
+`TRPCError` acionável:
+ - 400 "credit balance" → `PRECONDITION_FAILED` com link
+   `https://console.anthropic.com/settings/billing`
+ - 402 → `PRECONDITION_FAILED` "sem créditos"
+ - 401/403 → `UNAUTHORIZED` "chave inválida, atualize em /admin/ai"
+ - 429 → `TOO_MANY_REQUESTS` com header retry-after se presente
+ - 5xx → `null` (mantém fallback silencioso + circuit breaker)
+
+**Escopo:** aplicado nos 3 serviços user-facing (communication-summary,
+document-compare, conversion-rate-suggestion). email-link (background
+worker) e semantic-search (degrade gracioso) seguem no fallback
+silencioso — sem UI aguardando resposta.
+
+**Testes:** +5 casos em `communication-summary-errors.test.ts`
+(400 credit, 401, 429 sem/com retry-after: 30, 5xx silencioso).
+Instancia `Anthropic.APIError` direto (sem mock HTTP). Total
+392/398 passing.
+
 ---
 
 ## 📅 Sprints planejados (próximas 4–6 semanas)

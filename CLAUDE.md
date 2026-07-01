@@ -11,6 +11,42 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 ## Sprint atual
 
+> **Fix corretivo — IA per-tenant + erros estruturados (P-14/P-15):
+> ✅ CONCLUÍDO em 2026-06-30**
+>
+> Dois fixes na camada de consumo de IA descobertos em teste real
+> com a conta Anthropic sem créditos.
+>
+> Entregue:
+>  - ✅ **P-14 — `src/lib/ai/claude.ts`**: novo
+>    `getAnthropicForTenant(tenantId)` decripta `aiApiKeyEncrypted`
+>    e retorna client dedicado. Cache Map com TTL 10min +
+>    invalidação automática quando `ai-config.updateConfig` troca a
+>    key. Fallback pra `env.ANTHROPIC_API_KEY` com warn; throw
+>    apontando `/admin/ai` quando ambos ausentes. Consumidores
+>    migrados (5): communication-summary, document-compare,
+>    conversion-rate-suggestion, semantic-search, email-link.
+>    `getAnthropic()` legacy mantido como `@deprecated`. Commit
+>    `a80564f`
+>  - ✅ **P-15 — `src/lib/ai/anthropic-errors.ts` novo**: helper
+>    `mapAnthropicError(err)` traduz `Anthropic.APIError` em
+>    `TRPCError` acionável — 400 credit balance vira
+>    PRECONDITION_FAILED com link do billing; 401/403 vira
+>    UNAUTHORIZED apontando /admin/ai; 429 vira TOO_MANY_REQUESTS
+>    honrando `retry-after`; 5xx retorna null → caller mantém
+>    fallback silencioso com circuit breaker. Aplicado nos 3
+>    serviços user-facing (communication-summary, document-compare,
+>    conversion-rate-suggestion). email-link/semantic-search seguem
+>    silenciosos (background/degrade). Commit `be5f244`
+>  - ✅ Testes: `tests/unit/claude-per-tenant.test.ts` novo com 6
+>    casos (per-tenant, cache, fallback+warn, throw, invalidate);
+>    +5 casos em `communication-summary-errors.test.ts` (400 credit,
+>    401, 429 sem/com retry-after, 5xx silencioso). Total
+>    **392/398** passing (4 pré-existentes field-encryption + 2
+>    skipped). Type-check zero. Lint zero
+>
+> 🎉 Débitos P-14 e P-15 do `Backlog_Pos_MVP.md` fechados.
+
 > **Fix corretivo — Modal rouba foco (P-12):
 > ✅ CONCLUÍDO em 2026-06-30**
 >
@@ -652,6 +688,20 @@ foram fechados na Sprint 11.
   input. Fix: capturar `onClose` em `onCloseRef` e depender só
   de `[open]`. +3 testes em `tests/unit/modal.test.tsx`,
   381/387 passing (4 falhas + 2 skipped pré-existentes)
+- P-14 IA usa env global em vez de key por tenant — commit `a80564f`.
+  `getAnthropicForTenant(tenantId)` novo em `src/lib/ai/claude.ts`
+  decripta `aiApiKeyEncrypted` e retorna client dedicado com cache
+  TTL 10min por tenant. Fallback pro global com warn; throw
+  apontando /admin/ai quando ambos ausentes. 5 consumidores
+  migrados. +6 testes em `tests/unit/claude-per-tenant.test.ts`
+- P-15 Mensagem "IA indisponível" engolia erros estruturados — commit
+  `be5f244`. Helper `mapAnthropicError` em `src/lib/ai/anthropic-errors.ts`
+  converte `Anthropic.APIError` em `TRPCError` acionável (400 credit
+  balance → PRECONDITION_FAILED com link, 401/403 → UNAUTHORIZED,
+  429 → TOO_MANY_REQUESTS honrando retry-after, 5xx → null mantém
+  fallback silencioso). Aplicado nos 3 serviços user-facing.
+  +5 testes em `communication-summary-errors.test.ts`, 392/398
+  passing
 
 ---
 

@@ -1,5 +1,7 @@
+import { TRPCError } from '@trpc/server';
 import { masking } from '@/lib/ai/masking';
-import { getAnthropic, MODELS } from '@/lib/ai/claude';
+import { getAnthropicForTenant, MODELS } from '@/lib/ai/claude';
+import { mapAnthropicError } from '@/lib/ai/anthropic-errors';
 import {
   callAiFeature,
   AiLimitExceededError,
@@ -116,18 +118,21 @@ export async function summarizeCommunication(
   let errorCode: string | null = null;
   let rawResponse = '';
   let gateError: FeatureNotAvailableError | AiLimitExceededError | null = null;
+  let providerError: TRPCError | null = null;
 
   try {
     const completion = await callAiFeature(
       'communication-summary',
       { tenantId: input.tenantId },
-      async ({ model }) =>
-        getAnthropic().messages.create({
+      async ({ model }) => {
+        const client = await getAnthropicForTenant(input.tenantId);
+        return client.messages.create({
           model: model || MODELS.HAIKU,
           max_tokens: 1024,
           system: SYSTEM_PROMPT,
           messages: [{ role: 'user', content: masked }],
-        }),
+        });
+      },
     );
     promptTokens = completion.usage.input_tokens;
     completionTokens = completion.usage.output_tokens;
@@ -145,7 +150,13 @@ export async function summarizeCommunication(
     ) {
       gateError = err;
     } else {
-      breaker.recordFailure();
+      const mapped = mapAnthropicError(err);
+      if (mapped) {
+        errorCode = `anthropic_${(err as { status?: number }).status ?? 'unknown'}`;
+        providerError = mapped;
+      } else {
+        breaker.recordFailure();
+      }
     }
   } finally {
     const latencyMs = Date.now() - t0;
@@ -165,6 +176,10 @@ export async function summarizeCommunication(
 
   if (gateError) {
     throw gateError;
+  }
+
+  if (providerError) {
+    throw providerError;
   }
 
   if (!success) {

@@ -1,5 +1,7 @@
+import { TRPCError } from '@trpc/server';
 import { masking } from '@/lib/ai/masking';
-import { getAnthropic, MODELS } from '@/lib/ai/claude';
+import { getAnthropicForTenant, MODELS } from '@/lib/ai/claude';
+import { mapAnthropicError } from '@/lib/ai/anthropic-errors';
 import { callAiFeature } from '@/lib/ai/feature-gate';
 import { logAiUsage } from './ai-usage.service';
 import { CircuitBreaker } from './ai-circuit-breaker';
@@ -91,17 +93,20 @@ ${toMasked}
   let completionTokens = 0;
   let raw = '';
   let success = true;
+  let providerError: TRPCError | null = null;
   try {
     const completion = await callAiFeature(
       'proposal-version-diff',
       { tenantId: input.tenantId },
-      async ({ model }) =>
-        getAnthropic().messages.create({
+      async ({ model }) => {
+        const client = await getAnthropicForTenant(input.tenantId);
+        return client.messages.create({
           model: model || MODELS.HAIKU,
           max_tokens: 1024,
           system: SYSTEM,
           messages: [{ role: 'user', content: userPrompt }],
-        }),
+        });
+      },
     );
     promptTokens = completion.usage.input_tokens;
     completionTokens = completion.usage.output_tokens;
@@ -110,9 +115,14 @@ ${toMasked}
       .map((c) => c.text)
       .join('\n');
     breaker.recordSuccess();
-  } catch {
+  } catch (err) {
     success = false;
-    breaker.recordFailure();
+    const mapped = mapAnthropicError(err);
+    if (mapped) {
+      providerError = mapped;
+    } else {
+      breaker.recordFailure();
+    }
   } finally {
     await logAiUsage({
       tenantId: input.tenantId,
@@ -127,6 +137,7 @@ ${toMasked}
     });
   }
 
+  if (providerError) throw providerError;
   if (!success) return emptyResult('metadata');
 
   try {

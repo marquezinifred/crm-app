@@ -5,6 +5,7 @@ import { prisma } from '@/server/db/client';
 import { audit } from '@/server/services/audit.service';
 import { encryptField, maskApiKey, decryptField } from '@/lib/crypto/field-encryption';
 import { getMonthlyUsage, AI_PRICING } from '@/server/services/ai-usage.service';
+import { invalidateTenantClient } from '@/lib/ai/claude';
 import { AIProvider } from '@prisma/client';
 
 export const aiConfigRouter = router({
@@ -50,6 +51,9 @@ export const aiConfigRouter = router({
         where: { id: ctx.tenantId },
         data,
       });
+      if (input.apiKey) {
+        invalidateTenantClient(ctx.tenantId);
+      }
       await audit({
         action: 'tenant.update_ai_config',
         tableName: 'tenants',

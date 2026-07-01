@@ -1,9 +1,11 @@
 'use client';
 
+import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { UserButton } from '@clerk/nextjs';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
+import { CommandPalette } from '@/components/search/CommandPalette';
 
 const HIDDEN_ON = [
   '/sign-in', '/sign-up', '/onboarding', '/p/',
@@ -24,12 +26,30 @@ export function Topbar({
   onOpenMenu: () => void;
 }) {
   const pathname = usePathname() ?? '/';
-  if (HIDDEN_ON.some((p) => pathname.startsWith(p))) return null;
+  const [paletteOpen, setPaletteOpen] = React.useState(false);
+  const hidden = HIDDEN_ON.some((p) => pathname.startsWith(p));
+
+  // ⌘K / Ctrl+K — atalho global. Registrado antes do early-return pra que
+  // o hook rode em ordem estável entre renders (regras React).
+  React.useEffect(() => {
+    if (hidden) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setPaletteOpen((v) => !v);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [hidden]);
+
+  if (hidden) return null;
 
   const crumbs = breadcrumbsFor(pathname);
   const heightClass = variant === 'mobile' ? 'h-12' : 'h-14';
 
   return (
+    <>
     <header
       className={`${heightClass} sticky top-0 z-30 border-b border-border bg-page flex items-center gap-3 px-4 md:px-6`}
     >
@@ -66,6 +86,7 @@ export function Topbar({
         {variant === 'desktop' && (
           <button
             type="button"
+            onClick={() => setPaletteOpen(true)}
             aria-label="Buscar (Cmd+K)"
             className="hidden lg:flex items-center gap-2 h-8 px-3 rounded border border-border bg-card text-text-3 text-[13px] hover:border-border-strong w-64"
           >
@@ -87,6 +108,8 @@ export function Topbar({
         />
       </div>
     </header>
+    <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+    </>
   );
 }
 

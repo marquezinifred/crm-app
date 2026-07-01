@@ -19,7 +19,8 @@ import { alertsRouter } from './alerts';
 import { activitiesRouter, tasksRouter } from './activities';
 import { aiConfigRouter } from './ai-config';
 import { reportsRouter } from './reports';
-import { inboxRouter, searchRouter, adminEmailRouter } from './inbox';
+import { inboxRouter, searchNaturalRouter, adminEmailRouter } from './inbox';
+import { searchRouter as searchGlobalRouter } from './search';
 import { partnersRouter } from './partners';
 import { documentsRouter, templatesRouter } from './documents';
 import { proposalsRouter, approvalsRouter } from './proposals';
@@ -71,7 +72,14 @@ export const appRouter = router({
   aiConfig: aiConfigRouter,
   reports: reportsRouter,
   inbox: inboxRouter,
-  search: searchRouter,
+  // P-16 — `search` mescla o `natural` (semantic search Sprint 6) com o
+  // `global` (command palette Sprint P-16). Ambos vivem sob a mesma key
+  // tRPC pra que o cliente consuma como `trpc.search.natural` e
+  // `trpc.search.global` sem redirecionamentos.
+  search: router({
+    natural: searchNaturalRouter.natural,
+    global: searchGlobalRouter.global,
+  }),
   adminEmail: adminEmailRouter,
   partners: partnersRouter,
   documents: documentsRouter,

@@ -271,6 +271,59 @@ silencioso — sem UI aguardando resposta.
 Instancia `Anthropic.APIError` direto (sem mock HTTP). Total
 392/398 passing.
 
+### ~~P-16. Busca global (Command Palette ⌘K) sem handler~~ ✅ FECHADO
+**Resolvido em 2026-06-30.** Sintoma: botão "Buscar…" com atalho
+`⌘K` visível na Topbar em toda rota autenticada (linhas 67-77 de
+`src/components/layout/Topbar.tsx`), mas era `<button>` sem
+`onClick` — placeholder morto desde o Sprint 14.
+
+**Fix:**
+- Router tRPC novo `src/server/trpc/routers/search.ts` com
+  procedure `global` (Zod input `{query: min 2, max 100}`) que
+  retorna 4 buckets (companies/contacts/opportunities/users),
+  top 5 cada, via `ILIKE '%q%'` no Prisma. Tenant isolation via
+  `WHERE tenantId = ctx.tenantId` explícito. RBAC gracioso: user
+  sem `<entity>:read` recebe array vazio no bucket (não erro
+  global). CNPJ tolera máscara (extrai dígitos antes do LIKE).
+- Fica sob a key tRPC `search` mesclada com `searchNaturalRouter`
+  do Sprint 6 (semantic query) — cliente consome como
+  `trpc.search.global` e `trpc.search.natural` sem confusão.
+- Componente `src/components/search/CommandPalette.tsx` — overlay
+  standalone (não usa `<Modal>` pra evitar conflito entre
+  Tab-trap + navegação por setas). Debounce 200ms via setTimeout,
+  ↑/↓ movem highlight, Enter navega, ESC fecha, clique também
+  navega. Empty/loading/hint states. RBAC parcial vira bucket
+  omitido no render (sem heading nem lista).
+- Roteamento por bucket: `companies` → `/companies/<id>`,
+  `contacts` → `/contacts/<id>`, `opportunities` → `/pipeline/<id>`,
+  `users` → `/admin/users` (sem tela de detalhe — abre a lista).
+- `Topbar.tsx` — botão ganhou `onClick={setPaletteOpen(true)}` +
+  atalho global via `useEffect` que escuta `(Cmd|Ctrl)+K` no
+  `document` (respeitando `HIDDEN_ON` das rotas públicas).
+
+**Escopo:** 2 arquivos novos (router + componente) + 3
+modificações mínimas (`_app.ts` merge, `inbox.ts` rename export,
+`Topbar.tsx` wire). Sem migration, sem mudança em RBAC catálogo.
+
+**Testes:** 18 novos.
+- `tests/unit/search-router.test.ts` (9): Zod input rejeita
+  query <2/>100 chars, extrai dígitos-only pra LIKE de CNPJ,
+  não roda LIKE de CNPJ sem ≥2 dígitos, RBAC parcial vira
+  bucket vazio.
+- `tests/unit/command-palette.test.tsx` (9): não renderiza
+  fechado, input recebe foco, hint <2 chars, ESC → onClose,
+  empty state, resultados agrupados por bucket com heading,
+  setas ↑/↓ movem highlight + Enter navega, skeleton loading
+  visível, href correto por bucket (opportunity → /pipeline/).
+- Baseline 381 → 399 passing. Mesmas 4 falhas pré-existentes
+  (env vars ausentes em field-encryption/rate-limiter/ai-pricing/
+  document-compare/summary-parser) + 2 skipped seguem iguais.
+
+**Débito residual → novo P- futuro:** fuzzy match / typo tolerance
++ tsvector PT-BR pra full-text search. `ILIKE '%q%'` é suficiente
+enquanto tenant tem <100k contatos. Escala vira P-XX se surgir
+demanda.
+
 ---
 
 ## 📅 Sprints planejados (próximas 4–6 semanas)

@@ -652,6 +652,19 @@ foram fechados na Sprint 11.
   input. Fix: capturar `onClose` em `onCloseRef` e depender só
   de `[open]`. +3 testes em `tests/unit/modal.test.tsx`,
   381/387 passing (4 falhas + 2 skipped pré-existentes)
+- P-17 Tabelas sem ordenamento clicável — commits `e269325` (infra)
+  + `7e4949f` (rollout). `<TH>` do design system era wrapper mudo:
+  clicar no header não fazia nada nas 8 tabelas do app. Fix:
+  `<TH sortable sortState onSort>` renderiza chevron up/down/dupla
+  + `aria-sort` + `tabIndex=0` + Enter/Space; novo hook
+  `useTableSort` (asc → desc → null, null-safe, localeCompare
+  pt-BR + numeric) e helpers puros para teste. Rollout em
+  `/companies`, `/contacts`, `/admin/users`, `/admin/products`,
+  `/admin/partners` (card list com select), `/platform/tenants`,
+  `/platform/trials`. `/contacts` + `/admin/users` + `/admin/products`
+  migrados de raw `<table>` pro Table/TH/TR/TD do design system.
+  +23 testes (15 hook + 8 TH), 404/410 passing (4 falhas + 2
+  skipped pré-existentes por env vars)
 
 ---
 

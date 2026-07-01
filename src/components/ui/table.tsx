@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { cn } from '@/lib/utils/cn';
+import type { SortDir } from '@/lib/hooks/useTableSort';
 
 /**
  * DataTable Venzo — Sprint 14.
@@ -12,6 +13,9 @@ import { cn } from '@/lib/utils/cn';
  * keep it simple aqui exponho apenas estilos consistentes — a
  * conversão para cards é responsabilidade do consumidor (DataTable
  * full em sprints futuros).
+ *
+ * P-17: `<TH sortable sortState onSort>` habilita ordenamento clicável
+ * com chevrons visuais e a11y (aria-sort + tecla Enter/Space).
  */
 
 export function Table({ className, children, ...props }: React.HTMLAttributes<HTMLTableElement>) {
@@ -28,18 +32,104 @@ export function THead(props: React.HTMLAttributes<HTMLTableSectionElement>) {
   return <thead {...props} className={cn('bg-hover', props.className)} />;
 }
 
-export function TH({ children, ...props }: React.ThHTMLAttributes<HTMLTableCellElement>) {
+export interface THProps extends React.ThHTMLAttributes<HTMLTableCellElement> {
+  sortable?: boolean;
+  sortState?: SortDir | null;
+  onSort?: () => void;
+}
+
+export function TH({
+  children,
+  sortable,
+  sortState = null,
+  onSort,
+  ...props
+}: THProps) {
+  const baseClass =
+    'text-left px-4 py-2.5 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-text-2 border-b border-border whitespace-nowrap';
+
+  if (!sortable) {
+    return (
+      <th scope="col" {...props} className={cn(baseClass, props.className)}>
+        {children}
+      </th>
+    );
+  }
+
+  const ariaSort: React.AriaAttributes['aria-sort'] =
+    sortState === 'asc'
+      ? 'ascending'
+      : sortState === 'desc'
+      ? 'descending'
+      : 'none';
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTableCellElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onSort?.();
+    }
+    props.onKeyDown?.(e);
+  };
+
   return (
     <th
       scope="col"
+      role="columnheader"
+      aria-sort={ariaSort}
+      tabIndex={0}
       {...props}
+      onClick={(e) => {
+        onSort?.();
+        props.onClick?.(e);
+      }}
+      onKeyDown={handleKeyDown}
       className={cn(
-        'text-left px-4 py-2.5 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-text-2 border-b border-border whitespace-nowrap',
+        baseClass,
+        'cursor-pointer select-none hover:text-text-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-inset',
+        sortState && 'text-text-1',
         props.className,
       )}
     >
-      {children}
+      <span className="inline-flex items-center gap-1">
+        {children}
+        <SortIcon state={sortState} />
+      </span>
     </th>
+  );
+}
+
+function SortIcon({ state }: { state: SortDir | null }) {
+  if (state === 'asc') {
+    return (
+      <svg
+        viewBox="0 0 12 12"
+        aria-hidden="true"
+        className="h-3 w-3 text-brand-primary-light"
+      >
+        <path d="M6 3l4 5H2z" fill="currentColor" />
+      </svg>
+    );
+  }
+  if (state === 'desc') {
+    return (
+      <svg
+        viewBox="0 0 12 12"
+        aria-hidden="true"
+        className="h-3 w-3 text-brand-primary-light"
+      >
+        <path d="M6 9L2 4h8z" fill="currentColor" />
+      </svg>
+    );
+  }
+  return (
+    <svg
+      viewBox="0 0 12 12"
+      aria-hidden="true"
+      className="h-3 w-3 text-text-3"
+    >
+      <path d="M6 2l3 3H3z" fill="currentColor" />
+      <path d="M6 10l3-3H3z" fill="currentColor" />
+    </svg>
   );
 }
 

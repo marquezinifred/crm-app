@@ -5,6 +5,7 @@ import { trpc } from '@/lib/trpc/client';
 import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { Button } from '@/components/ui/button';
 import { ImportEntity, ImportDedupStrategy, ImportStatus } from '@prisma/client';
+import { PageHeader } from '@/components/layout/PageHeader';
 
 interface UploadResult {
   id: string;
@@ -60,7 +61,10 @@ export default function ImportsPage() {
 
   return (
     <main className="mx-auto max-w-4xl p-4 md:p-6">
-      <h1 className="mb-4 text-2xl font-bold">Importação de dados</h1>
+      <PageHeader
+        title="Importações"
+        description="Importar empresas e contatos de CSV/XLSX."
+      />
 
       <section className="mb-6 rounded-lg border border-border bg-card p-4">
         <ol className="mb-4 flex gap-1 text-xs">

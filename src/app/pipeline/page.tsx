@@ -4,24 +4,26 @@ import { useState } from 'react';
 import { useIsMobile } from '@/lib/utils/hooks';
 import { PipelineKanban } from '@/components/pipeline/PipelineKanban';
 import { PipelineMobile } from '@/components/pipeline/PipelineMobile';
+import { PageHeader } from '@/components/layout/PageHeader';
 
 export default function PipelinePage() {
   const isMobile = useIsMobile();
   const [advanceError, setAdvanceError] = useState<{ msg: string; oppId: string } | null>(null);
 
   return (
-    <main className="min-h-screen">
-      <header className="border-b border-border bg-card px-4 py-3 md:px-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold">Pipeline</h1>
+    <main className="min-h-screen p-4 md:p-6">
+      <PageHeader
+        title="Pipeline"
+        description="Oportunidades por estágio no funil de vendas."
+        primaryAction={
           <a
             href="/pipeline/new"
             className="rounded bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-dark"
           >
             + Nova oportunidade
           </a>
-        </div>
-      </header>
+        }
+      />
 
       {isMobile ? (
         <PipelineMobile
@@ -29,12 +31,10 @@ export default function PipelinePage() {
           onAdvanceError={(msg, oppId) => setAdvanceError({ msg, oppId })}
         />
       ) : (
-        <div className="p-4 md:p-6">
-          <PipelineKanban
-            onCardClick={(id) => (window.location.href = `/pipeline/${id}`)}
-            onAdvanceError={(msg, oppId) => setAdvanceError({ msg, oppId })}
-          />
-        </div>
+        <PipelineKanban
+          onCardClick={(id) => (window.location.href = `/pipeline/${id}`)}
+          onAdvanceError={(msg, oppId) => setAdvanceError({ msg, oppId })}
+        />
       )}
 
       {advanceError && (

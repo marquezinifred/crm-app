@@ -528,30 +528,38 @@ INSERT direto no banco.
 - Expandir pra 2-3 early adopters Enterprise
 - 30 dias sem regressão → flag global `true` em produção
 
-### P-26. PageHeader em rotas fora de `/admin` e `/platform`
-**Severidade:** Baixa. Cosmético. Identificado ao fechar P-02.
-Enquanto `/admin/*` (13 rotas) e `/platform/*` (11 rotas) estão
-100% no padrão `<PageHeader />`, ainda há rotas internas com
-`<h1>` ad-hoc:
+### ~~P-26. PageHeader em rotas fora de `/admin` e `/platform`~~ ✅ FECHADO
+**Resolvido em 2026-07-01.** Refactor mecânico substituindo `<h1>` +
+descrição ad-hoc por `<PageHeader title description />` (do design
+system) em 6 rotas:
 
-- `/pipeline` (kanban)
-- `/pipeline/[id]` (detalhe da oportunidade)
-- `/inbox`
-- `/contacts`
-- `/imports`
-- `/more`
-- `/reports`
+- `/pipeline` — title "Pipeline", description "Oportunidades por
+  estágio no funil de vendas.", primaryAction "+ Nova oportunidade"
+- `/inbox` — title "Inbox", description "E-mails recebidos aguardando
+  triagem.", secondaryAction link "Configurar endereço →"
+- `/contacts` — title "Contatos", description "Pessoas relacionadas
+  às empresas cliente."
+- `/imports` — title "Importações", description "Importar empresas
+  e contatos de CSV/XLSX."
+- `/more` — title "Mais", description "Configurações e ferramentas
+  adicionais."
+- `/reports` — title "Relatórios", description "Análise de conversão,
+  performance e forecast.", secondaryAction link "↓ Exportar Excel"
 
-`/dashboard` usa `<h1 text-h1>` polido no Sprint 14 (saudação
-"Bom dia, X.") — mantém-se por design, sem PageHeader.
+`/pipeline/[id]` **skipado por design**: o header atual é uma unidade
+contextual rica (título dinâmico + razão social do cliente + valor
+em destaque + badges de estágio/status + botões de ação avançar/
+voltar/cancelar). Aplicar `PageHeader` degradaria a UX — perderia
+o layout right-aligned do valor e badges. Consistência não vale
+regressão; mantido o padrão do Sprint 14.
 
-Rotas públicas (`/`, `/sign-in`, `/sign-up`, `/onboarding`,
-`/privacy`, `/terms`, `/privacy-request`) têm layout dedicado e
-NÃO devem usar `PageHeader` (que assume AppShell).
+`/dashboard` mantido por design (saudação "Bom dia, X." do Sprint
+14). Rotas públicas (`/`, `/sign-in`, `/sign-up`, `/onboarding`,
+`/privacy`, `/terms`, `/privacy-request`, `/p/*`) têm layout
+dedicado sem AppShell — não recebem `PageHeader`.
 
-**Esforço:** ~2h. Mesmo padrão do P-02: troca `<h1>` + opcional
-descrição por `<PageHeader />`. Sem preferência de ordem — pode
-fazer em batch único.
+Baseline mantido: 561 passing / 10 pré-existentes (env vars) /
+2 skipped. Type-check zero. Lint zero.
 
 ### ~~P-22. Convite de usuário sem indicação do tenant de destino~~ ✅ FECHADO
 **Resolvido em 2026-06-30 pelo commit `a1affec`.** Novo router

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
 import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/layout/PageHeader';
 
 interface Suggestion {
   opportunityId: string;
@@ -31,12 +32,15 @@ export default function InboxPage() {
 
   return (
     <main className="mx-auto max-w-3xl p-4 md:p-6">
-      <header className="mb-4 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Inbox de e-mails</h1>
-        <a href="/admin/email-inbound" className="text-sm text-text-2 hover:underline">
-          Configurar endereço →
-        </a>
-      </header>
+      <PageHeader
+        title="Inbox"
+        description="E-mails recebidos aguardando triagem."
+        secondaryAction={
+          <a href="/admin/email-inbound" className="text-sm text-text-2 hover:underline">
+            Configurar endereço →
+          </a>
+        }
+      />
 
       {isLoading && <p className="text-sm text-text-2">Carregando…</p>}
       {error && <p className="text-sm text-danger">{error.message}</p>}

@@ -1,5 +1,5 @@
 import { masking } from '@/lib/ai/masking';
-import { getAnthropic, MODELS } from '@/lib/ai/claude';
+import { getAnthropicForTenant, MODELS } from '@/lib/ai/claude';
 import {
   callAiFeature,
   AiLimitExceededError,
@@ -121,13 +121,15 @@ export async function summarizeCommunication(
     const completion = await callAiFeature(
       'communication-summary',
       { tenantId: input.tenantId },
-      async ({ model }) =>
-        getAnthropic().messages.create({
+      async ({ model }) => {
+        const client = await getAnthropicForTenant(input.tenantId);
+        return client.messages.create({
           model: model || MODELS.HAIKU,
           max_tokens: 1024,
           system: SYSTEM_PROMPT,
           messages: [{ role: 'user', content: masked }],
-        }),
+        });
+      },
     );
     promptTokens = completion.usage.input_tokens;
     completionTokens = completion.usage.output_tokens;

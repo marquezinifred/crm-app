@@ -1,5 +1,5 @@
 import { masking } from '@/lib/ai/masking';
-import { getAnthropic, MODELS } from '@/lib/ai/claude';
+import { getAnthropicForTenant, MODELS } from '@/lib/ai/claude';
 import { callAiFeature } from '@/lib/ai/feature-gate';
 import { logAiUsage } from './ai-usage.service';
 import { CircuitBreaker } from './ai-circuit-breaker';
@@ -95,13 +95,15 @@ ${toMasked}
     const completion = await callAiFeature(
       'proposal-version-diff',
       { tenantId: input.tenantId },
-      async ({ model }) =>
-        getAnthropic().messages.create({
+      async ({ model }) => {
+        const client = await getAnthropicForTenant(input.tenantId);
+        return client.messages.create({
           model: model || MODELS.HAIKU,
           max_tokens: 1024,
           system: SYSTEM,
           messages: [{ role: 'user', content: userPrompt }],
-        }),
+        });
+      },
     );
     promptTokens = completion.usage.input_tokens;
     completionTokens = completion.usage.output_tokens;

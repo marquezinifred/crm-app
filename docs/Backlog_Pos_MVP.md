@@ -387,42 +387,14 @@ Baseline 381 → 404 passing. Type-check zero. Lint zero.
   neste rollout; adicionar `sortBy`/`sortDir` na query tRPC
   quando surgir
 
-### P-22. Convite de usuário sem indicação do tenant de destino
-**Severidade:** 🔴 Alta (risco de convite pro tenant errado em
-impersonação). Identificado em 2026-06-30 por Fred: "como sei
-para qual tenant estou convidando o usuário?".
-
-**Comportamento atual:** o backend `users.invite` pega
-`ctx.tenantId` da sessão ativa e convida sem exibir isso ao
-Admin. Em cenário de impersonação (Platform Owner logado como
-outro tenant), o convite vai pro tenant impersonated — nada
-indica isso na UI.
-
-**Impacto real:**
-- Admin de tenant único (99% dos casos) confia que é sempre o
-  próprio — OK.
-- **Platform Owner impersonando** pode convidar erradamente pra
-  tenant X quando ainda achava que estava fora do modo
-  impersonate. Convite disparado, senha configurada, acesso
-  garantido — reverter exige remover user à mão.
-
-**Fix (~30min):**
-1. Modal de convite em `src/app/admin/users/page.tsx:99` adiciona
-   linha abaixo do título:
-   ```
-   Convidando usuário para: {tenantName}
-   ```
-   com `tenantName` vindo de `trpc.tenants.current.useQuery()` (já
-   existe, retorna nome do tenant ativo).
-2. Se `ctx.impersonatedFrom` (Sprint 15A) estiver setado, mostrar
-   badge amarelo "⚠ Modo impersonação — verifique o destino
-   antes de enviar".
-3. Analogamente: aplicar em todos os outros modais de "criar
-   entidade que vira do tenant" (create company, create contact,
-   create partner) — mesma linha discreta.
-
-**Esforço:** ~30min pra usuários + ~1h se propagar pra todas as
-telas de criação.
+### ~~P-22. Convite de usuário sem indicação do tenant de destino~~ ✅ FECHADO
+**Resolvido em 2026-06-30 pelo commit `a1affec`.** Novo router
+`src/server/trpc/routers/tenants.ts` com procedure `current`
+retornando `{id, name, slug, plan, impersonating}`. Modal invite
+em `src/app/admin/users/page.tsx` exibe "Convidando para o
+tenant: {nome}" abaixo do título; se `impersonating != null`,
+badge amarelo "⚠ Modo impersonação — confirme o destino". +6
+testes em `tests/unit/tenants-current.test.ts`.
 
 ### P-21. Erro Zod renderizado como JSON cru na UI
 **Severidade:** Média (UX). Identificado em 2026-06-30 no

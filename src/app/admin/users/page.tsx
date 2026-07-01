@@ -41,6 +41,7 @@ export default function AdminUsersPage() {
   const utils = trpc.useUtils();
   const me = trpc.users.me.useQuery();
   const list = trpc.users.list.useQuery({});
+  const currentTenant = trpc.tenants.current.useQuery();
   const invite = trpc.users.invite.useMutation({
     onSuccess: () => {
       utils.users.list.invalidate();
@@ -98,6 +99,21 @@ export default function AdminUsersPage() {
             <h2 id={inviteTitleId} className="text-lg font-semibold">
               Convidar usuário
             </h2>
+            {currentTenant.isLoading ? (
+              <p className="text-sm text-text-3" aria-live="polite">
+                Carregando tenant destino…
+              </p>
+            ) : currentTenant.data ? (
+              <p className="text-sm text-text-2">
+                Convidando para o tenant:{' '}
+                <strong className="text-text-1">{currentTenant.data.name}</strong>
+                {currentTenant.data.impersonating && (
+                  <span className="ml-2 rounded bg-warning-bg px-2 py-0.5 text-xs text-warning-text">
+                    ⚠ Modo impersonação — confirme o destino
+                  </span>
+                )}
+              </p>
+            ) : null}
             <form
               onSubmit={(e) => {
                 e.preventDefault();

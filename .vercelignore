@@ -1,0 +1,23 @@
+# Vercel upload ignore — reduz o payload do `vercel` CLI
+# (`.gitignore` já cobre node_modules/.next; este arquivo cobre o resto)
+
+# Worktrees de sessão Claude — cópias de trabalho, 200MB+
+.claude/
+
+# Testes e artefatos de CI que Vercel não precisa em runtime
+tests/
+playwright-report/
+test-results/
+coverage/
+.playwright/
+
+# Documentação e specs (não precisam no build/runtime)
+docs/
+
+# Arquivos locais/de segurança (defesa em profundidade além do .gitignore)
+.env
+.env.local
+.env*.local
+.DS_Store
+.vscode/
+.idea/

@@ -117,7 +117,7 @@ export const usersRouter = router({
           role: input.role,
           localUserId: local.id,
         },
-        redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/`,
+        redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/sign-up`,
       });
     } catch (err) {
       // Rollback do User local se o convite Clerk falhar

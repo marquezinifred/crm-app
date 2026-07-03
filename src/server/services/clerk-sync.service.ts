@@ -66,6 +66,24 @@ export async function syncUserFromClerk(payload: ClerkUserPayload): Promise<void
       return;
     }
 
+    // users.invite (Sprint 1) cria row pending com (tenantId, email, clerkId=NULL)
+    // antes do magic link ser aceito. Ao aceitar, vincula clerkId em vez de
+    // criar duplicata (evita UNIQUE violation em @@unique([tenantId, email])).
+    const linked = await prisma.user.updateMany({
+      where: {
+        tenantId,
+        email: primaryEmail,
+        clerkId: null,
+        deletedAt: null,
+      },
+      data: {
+        clerkId: payload.id,
+        fullName,
+        active: true,
+      },
+    });
+    if (linked.count > 0) return;
+
     await prisma.user.create({
       data: {
         tenantId,

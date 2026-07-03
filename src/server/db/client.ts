@@ -11,8 +11,15 @@ const TENANT_ROOT_MODELS = new Set(['Tenant']);
 
 // Modelos cujas operações de gravação não exigem tenant no payload por estarem
 // em contextos onde o tenant é inferido pelo relacionamento (ex: webhooks Clerk
-// criando User). Mantemos a lista vazia por padrão — toda escrita exige tenant.
-const ALLOW_MISSING_TENANT_ON_WRITE = new Set<string>([]);
+// criando User). Proteção real preservada pela injeção do WHERE (linha 98-101)
+// que garante que updates só afetam rows do próprio tenant.
+const ALLOW_MISSING_TENANT_ON_WRITE = new Set<string>([
+  // User.update: 6 call sites legítimos passam apenas campos de perfil
+  // (role, active, lastLoginAt, cachedPermissions, clerkId) sem tenantId
+  // no data. WHERE já injeta tenantId; data não pode mover row de tenant
+  // por não conter tenantId (undefined ignora, não sobrescreve pra null).
+  'User.update',
+]);
 
 function createPrismaClient(): PrismaClient {
   const log: Prisma.LogLevel[] =

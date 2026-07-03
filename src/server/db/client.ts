@@ -19,6 +19,10 @@ const ALLOW_MISSING_TENANT_ON_WRITE = new Set<string>([
   // no data. WHERE já injeta tenantId; data não pode mover row de tenant
   // por não conter tenantId (undefined ignora, não sobrescreve pra null).
   'User.update',
+  // Task.update: sites legítimos passam só campos do form (title,
+  // description, dueDate, priority, assigneeId, status) sem tenantId.
+  // Mesma proteção via WHERE injection do tenant-context.
+  'Task.update',
 ]);
 
 function createPrismaClient(): PrismaClient {

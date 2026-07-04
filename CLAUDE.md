@@ -1291,11 +1291,15 @@ foram fechados na Sprint 11.
   tenant (P-06), Inbound Marketing (Sprint 15D), RBAC Granular
   (Sprint 15E) com guard anti-escalada, Command Palette ⌘K (P-16),
   multi-tenancy cross-tenant, vazamento de chave IA, audit_logs em
-  mutations. Placeholders explícitos pras variações que só existem
-  em chat (task #22/#23 do HANDOFF). Manutenção: quando cenário virar
-  release-blocker recorrente, promover pra §3; quando cenário virar
-  automatizado, mover pra §5. Backlog atualizado (P-37 ✅) + HANDOFF
-  §7 referências ganha entrada nova
+  mutations. 4 blocos com variações completas preenchidas (§2.3.a
+  8 variações /admin/ai · §2.3.b 6 drilldown P-06 · §2.4 8 Inbound
+  Sprint 15D · §2.6 9 Command Palette), extraídas do código real
+  (admin/ai/page.tsx, admin-alerts.ts, inbound-parser.service.ts,
+  CommandPalette.tsx). Zero placeholder residual — 691 linhas total.
+  Manutenção: quando cenário virar release-blocker recorrente,
+  promover pra §3; quando cenário virar automatizado, mover pra §5.
+  Backlog atualizado (P-37 ✅) + HANDOFF §7 referências ganha entrada
+  nova
 
 **Débitos zerados em 2026-07-01:**
 - P-26 PageHeader em rotas fora de `/admin` e `/platform` — refactor

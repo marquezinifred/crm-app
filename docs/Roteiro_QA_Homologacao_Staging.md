@@ -164,78 +164,223 @@ Cria uma opp end-to-end e move pelos 7 estágios respeitando validações.
 
 ### 2.3. IA end-to-end (~15min)
 
-**Roteiro detalhado das 8 variações do Card /admin/ai e das 6 variações do drilldown foi preparado pelo PO em conversa de 2026-06-30/2026-07-01** (task #22 e #23 do HANDOFF). Fred cola aqui quando abrir sessão de teste.
+Cobre 3 áreas: `/admin/ai` 4 Cards (P-23 + refino), drilldown Platform Owner `/platform/tenants/[id]/ai` (P-06 telas 1+2) e consumo real. Variações derivadas do código atual (`src/app/admin/ai/page.tsx`, `src/lib/ai/admin-alerts.ts`, `src/app/platform/tenants/[id]/ai/**`).
 
-<!-- PLACEHOLDER: cole aqui as 8 variações /admin/ai (P-23 + refino) preparadas em conversa. -->
-<!-- PLACEHOLDER: cole aqui as 6 variações /platform/tenants/[id]/ai (P-06) preparadas em conversa. -->
+#### 2.3.a. /admin/ai — 8 variações (~10min, todo tenant admin)
 
-Enquanto placeholders não estão preenchidos, rodar o smoke abaixo:
+**Pré-requisito:** logado como admin do tenant marquezini. Ter uma chave Anthropic válida à mão.
 
-#### 2.3.a. /admin/ai smoke (5min)
+1. **V1 — Card A abre com chave já cadastrada**
+   - `/admin/ai` → Card A "Configuração padrão".
+   - **Passa se:** provider preselecionado (default ANTHROPIC), modelo em dropdown, campo "Chave API" com helper `Atual: sk-…XXXX. Preencha para substituir.` e placeholder `(deixe vazio para manter)`.
+   - **Falha se:** placeholder é `sk-…` (regressão — card não detectou chave existente via `hasApiKey`).
 
-1. `/admin/ai` → tela abre com 4 cards.
-   - **Passa se:** Card A "Configuração padrão", Card B "Features de IA" agrupado por categoria, Card C "Uso e custo do mês" com breakdown, Card D "Alertas" (vazio ou com alertas).
-2. Card A → botão "Testar chave" com chave Anthropic válida cadastrada.
-   - **Passa se:** retorna `{ok: true, latencyMs: <número>}` sem echar a chave em resposta nem em Network tab.
-   - **Falha (crítico segurança):** se resposta ou Network mostrar valor real da chave.
-3. Card B → clicar em qualquer linha de feature → modal "Editar feature" abre.
-   - **Passa se:** modal tem 3 inputs primary (provider/model/key) + 3 fallback + input `costAlertBrlMonthly`.
-4. Card D → se aparecer alerta `CIRCUIT_OPEN`, clicar "Limpar circuit".
-   - **Passa se:** AlertDialog do design system aparece (não `confirm()` nativo).
+2. **V2 — Testar chave válida (crítico segurança)**
+   - Card A → colar chave válida no campo → "Testar chave".
+   - **Passa se:** aparece caixa verde `✓ Chave válida — resposta em <N>ms.` E abrir F12 → Network → response do `/api/trpc/aiConfig.testKey` só tem `{ok:true, latencyMs:<N>}` — **sem** campo com valor da chave.
+   - **Falha (crítico):** payload de response contém o valor da chave em qualquer campo (inclusive `input` ou `error`) → **bloqueio release imediato**.
 
-#### 2.3.b. Drilldown por tenant (5min — só Platform Owner)
+3. **V3 — Testar chave inválida**
+   - Card A → colar `sk-xxxxxx-invalida` → "Testar chave".
+   - **Passa se:** caixa vermelha `✗ Chave inválida — <motivo>` aparece. `<motivo>` deve ser mensagem estruturada (P-15: `chave inválida, atualize em /admin/ai` para 401/403). NÃO deve ser "Unable to transform response from server".
 
-1. `/platform/tenants` → clicar num tenant → header ganhou botões "IA" e "Features IA".
-2. Botão "IA" → `/platform/tenants/[id]/ai` abre com 5 seções (métricas, breakdown, histórico 30d, modelos pinados, anomalias).
-   - **Passa se:** progress bar aparece com `aria-valuenow` correto quando `monthlyTokenLimit` configurado.
-3. Anomalia aparecendo → clicar "Reconhecer".
-   - **Passa se:** ack persiste (recarregar não traz de volta a mesma anomalia).
-4. Botão "Features IA" → `/platform/tenants/[id]/ai/features` abre com features agrupadas por categoria.
-   - **Passa se:** `<Select>` alternar DISABLED/INCLUDED/ADDON_ACTIVE dispara toast de sucesso.
+4. **V4 — Trocar provider muda modelos disponíveis**
+   - Card A → dropdown Provider → selecionar OPENAI.
+   - **Passa se:** dropdown Modelo repopula com opções OpenAI (`gpt-4o-mini`, `gpt-4o`, `gpt-4.1`), primeiro pré-selecionado. Estado `testResult` limpo (banner some se estava lá).
 
-#### 2.3.c. Consumo real (5min)
+5. **V5 — Card B: modal de feature abre com 3 fieldsets + costAlert**
+   - Card B → clicar linha de qualquer feature (ex: `communication-summary`) → modal abre.
+   - **Passa se:** modal tem:
+     - Checkbox "Feature ativa para este tenant"
+     - Fieldset **Provider e modelo** — toggle + selects Provider/Modelo quando ligado
+     - Fieldset **Chave API** — toggle + input password + botão "Testar chave" desabilitado quando input vazio
+     - Fieldset **Fallback** — toggle + 3 inputs (provider/modelo/chave fallback)
+     - Campo "Alerta de custo (R$/mês)" com helper "Opcional. Deixe vazio…"
+   - **Falha se:** cursor pula ao digitar (bug P-12 regrediu) ou qualquer fieldset falta.
 
-1. Voltar pra tenant marquezini como admin → abrir uma opp em `/pipeline/<id>`.
-2. Seção "Registrar comunicação" → colar texto de reunião (>50 chars) → "Resumir com IA".
-   - **Passa se:** aparece preview com 4 blocos (resumo/próximos passos/objeções/tarefas sugeridas).
-   - **Falha se:** mensagem "IA indisponível" enganosa aparece com chave configurada (bug P-15 regrediu — a mensagem deveria distinguir credit_balance / 401 / 429 / 5xx).
+6. **V6 — Card C: breakdown primary vs fallback com barras (P-23 refino)**
+   - Card C → depois de gerar consumo real (executar V7 antes, se card estiver vazio).
+   - **Passa se:** vê legenda "Primary · Fallback" no topo direito; 4 tiles (Total tokens, Custo USD, Tokens fallback, Custo fallback USD); lista com barras horizontais duas cores (info + warning) proporcionais ao maior custo da tela.
+   - **Passa mesmo sem uso fallback:** só barra azul aparece; barra warning omitida quando `fallbackRequests=0`.
+   - **Falha se:** só uma barra brand-primary aparece (regressão pra pré-refino de P-23).
 
-**Bloqueia release se:** chave IA vaza em resposta, drilldown não abre, ou consumo real falha silenciosamente sem mensagem estruturada.
+7. **V7 — Card D: 4 alertas possíveis (spec `src/lib/ai/admin-alerts.ts`)**
+   - Cenário CIRCUIT_OPEN: derrubar 3+ requests IA em <1min contra provider errado → Card D deve mostrar alerta 🔴 "Circuit breaker aberto — <PROVIDER>" com botão "Limpar".
+     - **Passa se:** clicar "Limpar" abre `AlertDialog` (não `confirm()` nativo) com texto "As próximas chamadas ao <PROVIDER> voltam a tentar…"; após confirmar, toast "Circuit breaker limpo."
+   - Cenário MISSING_KEY: apagar chave global (Card A → salvar vazio) e ter feature em `INCLUDED` sem chave própria → alerta 🔴 "Feature sem chave — <feature>".
+     - **Passa se:** alerta some quando cadastra a chave de volta.
+   - Cenário FALLBACK_FREQUENT (P-23 refino): forçar 3+ requests com used_fallback=true em 24h para uma mesma feature (chave primary errada + fallback OK) → alerta 🟡 "Feature caindo em fallback — <feature>".
+     - **Passa se:** alerta severity yellow aparece; threshold é `FALLBACK_ALERT_THRESHOLD = 3`.
+   - Cenário COST_ABOVE_THRESHOLD (P-23 refino): setar `costAlertBrlMonthly=1` em uma feature ativa que já teve consumo → alerta 🟡 "Custo acima do limite — <feature>".
+     - **Passa se:** alerta some quando remove o threshold.
+
+8. **V8 — Card D sem alertas mostra empty state**
+   - Estado: chave válida global cadastrada + nenhum circuit aberto + nenhuma feature ativa sem chave + nenhum fallback frequente + nenhum cost overshoot.
+   - **Passa se:** texto "Nenhum alerta ativo." aparece; sem lista `<ul>` renderizada.
+
+#### 2.3.b. /platform/tenants/[id]/ai — 6 variações (~5min, Platform Owner only)
+
+**Pré-requisito:** logado como Platform Owner Fred (dual identity — memory `crm-app-setup-state`). Ter um tenant seed (`acme` ou `beta`) com histórico de consumo IA.
+
+1. **V1 — Entrypoints e header do drilldown**
+   - `/platform/tenants` → clicar num tenant → em `/platform/tenants/[id]`, header tem 2 botões novos "IA" e "Features IA" (adjacentes a "Impersonar admin").
+   - Clicar "IA" → cai em `/platform/tenants/[id]/ai`.
+   - **Passa se:** header mostra `IA · <tenant.name>` + slug em fonte mono + badge de plano. Nav "← Voltar para <tenant.name>" no topo.
+   - **Falha se:** botões não aparecem (regressão P-06 — entrypoints removidos).
+
+2. **V2 — Card A: 3 MetricTiles + progress bar condicional**
+   - Card "Limites e uso do mês" mostra 3 tiles (Tokens consumidos / Requests / Custo estimado em BRL).
+   - Progress bar só aparece se `monthlyTokenLimit != null`.
+     - **Passa se com limit=100k e uso=40k:** barra brand-primary a 40% + `aria-valuenow="40"`.
+     - **Passa se com uso≥80% e <100%:** barra warning.
+     - **Passa se com uso≥100%:** barra danger. Percentual pode passar de 100% na dica mas o width fica capped.
+   - Custo em BRL aparece na variante compacta com tooltip mostrando valor completo.
+
+3. **V3 — Editar limites (details colapsável + submit)**
+   - Card A → `<details>` "Editar limites e models pinados" fechado por default.
+   - Expandir → grid 5 campos (monthlyTokenLimit / dailyRequestLimit / pinnedModelHaiku / pinnedModelSonnet / anomalyThresholdMultiplier default 3).
+   - **Passa se ao limpar `monthlyTokenLimit` e submeter:** valor persiste como `null` (banco → `NULL`, não `0`). Depois de refresh, campo aparece vazio.
+   - **Passa se ao setar `monthlyTokenLimit=5000000`:** persiste como número; progress bar recalcula.
+   - Feedback: `p.success` "Limites atualizados." aparece; `p.danger` para erro.
+
+4. **V4 — Card B: breakdown por (provider, model) com barras**
+   - Card "Breakdown por provider / model (mês)" com grid `180px 1fr 100px`.
+   - **Passa se:** provider em cabeçalho + model em fonte mono truncado (title=modelo full); barra brand-primary proporcional ao maior tokens da tela; custo BRL em brand-accent tabular-nums.
+   - Empty state: "Nenhum uso registrado neste mês."
+
+5. **V5 — Card C: histórico diário 30d (chart + tabela) + Card E anomalias**
+   - Card "Histórico diário (últimos 30d)" mostra chart de barras (aria-hidden) + tabela abaixo com Data/Provider/Model/Reqs/Tokens/Custo R$.
+   - **Passa se:** barras têm altura proporcional; hover em cada barra mostra `<data> · <N> tk`. Tabela tem no máximo 30 linhas.
+   - Empty state: "Sem consumo no período."
+   - Card E "Anomalias detectadas (últimas 20)" com colunas Tipo/Detalhes/Detectada/Status/Ações.
+   - **Passa se anomalia ATIVA:** badge "Ativa" warning + botão "Reconhecer" ghost. Clicar → mutation `acknowledgeAlert` → após revalidação badge muda pra "Reconhecida" success e botão some.
+
+6. **V6 — Tela 2 `/features`: agrupamento por categoria + Select alterna status**
+   - Botão "Gerenciar Features IA →" no header (ou link direto `/platform/tenants/[id]/ai/features`).
+   - **Passa se:** header mostra `Features IA · <tenant.name>` + badge "N/M ativas" (ex: `3/5 ativas`).
+   - Uma section por `AiFeatureCategory` (Sumarização / Scoring / Busca semântica / Classificação / Geração / Extração). Cada tabela mostra Feature (name+desc+code mono) / Provider default / Add-on R$/mês / Status atual (badge) / Select alterar / Add-on ativado em.
+   - **Passa se:** alterar Select DISABLED→INCLUDED dispara `tenantAccessSet` sem erro; badge status atualiza após revalidação; erro renderiza como `role="alert"` no topo.
+
+**Bloqueia release se:** V2 (chave IA vazamento) falha, drilldown não abre pra Platform Owner (regressão P-11 dual identity), ou consumo real (V7 abaixo) falha silenciosamente.
+
+#### 2.3.c. Consumo real (~2min)
+
+Fecha o loop — prova que a IA que os cards mostram funciona ponta a ponta.
+
+1. Voltar pra tenant marquezini como admin → abrir opp em `/pipeline/<id>`.
+2. Seção "Registrar comunicação" → colar texto de reunião (≥50 chars) → "Resumir com IA".
+   - **Passa se:** preview com 4 blocos (resumo/próximos passos/objeções/tarefas sugeridas). Card C de `/admin/ai` incrementa `Total de tokens` em ~1k-5k.
+   - **Falha estruturado (P-15):** se conta Anthropic sem créditos, mensagem deve ser `PRECONDITION_FAILED` com link `console.anthropic.com/settings/billing` — **não** "IA indisponível" genérico.
+   - **Falha 401/403:** mensagem `UNAUTHORIZED chave inválida, atualize em /admin/ai`.
+   - **Falha 429:** `TOO_MANY_REQUESTS` honrando `retry-after` se presente.
+   - **Falha 5xx:** payload volta com `aiGenerated: false` e UI cai em modo manual (comportamento esperado).
 
 ### 2.4. Inbound Marketing end-to-end (~25min — Sprint 15D)
 
-**Roteiro detalhado das 8 variações Sprint 15D preparado pelo PO em conversa de 2026-06-30/2026-07-01**. Fred cola aqui.
+Cobre 8 variações do fluxo completo: config webhook → 5 matchers do parser → blacklist → low confidence → rate limit → fila → alocação. Derivado de `src/server/services/inbound-parser.service.ts` (5 matchers: webhook JSON / Typeform / RD Station / HTML table / plain key:value) e `src/server/services/inbound-lead-creator.service.ts` (`MIN_CONFIDENCE=0.4`, 4 reasons: `parse_error`, `no_signal`, `blacklisted_domain`, `low_confidence`).
 
-<!-- PLACEHOLDER: cole aqui as 8 variações Inbound (Sprint 15D) preparadas em conversa. -->
+**Pré-requisito:**
+- Ativar tab "Forms de captura" em `/admin/email-inbound` → toggle "webhookEnabled" ligado + salvar
+- Copiar URL do webhook e secret pra variável de shell:
+```bash
+export WEBHOOK_URL="https://crm-app-pi-eight.vercel.app/api/v1/inbound/lead"
+export SECRET="<cole-o-secret-daqui>"
+```
+- Ter Railway worker vivo (§1.2 verificado)
+- Ter no mínimo 2 vendedores ativos no tenant marquezini pra testar alocação
 
-Enquanto placeholder não é preenchido, rodar smoke abaixo:
+1. **V1 — Configuração + rotação de secret**
+   - `/admin/email-inbound` → tab "Forms de captura" abre 3 cards (Webhook / Notificação / Blacklist).
+   - Card Webhook mostra URL completa + botão "Copiar" + botão "Regenerar secret".
+   - **Passa se:** clicar "Regenerar" abre `AlertDialog` danger com aviso "Isso quebra qualquer integração que ainda use o secret antigo".
+   - Confirmar → toast success + secret novo aparece (prefixo `whs_`).
+   - **Falha (crítico segurança):** value do secret aparece em `audit_logs` (checar `SELECT after FROM audit_logs WHERE action='tenant.inbound.regenerateSecret' ORDER BY created_at DESC LIMIT 1;` — deve mostrar só `rotatedAt`, nunca `webhookSecret`).
 
-1. **Configurar webhook**
-   - `/admin/email-inbound` → tab "Forms de captura".
-   - Copiar URL do webhook + secret.
-   - **Passa se:** botão "Regenerar secret" abre `AlertDialog` do design system.
-2. **Disparar webhook curl (staging URL)**
+2. **V2 — Matcher `webhook-custom-json` (confidence 0.99)**
    ```bash
-   curl -X POST "https://crm-app-pi-eight.vercel.app/api/v1/inbound/lead?secret=<SECRET>" \
+   curl -sf -X POST "$WEBHOOK_URL?secret=$SECRET" \
      -H 'content-type: application/json' \
-     -d '{"name":"Lead Teste","email":"lead+teste@venzo.com","company":"Empresa Teste","message":"Interesse em X"}'
+     -d '{"contact":{"fullName":"Marina QA","email":"marina.qa+v2@venzo.com","phone":"+55 11 98765-4321"},"company":{"razaoSocial":"Aurora Digital SA","cnpj":"00.000.000/0001-91"},"source":"webhook-custom","message":"Interessada em plano Enterprise"}'
    ```
-   - **Passa se:** retorna `202 {"status":"queued"}`.
-   - **Falha se:** 401 (secret errado), 403 (webhook desativado), 429 (rate limit — aguarda 60s), 500.
-3. **Aguardar worker processar (~5s)**
-   - Railway Logs devem mostrar `[inbound-lead-create] job <id> concluído`.
-   - **Falha se:** log não aparece em 30s. Provável causa: worker morto (§1.2 regrediu) ou P-36 voltou.
-4. **Verificar fila /inbox/prospects** (como admin ou role com `inbound:view_queue`)
-   - **Passa se:** card aparece com badge de source, confidence %, empresa "Empresa Teste".
-5. **Alocar vendedor**
-   - Botão "Alocar" → popover com vendedores ordenados por carga (asc).
-   - Escolher vendedor.
-   - **Passa se:** card some da fila + toast "Vendedor alocado."
-6. **Rate limit** (opcional, mas recomendado)
-   - Disparar 11 requests em <60s pro endpoint acima com IP fixo.
-   - **Passa se:** 11ª request retorna 429 (rate limit `PUBLIC_FORM_LIMIT`).
+   - **Passa se:** retorna `202 {"status":"queued"}` E Railway log mostra `[inbound-lead-create]` E card aparece em `/inbox/prospects` em ≤10s com badge `IA · 99%` **em roxo** (variant primary — matcher webhook-custom-json usa confidence 0.99 e o UI marca como IA quando `parsedBy` começa com `ai:`; matchers regex usam `regex:*` e ficam success/verde).
+   - Nota: matcher webhook-custom-json na verdade tem `parsedBy='regex:webhook-custom-json'` — badge deve ser **verde `regex · 99%`**. Confidence 99% ainda passa MIN_CONFIDENCE.
 
-**Bloqueia release se:** webhook público quebrou (segurança — cliente perde leads) ou fila não popula (P-36 regrediu).
+3. **V3 — Matcher `typeform-v1` (confidence 0.95)**
+   ```bash
+   curl -sf -X POST "$WEBHOOK_URL?secret=$SECRET" \
+     -H 'content-type: application/json' \
+     -d '{"form_response":{"form_id":"typeform-test","answers":[{"field":{"ref":"name"},"text":"Pedro QA"},{"field":{"ref":"email"},"email":"pedro.qa+v3@venzo.com"},{"field":{"ref":"empresa"},"text":"Beta Ind Ltda"}]}}'
+   ```
+   - **Passa se:** card aparece com badge `regex · 95%` + source `typeform`.
+   - Se seu payload real for diferente, cheque `src/server/services/inbound-parser.service.ts:175` (matcher `typeformMatcher`) pra formato exato aceito.
+
+4. **V4 — Matcher `plain-key-value` (confidence 0.85 — mínimo pra passar cascata regex)**
+   ```bash
+   curl -sf -X POST "$WEBHOOK_URL?secret=$SECRET" \
+     -H 'content-type: text/plain' \
+     -d $'Nome: Carla QA\nEmpresa: Delta Serviços Ltda\nEmail: carla.qa+v4@venzo.com\nTelefone: (11) 91234-5678\nMensagem: Quer conversar sobre integracao'
+   ```
+   - **Passa se:** card aparece com badge `regex · 85%`. Empresa dedup se já existir "Delta Serviços Ltda".
+   - Testa o KEY_ALIASES do parser (aceita "nome/empresa/telefone" em pt-BR).
+
+5. **V5 — Fallback IA (confidence 0.65) quando nenhum matcher bate ≥ 0.85**
+   ```bash
+   curl -sf -X POST "$WEBHOOK_URL?secret=$SECRET" \
+     -H 'content-type: text/plain' \
+     -d 'Oi tudo bom, aqui é o Ricardo QA da empresa Omega Tecnologia, gostaria de agendar uma reunião. Meu email é ricardo.qa+v5@venzo.com'
+   ```
+   - **Passa se com feature `inbound-lead-parser` ativa (ADDON_ACTIVE ou INCLUDED):** card aparece com badge **`IA · 65%`** (roxo/primary — parsedBy=`ai:...`). Confidence 0.65 passa `MIN_CONFIDENCE=0.4`.
+   - **Passa se feature DESATIVADA:** o parser cai em `no_signal` (regex não pegou nada útil) → vai pra `inbound_leads_rejected` (não aparece na fila).
+   - **Falha (crítico masking):** logar payload no Anthropic dashboard não deve mostrar "ricardo.qa+v5@venzo.com" em claro (deve estar mascarado como `[EMAIL_1]` — `DataMaskingService` preservado no dispatchChat).
+
+6. **V6 — Blacklist bloqueia (reason=blacklisted_domain)**
+   - `/admin/email-inbound` → card Blacklist → adicionar `spam-test.com` na textarea → salvar.
+   - Disparar:
+   ```bash
+   curl -sf -X POST "$WEBHOOK_URL?secret=$SECRET" \
+     -H 'content-type: application/json' \
+     -d '{"contact":{"fullName":"Bot","email":"bot@spam-test.com"},"company":{"razaoSocial":"Spam SA"},"message":"Ganhe dinheiro fácil!"}'
+   ```
+   - **Passa se:** retorna 202 (endpoint aceita) MAS card NÃO aparece na fila. Rodar SQL:
+     ```sql
+     SELECT reason, raw_payload->>'email' FROM inbound_leads_rejected ORDER BY created_at DESC LIMIT 1;
+     ```
+     Esperado: `reason=blacklisted_domain`.
+   - Tab "Histórico" em `/admin/email-inbound` mostra a rejeição com badge danger.
+
+7. **V7 — Low confidence rejeitado (reason=low_confidence)**
+   - Disparar com texto que o parser regex não pegue E feature IA DESLIGADA (Card B em `/admin/ai` → editar `inbound-lead-parser` → desmarcar "Feature ativa"):
+   ```bash
+   curl -sf -X POST "$WEBHOOK_URL?secret=$SECRET" \
+     -H 'content-type: text/plain' \
+     -d 'algo sem estrutura nem email'
+   ```
+   - **Passa se:** SQL retorna `reason IN ('no_signal', 'parse_error', 'low_confidence')` (depende de quão pouco sinal — sem email/CNPJ nenhum matcher passa 0.85 e sem IA cai em `no_signal`).
+   - Reativar feature IA depois desta variação (senão V5 quebra).
+
+8. **V8 — Rate limit por IP (`PUBLIC_FORM_LIMIT` — 10/min)**
+   ```bash
+   for i in $(seq 1 12); do
+     curl -s -o /dev/null -w "req $i: %{http_code}\n" -X POST "$WEBHOOK_URL?secret=$SECRET" \
+       -H 'content-type: application/json' \
+       -d "{\"contact\":{\"fullName\":\"Load $i\",\"email\":\"load+$i@venzo.com\"},\"company\":{\"razaoSocial\":\"Load $i SA\"},\"message\":\"teste $i\"}"
+   done
+   ```
+   - **Passa se:** requests 1–10 respondem `202`; requests 11–12 respondem `429` (rate limited).
+   - Aguardar 60s antes de rodar outra variação (janela do rate limiter).
+
+**Após 8 variações, testar alocação na fila:**
+
+9. **Alocar vendedor**
+   - `/inbox/prospects` → em qualquer card, botão "Alocar" → Popover Radix com vendedores ordenados por `activeOpps asc`.
+   - Clicar num vendedor.
+   - **Passa se:** toast success "Lead alocado." + card some da fila. Verificar SQL: `SELECT owner_id FROM opportunities WHERE id='<opp_id>';` → owner_id preenchido.
+
+**Bloqueia release se:**
+- V2/V3/V4 falham (parser regex quebrou — perde leads reais)
+- V5 vaza PII em masking (crítico LGPD)
+- V6 deixa passar blacklist (spam vira opp)
+- V8 permite mais de 10 req/min (rate limit não bloqueia bot)
 
 ### 2.5. RBAC Granular (~10min — Sprint 15E)
 
@@ -262,23 +407,65 @@ Enquanto placeholder não é preenchido, rodar smoke abaixo:
 
 ### 2.6. Command Palette ⌘K (~5min)
 
-**Roteiro das 9 variações preparado pelo PO em conversa de 2026-06-30/2026-07-01**.
+9 variações derivadas do código real (`src/components/search/CommandPalette.tsx`, `src/server/trpc/routers/search.ts`). Cobre: atalho global, debounce, 4 buckets, teclado + mouse, RBAC gracioso, empty/hint/loading, rotas públicas.
 
-<!-- PLACEHOLDER: cole aqui as 9 variações Command Palette (P-16) preparadas em conversa. -->
+**Pré-requisito:** logado como admin marquezini. Dados de teste da §2.2 já criados (Company "QA Test SA", Contact "QA Test", Opportunity "Deal QA #1"). Ter também 1+ user no admin (ex: você mesmo).
 
-Smoke enquanto placeholder não preenchido:
+1. **V1 — Atalho global abre em rota autenticada**
+   - Em `/dashboard` → pressionar `⌘K` (macOS) ou `Ctrl+K` (Linux/Win).
+   - **Passa se:** overlay `role="dialog" aria-modal="true" aria-label="Busca global"` aparece; scroll do body trava (`document.documentElement.style.overflow=hidden`); input com placeholder "Busque empresas, contatos, oportunidades…" ganha foco.
+   - **Passa se:** clicar no botão "Buscar…" da topbar abre também.
+   - **Falha se:** nada acontece (regressão P-16 — atalho não wired ao `document`).
 
-1. Em qualquer rota autenticada, atalho `⌘K` (macOS) ou `Ctrl+K` (Linux/Win) abre o overlay.
-   - **Passa se:** overlay aparece com input focado.
-2. Digitar "qa" (≥2 chars) → resultados em 4 buckets (companies/contacts/opportunities/users), top 5 cada.
-3. Setas ↑/↓ movem highlight; Enter navega.
-   - **Passa se:** bucket "companies" com "QA Test SA" (criada em 2.2) → Enter navega pra `/companies/<id>`.
-4. Debounce: digitar rápido não faz 1 request por keystroke.
-   - **Passa se:** Network mostra 1 request após parar de digitar (~200ms).
-5. ESC fecha.
-6. Rota pública (ex: `/sign-in` em sessão nova) → atalho **não** abre palette.
+2. **V2 — Hint state (< 2 chars)**
+   - Overlay aberto, campo vazio.
+   - **Passa se:** texto "Digite ao menos 2 caracteres para buscar." aparece centralizado. Digitar 1 char não muda estado; digitar o 2º char troca pra loading/results.
 
-**Bloqueia release se:** palette não abre em rota autenticada (regressão P-16).
+3. **V3 — Debounce 200ms + Network única**
+   - Overlay aberto → F12 → Network → filter `search.global`.
+   - Digitar "quali" rapidamente (5 chars em <200ms).
+   - **Passa se:** só **1 request** a `/api/trpc/search.global` sai (não 5). Últimos 200ms sem tecla → dispara.
+   - **Falha se:** múltiplos requests por keystroke (debounce quebrou).
+
+4. **V4 — Loading skeleton**
+   - Enquanto request em flight (rede lenta ajuda; ou throttle Slow 3G no DevTools).
+   - **Passa se:** 3 barras de skeleton `bg-hover animate-pulse` aparecem + `<span class="sr-only">Buscando...</span>` pra a11y.
+
+5. **V5 — 4 buckets agrupados na ordem esperada**
+   - Digitar "qa" (assumindo dados da §2.2).
+   - **Passa se:** grupos aparecem na ordem Oportunidades → Empresas → Contatos → Pessoas do time. Só grupos com resultados aparecem (RBAC gracioso — bucket vazio some).
+   - Cada grupo tem heading uppercase tracking-wide + itens com ícone SVG + primário + secundário truncado.
+   - Cada bucket limita a **top 5** resultados (ver `src/server/trpc/routers/search.ts`).
+
+6. **V6 — Navegação teclado ↑/↓ + Enter**
+   - Digitar "qa" → resultados carregam.
+   - Pressionar ↓ 2 vezes → highlight muda pra 3º item (className `bg-hover`).
+   - Pressionar ↑ 1 vez → volta pro 2º.
+   - Pressionar Enter no bucket Empresas item "QA Test SA".
+   - **Passa se:** overlay fecha + rota muda pra `/companies/<id>`.
+   - Roteamento esperado por bucket: `companies:X` → `/companies/X`; `contacts:X` → `/contacts/X`; `opportunities:X` → `/pipeline/X` (não `/opportunities/X`); `users:X` → `/admin/users`.
+
+7. **V7 — Mouse hover + click (mouseEnter atualiza highlight)**
+   - Digitar "qa" → passar mouse sobre 3º item.
+   - **Passa se:** highlight visual muda pra 3º (mouseEnter → setHighlight). Clicar → navega mesmo destino que Enter.
+
+8. **V8 — Empty state + ESC + click fora**
+   - Digitar "xyzabcdefinexistente" → esperar debounce + response.
+   - **Passa se:** texto `Nenhum resultado para "xyzabcdefinexistente".` + sub-texto "Tente outro termo — nome, e-mail ou CNPJ."
+   - Pressionar ESC → overlay fecha; scroll do body destrava.
+   - Reabrir com ⌘K → clicar no backdrop preto (fora do card branco) → fecha (stopPropagation no card impede fechar clicando dentro).
+
+9. **V9 — Atalho não abre em rota pública**
+   - Sign out → em `/sign-in`, pressionar ⌘K.
+   - **Passa se:** nada acontece (topbar não é renderizada em rota HIDDEN_ON — atalho não wired).
+   - Testar também em `/`, `/privacy`, `/terms`, `/p/<slug>/contact`.
+   - **Falha se:** overlay abre → tentativa de bater `search.global` retorna UNAUTHORIZED (não crítico mas é UX ruim).
+
+**Passa como bônus:**
+- RBAC gracioso — logar como PARCEIRO (sem `company:read`) → digitar "qa" → bucket "Empresas" não aparece (bucket vazio ao invés de 403 global). Testado em `search-router.test.ts:AC-P16-06`.
+- Debounce respeita query.length < 2 — apagar tudo depois de já ter digitado deve voltar pro hint state em vez de rodar uma última query.
+
+**Bloqueia release se:** V1 quebra (feature morta) ou V6 quebra (navegação por teclado é acessibilidade obrigatória — AC-P16-06). V2, V3, V8 são polish e valem regressão registrar como P-XX.
 
 ---
 

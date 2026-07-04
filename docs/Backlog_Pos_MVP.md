@@ -796,11 +796,26 @@ Command Palette (P-16), Pipeline 7 estágios, drilldown por tenant
 (P-06), segurança (multi-tenancy cross-tenant, chave IA vazamento,
 audit_logs, anti-escalada RBAC) cobertos com pass/fail explícito.
 
-**Placeholders explícitos** pras 3 variações que estão só em chat
-(§2.3 8 variações /admin/ai, §2.3.b 6 variações drilldown, §2.4
-8 variações Inbound Marketing, §2.6 9 variações Command Palette).
-Fred cola quando abrir sessão de PO próxima. Doc **não inventa
-cenários** — só o que já está em fontes commitadas.
+**Variações completas** — 4 blocos preenchidos (§2.3.a /admin/ai 8
+variações · §2.3.b drilldown P-06 6 variações · §2.4 Inbound Sprint
+15D 8 variações · §2.6 Command Palette 9 variações). Extraído
+diretamente do código real:
+- `src/app/admin/ai/page.tsx` + `src/lib/ai/admin-alerts.ts`
+  (Card A/B/C/D + 4 tipos de alerta CIRCUIT_OPEN/MISSING_KEY/
+  FALLBACK_FREQUENT/COST_ABOVE_THRESHOLD).
+- `src/app/platform/tenants/[id]/ai/page.tsx` +
+  `.../features/page.tsx` (5 seções tela 1 + tela 2 features).
+- `src/server/services/inbound-parser.service.ts` (5 matchers:
+  webhook-custom-json 0.99 / typeform-v1 0.95 / rd-station-v1 0.9 /
+  html-table 0.9 / plain-key-value 0.85) + `.../inbound-lead-creator.
+  service.ts` (`MIN_CONFIDENCE=0.4`, 4 reasons de rejeição).
+- `src/components/search/CommandPalette.tsx` +
+  `src/server/trpc/routers/search.ts` (debounce 200ms, 4 buckets,
+  navegação teclado ↑/↓/Enter/ESC, RBAC gracioso).
+
+Total: 691 linhas. Cada variação: passo executável + pass/fail
+explícito + comando curl/SQL onde aplicável. Zero placeholder
+residual.
 
 Manutenção: quando cenário virar release-blocker recorrente, promover
 pra §3. Quando cenário virar teste automatizado, mover pra §5.

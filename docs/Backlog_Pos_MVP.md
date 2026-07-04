@@ -684,11 +684,14 @@ tenants, opps de exemplo).
 
 **Esforço:** ~10min. **Fazer HOJE.**
 
-### P-33. Vercel CLI outdated (54.18.7 → 54.20.1)
+### P-33. Vercel CLI outdated (54.18.7 → 54.20.1) — ✅ FECHADO 2026-07-04
 **Severidade:** Baixa. Não bloqueia deploy, só otimiza (novos
 recursos agentic + performance).
 
 **Ação:** `npm i -g vercel@latest` (ou `pnpm add -g vercel@latest`).
+
+**Resolução:** upgrade global aplicado — `vercel --version` retorna
+`Vercel CLI 54.20.1`. Nada no repo mudou (só o binário local do dev).
 
 **Esforço:** ~30s.
 

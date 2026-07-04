@@ -60,6 +60,15 @@ Rodar antes de subir qualquer coisa em staging. Se um item falha, corrigir antes
 - [ ] **Feature flags conferidas antes do rollout**
   - `RBAC_GRANULAR_ENABLED=false` no 1º deploy (ligar só depois de §2.5 passar).
   - `MULTI_AI_ENABLED` casa em Vercel e Railway (mesmo valor).
+- [ ] **Chaves Clerk reais em staging/prod (NUNCA dummies)** — o `.env.example`
+  documenta dummies (`pk_test_ZmFrZS5jbGVyay5hY2NvdW50cy5kZXYk` +
+  `sk_test_dummy_do_not_use_in_prod`) só para dev/QA local em worktree —
+  eles passam o parser do SDK e deixam `next dev` subir, mas qualquer
+  chamada real ao Clerk API retorna `clerk_key_invalid`. Em Vercel e
+  Railway, confirmar que as vars `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` e
+  `CLERK_SECRET_KEY` apontam pra instância Clerk real
+  (`guiding-bobcat-23.clerk.accounts.dev` em staging). Ver P-39 no
+  [`Backlog_Pos_MVP.md`](Backlog_Pos_MVP.md) pra contexto.
 
 ---
 

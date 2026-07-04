@@ -1335,6 +1335,28 @@ foram fechados na Sprint 11.
   promover pra §3; quando cenário virar automatizado, mover pra §5.
   Backlog atualizado (P-37 ✅) + HANDOFF §7 referências ganha entrada
   nova
+- P-39 Fixture Clerk mock pra QA/dev local — docs-only. Sem
+  `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` real, o SDK Clerk falava
+  "Publishable key not valid" e `next dev` ficava inutilizável em
+  worktree isolada. Investigação em `@clerk/shared/dist/keys.js`
+  mostrou que `isPublishableKey` valida só (1) prefixo
+  `pk_test_`/`pk_live_` e (2) que o segmento base64-decoded termina
+  em `$` — sem checagem de rede na inicialização. Fix: `.env.example`
+  ganha dummy `pk_test_ZmFrZS5jbGVyay5hY2NvdW50cy5kZXYk` (base64
+  decoda pra `fake.clerk.accounts.dev$`) + `sk_test_dummy_do_not_use_in_prod`.
+  Comentário de 10 linhas acima explica dev/QA local vs staging/prod.
+  Rotas protegidas ainda exigem login que falhará com Clerk API
+  (`clerk_key_invalid`) — combine com bypass `NODE_ENV=test` em
+  `tests/e2e/fixtures/auth.ts` (Sprint 11) pros Playwright.
+  Verificação manual: `rm -rf .next && npm run dev` sobe em 1.2s,
+  `HEAD /` → 200, `HEAD /sign-in` → 200, header
+  `x-clerk-auth-reason: dev-browser-missing` confirma middleware
+  Clerk rodando. Débito residual: runtime warning
+  `Missing CLERK_ENCRYPTION_KEY` aparece com dummies (não crasha,
+  var não relacionada à pub key). Roteiro de QA baseline
+  ("609 passing / 10 failed" em §0) desatualizado — sub-débito 15min,
+  não bloqueia P-39. QA automation exception aplicada (docs-only,
+  sem código de app novo). Backlog atualizado (P-39 ✅)
 
 **Débitos zerados em 2026-07-01:**
 - P-26 PageHeader em rotas fora de `/admin` e `/platform` — refactor

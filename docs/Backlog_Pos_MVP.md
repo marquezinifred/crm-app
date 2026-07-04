@@ -711,23 +711,53 @@ pra teste.
 
 **Esforço:** ~15min de doc (README ou runbook staging).
 
-### P-35. 📊 Sentry + Axiom sem wiring (débito Sprint 0)
-**Severidade:** Média. Env vars existem mas SDK não foi
-inicializado nem os workers escrevem logs estruturados.
+### P-35. 📊 Sentry + Axiom wiring — ✅ FECHADO em 2026-07-04
+**Severidade:** Média (agora zerada).
 
-**Impacto atual:** logs de produção ficam só no Vercel dashboard
-(rotação curta, não pesquisável, sem alertas). Erros silenciosos
-não geram notificação.
+**Entregue:**
+- `@sentry/nextjs` já estava instalado — configurado via
+  `sentry.client.config.ts` + `sentry.server.config.ts` +
+  `sentry.edge.config.ts` (root do repo) + `instrumentation.ts`
+  (Next.js 14 hook). `next.config.mjs` wrapped com
+  `withSentryConfig` (silent, widenClientFileUpload, hideSourceMaps,
+  disableSourceMapUpload quando SENTRY_AUTH_TOKEN ausente).
+- `@axiomhq/js` + `@axiomhq/nextjs` adicionados. Logger em
+  `src/lib/monitoring/axiom.ts` com no-op sem AXIOM_TOKEN/DATASET
+  + categorias tipadas: `logAudit`, `logAiUsage`, `logWorkerJob`,
+  `logTrpc` + helper `flush()`.
+- Helpers em `src/lib/monitoring/sentry.ts` com `captureException`,
+  `captureMessage`, `addBreadcrumb`, `withScope`, `shouldReportTrpcError`
+  — todos no-op quando `Sentry.getClient()` undefined (sem DSN).
+- **Instrumentação aplicada:**
+  - `audit.service.ts` — breadcrumb no sucesso, exception no erro,
+    log Axiom nos dois casos
+  - `ai-usage.service.ts` `logAiUsage()` — log Axiom com costBrl
+    derivado (USD_BRL_RATE), provider/fallback/latência
+  - `jobs/queues.ts` `makeWorker()` — wrap universal com Axiom
+    `logWorkerJob` (durationMs/ok/error) + Sentry captureException,
+    tenantId auto-extraído do payload quando presente
+  - `trpc.ts` — middleware `monitor` novo, aplicado em
+    `protectedProcedure` e `platformProcedure`. Loga procedures no
+    Axiom; Sentry só captura INTERNAL_SERVER_ERROR (não FORBIDDEN/
+    UNAUTHORIZED/PRECONDITION_FAILED). Queries só logadas quando
+    falham a menos que `AXIOM_LOG_QUERIES=true`.
+  - `dispatch.ts` `dispatchChat()` — breadcrumb por feature code
+  - `api/trpc/[trpc]/route.ts` onError — defense-in-depth
+- Env vars documentados em `.env.example` (via `src/lib/env.ts`):
+  `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_ORG`,
+  `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN`, `SENTRY_ENVIRONMENT`,
+  `AXIOM_TOKEN`, `AXIOM_DATASET`, `AXIOM_LOG_QUERIES`
+- `docs/Observability.md` novo: setup Sentry + Axiom + alertas
+  recomendados (5 queries APL) + runbook por alerta + política
+  anti-PII
+- Testes: `tests/unit/monitoring-sentry.test.ts` (+13) e
+  `monitoring-axiom.test.ts` (+13). Baseline preservado
+  (falhas pré-existentes por env vars ausentes não regridem).
 
-**Escopo do wiring (Sprint 16):**
-- `@sentry/nextjs` init em `src/sentry.client.config.ts` e
-  `src/sentry.server.config.ts`
-- Sourcemap upload no build (Sentry integration Vercel)
-- Breadcrumbs em `audit()`, `dispatchChat`, error boundaries
-- Axiom via `@axiom-monitor/nextjs` ou dataset direto — logs de
-  workers BullMQ + latência tRPC + custo IA por tenant
-
-**Esforço:** ~1-2 dias. Parte do Sprint 16 (Hardening produção).
+**Fora do escopo (mantido para hardening futuro):**
+- Alertas configurados em Sentry/Axiom UI — decisão de infra do
+  Fred. Doc lista os 5 monitores APL prontos pra colar.
+- OpenTelemetry — Sentry+Axiom já cobrem MVP; nenhum ganho claro.
 
 ### P-36. ⏰ Workers BullMQ não estão rodando
 **Severidade:** 🔴 Alta (features degradadas silenciosamente).

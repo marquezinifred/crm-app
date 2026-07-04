@@ -2351,6 +2351,22 @@ ficam isoladas por ambiente).
 
 ---
 
+## Observabilidade
+
+Sentry (error tracking) + Axiom (structured logs) já wireados —
+ver `docs/Observability.md` pra setup completo, categorias de log,
+dashboards e runbook. Ambos SDKs viram **no-op silencioso** quando
+os env vars correspondentes não estão setados (dev local sem
+tokens funciona igual).
+
+Hooks: `audit()` (breadcrumb + log), `logAiUsage()` (custo BRL +
+provider + fallback), `makeWorker()` (duração + erro), middleware
+tRPC `monitor` (procedure + tenantId + errorCode). PII **nunca**
+sai do processo — payloads de mutation e prompts IA não vão para
+Sentry/Axiom.
+
+---
+
 ## Checklist antes de cada deploy (PR → staging)
 
 - [ ] `npm run test` passa

@@ -1,5 +1,7 @@
 import { prisma } from '@/server/db/client';
 import { getTenantContext, runAsSystem, SYSTEM_TENANT_SENTINEL } from '@/server/db/tenant-context';
+import { logAudit } from '@/lib/monitoring/axiom';
+import { addBreadcrumb, captureException } from '@/lib/monitoring/sentry';
 
 export interface AuditEntry {
   action: string;
@@ -53,7 +55,32 @@ export async function audit(entry: AuditEntry): Promise<void> {
         },
       }),
     );
+    addBreadcrumb({
+      category: 'audit',
+      message: entry.action,
+      level: 'info',
+      data: { tableName: entry.tableName, recordId: entry.recordId },
+    });
+    logAudit({
+      action: entry.action,
+      tableName: entry.tableName,
+      recordId: entry.recordId,
+      tenantId: effectiveTenantId,
+      userId: ctx?.userId ?? null,
+      ok: true,
+    });
   } catch (err) {
     console.error('[audit] falha ao gravar log:', err);
+    captureException(err, {
+      tags: { category: 'audit', action: entry.action, tableName: entry.tableName },
+    });
+    logAudit({
+      action: entry.action,
+      tableName: entry.tableName,
+      recordId: entry.recordId,
+      tenantId: effectiveTenantId,
+      userId: ctx?.userId ?? null,
+      ok: false,
+    });
   }
 }

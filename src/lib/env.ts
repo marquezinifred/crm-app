@@ -53,10 +53,25 @@ const envSchema = z.object({
   STRIPE_PRICE_PRO: z.string().optional(),
   STRIPE_PRICE_ENTERPRISE: z.string().optional(),
 
-  // Observabilidade
+  // Observabilidade — Sentry (error tracking + performance).
+  // NEXT_PUBLIC_SENTRY_DSN é o mesmo DSN exposto ao browser; se ausente,
+  // o wrapper é no-op tanto server quanto client. SENTRY_ORG/PROJECT/
+  // AUTH_TOKEN são usados só no build (sourcemap upload); vazio pula
+  // upload sem quebrar o build.
   SENTRY_DSN: z.string().url().optional(),
+  NEXT_PUBLIC_SENTRY_DSN: z.string().url().optional(),
+  SENTRY_ORG: z.string().optional(),
+  SENTRY_PROJECT: z.string().optional(),
+  SENTRY_AUTH_TOKEN: z.string().optional(),
+  SENTRY_ENVIRONMENT: z.string().optional(),
+
+  // Observabilidade — Axiom (structured logs).
+  // Sem AXIOM_TOKEN + AXIOM_DATASET, o logger é no-op.
   AXIOM_TOKEN: z.string().optional(),
   AXIOM_DATASET: z.string().optional(),
+  // Trace inclusion — quando false (default), só mutations tRPC são
+  // logadas; queries só quando falham. `true` loga todas as procedures.
+  AXIOM_LOG_QUERIES: z.coerce.boolean().default(false),
 
   // App
   NEXT_PUBLIC_APP_URL: z.string().url().default('http://localhost:3000'),

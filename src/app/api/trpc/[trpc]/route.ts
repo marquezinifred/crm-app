@@ -2,6 +2,10 @@ import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import { appRouter } from '@/server/trpc/routers/_app';
 import { createContext } from '@/server/trpc/context';
 import { runWithTenant } from '@/server/db/tenant-context';
+import {
+  captureException,
+  shouldReportTrpcError,
+} from '@/lib/monitoring/sentry';
 
 const handler = async (req: Request) => {
   return fetchRequestHandler({
@@ -15,6 +19,14 @@ const handler = async (req: Request) => {
     onError({ error, path }) {
       if (error.code === 'INTERNAL_SERVER_ERROR') {
         console.error(`[tRPC] ${path}`, error);
+      }
+      // Defense-in-depth: o middleware `monitor` já reporta, mas se
+      // uma procedure não passou por ele (public sem middleware), a
+      // camada de transporte pega o erro aqui.
+      if (shouldReportTrpcError(error.code)) {
+        captureException(error, {
+          tags: { procedure: path ?? 'unknown', errorCode: error.code },
+        });
       }
     },
     responseMeta() {

@@ -1,5 +1,7 @@
 import { prisma } from '@/server/db/client';
 import { AIProvider, Prisma } from '@prisma/client';
+import { logAiUsage as axiomLogAiUsage } from '@/lib/monitoring/axiom';
+import { env } from '@/lib/env';
 
 /**
  * Tabela de preços por provider/modelo (USD por milhão de tokens).
@@ -70,6 +72,22 @@ export async function logAiUsage(input: LogUsageInput): Promise<void> {
   } catch (err) {
     console.error('[ai-usage] falha ao gravar log:', err);
   }
+
+  axiomLogAiUsage({
+    requestType: input.requestType,
+    tenantId: input.tenantId,
+    provider: input.provider,
+    configuredProvider: input.configuredProvider ?? null,
+    model: input.model,
+    usedFallback: input.usedFallback ?? false,
+    promptTokens: input.promptTokens,
+    completionTokens: input.completionTokens,
+    costUsd,
+    costBrl: costUsd * env.USD_BRL_RATE,
+    latencyMs: input.latencyMs ?? null,
+    success: input.success ?? true,
+    errorCode: input.errorCode ?? null,
+  });
 }
 
 export interface MonthlyUsageBreakdownRow {

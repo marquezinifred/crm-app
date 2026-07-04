@@ -1069,9 +1069,29 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 ---
 
+## Baseline de testes atual (2026-07-04)
+
+Medido pelo QA automation report após ciclo P-32 → P-36:
+
+- `npm test` com env dummy consistente: **715 passing / 0 failing / 168 skipped**
+  (883 tests total)
+- Sem env vars: ~11 test files falham no import (env-dependent —
+  field-encryption, rate-limiter, ai-pricing, document-compare,
+  summary-parser, communication-summary-errors). Não é regressão real
+- 168 skipped = ~166 estáticos + 2 conditional (RBAC + tenant-isolation
+  guardados por `DATABASE_URL_TEST`)
+- `npx tsc --noEmit`: zero
+- `npm run lint`: zero na paterna (worktree pode falhar por [P-40](docs/Backlog_Pos_MVP.md))
+
+Snapshots históricos por sprint estão preservados nos bullets acima
+("Testes: X passing" em cada bloco de sprint) — não confundir com
+baseline atual.
+
+---
+
 ## Débitos técnicos com dependência cruzada (registrados para sprints futuros)
 
-**Débitos abertos (atualizado 2026-07-01):**
+**Débitos abertos (atualizado 2026-07-04):**
 
 | ID | Origem | Pendência | Resolve em |
 |----|--------|-----------|-----------|

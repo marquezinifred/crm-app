@@ -879,23 +879,20 @@ mesma pasta pai).
 
 **Esforço:** ~30min. Não bloqueia — lint funciona na paterna.
 
-### P-41. Baseline de testes desatualizado no CLAUDE.md
-**Severidade:** Baixa (só documentação). Descoberto por QA automation
-em 2026-07-04.
+### ~~P-41. Baseline de testes desatualizado no CLAUDE.md~~ ✅ FECHADO
+**Resolvido em 2026-07-04** (inline na paterna, docs-only). Baseline
+atualizado em 3 pontos:
+- `CLAUDE.md` — nova seção "## Baseline de testes atual (2026-07-04)"
+  inserida antes de "## Débitos técnicos", registrando 715 passing / 0
+  failing / 168 skipped (883 total), com nota de que snapshots
+  históricos por sprint são preservados
+- `docs/Metodologia_Desenvolvimento_Venzo.md` §5.2 — baseline reescrito
+  para os números corretos + explicação sobre "sem env vars ~11 files
+  falham no import" (não regressão)
+- Memory `crm-app-setup-state.md` — adicionado bullet "Baseline testes
+  (2026-07-04)" apontando pra CLAUDE.md como fonte da verdade
 
-CLAUDE.md cita "576 passing / ~10 pré-existentes / 2 skipped" em
-várias seções, mas estado real com env dummy é **715/883 passing /
-168 skipped**. As "10 falhas pré-existentes" eram env vars ausentes
-(11 test files falhando quando sem env, não 10 tests individuais).
-
-**Escopo:** atualizar `CLAUDE.md` §Sprint atual + memory
-`crm-app-setup-state.md` com baseline correto (715 passing / 168
-skipped conforme QA report 2026-07-04). Mencionar que 168 skipped
-inclui ~166 estáticos + 2 conditional (RBAC/tenant-isolation guardados
-por `DATABASE_URL_TEST`).
-
-**Esforço:** ~15min. Fica pro próximo chip que atualizar CLAUDE.md
-naturalmente.
+QA automation exception aplicada (docs-only, sem código de app).
 
 ---
 

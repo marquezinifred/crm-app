@@ -228,12 +228,16 @@ Touch targets ≥ 44×44px.
 | Visual | Playwright + screenshots | Baseline de 25 rotas × 3 viewports (P-03) |
 | Accessibility | axe-core smoke | 5 rotas públicas + 4 autenticadas (Sprint 14) |
 
-### 5.2. Baseline atual (2026-07-04)
-- Vitest: ~576 passing / ~10 pré-existentes (env vars ausentes em field-encryption,
+### 5.2. Baseline atual (2026-07-04, medido pelo QA automation report)
+- Vitest com env dummy consistente: **715 passing / 0 failing / 168 skipped**
+  (883 tests total)
+- Sem env vars: ~11 test files falham no import (env-dependent — field-encryption,
   rate-limiter, ai-pricing, document-compare, summary-parser,
-  communication-summary-errors) / 2 skipped
+  communication-summary-errors etc). NÃO é regressão real
+- 168 skipped inclui ~166 estáticos (features/casos ainda não cobertos) + 2
+  conditional (RBAC + tenant-isolation guardados por `DATABASE_URL_TEST`)
 - Type-check: zero
-- Lint: zero
+- Lint: zero (na paterna; worktree pode falhar por [P-40](Backlog_Pos_MVP.md))
 
 **Novo chip não pode piorar baseline.** Se piorar, chip volta pra worktree
 com plano de correção do QA automation.

@@ -3,6 +3,9 @@ import superjson from 'superjson';
 import { ZodError } from 'zod';
 import type { Context } from './context';
 import { ForbiddenError } from '@/lib/auth/rbac';
+import { logTrpc } from '@/lib/monitoring/axiom';
+import { captureException, shouldReportTrpcError } from '@/lib/monitoring/sentry';
+import { env } from '@/lib/env';
 
 const t = initTRPC.context<Context>().create({
   transformer: superjson,
@@ -46,7 +49,63 @@ const mapErrors = t.middleware(async ({ next }) => {
   }
 });
 
-export const protectedProcedure = t.procedure.use(mapErrors).use(enforceAuth);
+/**
+ * P-35 — Instrumentação observability por procedure. Emite:
+ *   • Axiom `trpc` (success) ou `trpc_error` (failure) com
+ *     `{procedure, kind, tenantId, userId, durationMs, ok, errorCode?}`
+ *   • Sentry `captureException` apenas quando o erro é
+ *     INTERNAL_SERVER_ERROR (evita ruído com FORBIDDEN/UNAUTHORIZED/
+ *     PRECONDITION_FAILED que são respostas esperadas).
+ *
+ * Queries só são logadas quando falham (a menos que
+ * `AXIOM_LOG_QUERIES=true`) — evita inflar dataset com listagens.
+ */
+const monitor = t.middleware(async ({ ctx, path, type, next }) => {
+  const start = Date.now();
+  try {
+    const result = await next();
+    const durationMs = Date.now() - start;
+    if (type !== 'query' || env.AXIOM_LOG_QUERIES) {
+      logTrpc({
+        procedure: path,
+        kind: type,
+        tenantId: ctx.tenantId ?? null,
+        userId: ctx.user?.id ?? null,
+        durationMs,
+        ok: true,
+      });
+    }
+    return result;
+  } catch (err) {
+    const durationMs = Date.now() - start;
+    const code = err instanceof TRPCError ? err.code : 'INTERNAL_SERVER_ERROR';
+    const message = err instanceof Error ? err.message : String(err);
+    logTrpc({
+      procedure: path,
+      kind: type,
+      tenantId: ctx.tenantId ?? null,
+      userId: ctx.user?.id ?? null,
+      durationMs,
+      ok: false,
+      errorCode: code,
+      errorMessage: message,
+    });
+    if (shouldReportTrpcError(code)) {
+      captureException(err, {
+        tags: {
+          procedure: path,
+          kind: type,
+          tenantId: ctx.tenantId ?? undefined,
+          userId: ctx.user?.id ?? undefined,
+          errorCode: code,
+        },
+      });
+    }
+    throw err;
+  }
+});
+
+export const protectedProcedure = t.procedure.use(monitor).use(mapErrors).use(enforceAuth);
 
 /**
  * Sprint 15A — procedure exclusiva Platform Owner.
@@ -69,4 +128,4 @@ const enforcePlatform = t.middleware(({ ctx, next }) => {
   });
 });
 
-export const platformProcedure = t.procedure.use(mapErrors).use(enforcePlatform);
+export const platformProcedure = t.procedure.use(monitor).use(mapErrors).use(enforcePlatform);

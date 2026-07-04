@@ -1,5 +1,7 @@
 import { Queue, QueueEvents, Worker, type ConnectionOptions } from 'bullmq';
 import { env } from '@/lib/env';
+import { logWorkerJob } from '@/lib/monitoring/axiom';
+import { captureException } from '@/lib/monitoring/sentry';
 
 let _connection: ConnectionOptions | null = null;
 export function bullConnection(): ConnectionOptions {
@@ -28,14 +30,53 @@ export function makeQueue<T = unknown>(name: string): Queue<T> {
   return new Queue<T>(name, { connection: bullConnection() });
 }
 
+/**
+ * P-35 — Wrap todo handler de worker BullMQ com instrumentação
+ * Axiom (duração + ok/erro) + Sentry (exception capture). Se o payload
+ * tiver `tenantId`, ele vira tag na entry do Axiom pra facilitar
+ * filtro por cliente.
+ */
 export function makeWorker<T>(
   name: string,
   handler: (job: { data: T }) => Promise<unknown>,
 ): Worker<T> {
-  return new Worker<T>(name, async (job) => handler({ data: job.data }), {
-    connection: bullConnection(),
-    concurrency: 4,
-  });
+  return new Worker<T>(
+    name,
+    async (job) => {
+      const start = Date.now();
+      const payload = job.data as unknown as { tenantId?: string | null } | null;
+      const tenantId = payload && typeof payload === 'object' ? payload.tenantId ?? null : null;
+      try {
+        const result = await handler({ data: job.data });
+        logWorkerJob({
+          jobName: name,
+          jobId: job.id,
+          tenantId,
+          durationMs: Date.now() - start,
+          ok: true,
+        });
+        return result;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        captureException(err, {
+          tags: { category: 'worker', jobName: name, tenantId: tenantId ?? undefined },
+        });
+        logWorkerJob({
+          jobName: name,
+          jobId: job.id,
+          tenantId,
+          durationMs: Date.now() - start,
+          ok: false,
+          error: msg,
+        });
+        throw err;
+      }
+    },
+    {
+      connection: bullConnection(),
+      concurrency: 4,
+    },
+  );
 }
 
 export function makeEvents(name: string): QueueEvents {

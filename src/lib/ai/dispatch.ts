@@ -4,6 +4,7 @@ import { callAiFeature } from './feature-gate';
 import { callAiWithFallback } from './call';
 import type { LlmChatParams, LlmEmbedParams } from './adapters/types';
 import type { AIProvider } from '@prisma/client';
+import { addBreadcrumb } from '@/lib/monitoring/sentry';
 
 /**
  * Sprint 15F — despacho unificado que respeita a feature flag
@@ -41,6 +42,16 @@ export interface DispatchChatInput {
 export async function dispatchChat(
   input: DispatchChatInput,
 ): Promise<DispatchChatOutput> {
+  addBreadcrumb({
+    category: 'ai.dispatch',
+    message: input.featureCode,
+    level: 'info',
+    data: {
+      tenantId: input.tenantId,
+      multiEnabled: env.MULTI_AI_ENABLED,
+      model: input.chat.model,
+    },
+  });
   if (env.MULTI_AI_ENABLED) {
     const call = await callAiWithFallback(
       input.featureCode,

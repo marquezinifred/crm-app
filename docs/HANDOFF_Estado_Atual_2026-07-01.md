@@ -66,6 +66,7 @@ Consulte [`docs/Backlog_Pos_MVP.md`](Backlog_Pos_MVP.md) — vai até P-26. Esta
 | P-03 | Visual baseline | Depende de seed E2E |
 | P-05 | Lighthouse CI | Depende de STAGING_URL |
 | P-25 | Rollout Sprint 15F em produção | Fred decide quando |
+| P-36 | Workers BullMQ (Railway) | ⏸️ Artefatos prontos (Dockerfile.worker + railway.json + guia) — Fred autentica Railway + cola env vars (~30min-2h) |
 | **P-27** (implícito, mencionado no chip P-24) | Delete de `AiFeature` no marketplace | Nice-to-have |
 | ~~P-33~~ | ~~Vercel CLI outdated~~ | ✅ FECHADO 2026-07-04 |
 

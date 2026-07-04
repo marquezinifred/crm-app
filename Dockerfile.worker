@@ -1,0 +1,56 @@
+# =====================================================================
+# CRM Venzo — Workers BullMQ (P-36)
+# Imagem dedicada aos consumers das queues (alerts-scan, email-send,
+# import-run, ai-usage-rollup, health-score-rollup, inbound-lead-create).
+# Roda `tsx src/jobs/index.ts` — não faz `next build`.
+#
+# Base: Node 20 LTS Alpine (mesma do Dockerfile principal — mantém
+# Prisma binary target consistente entre imagens).
+# =====================================================================
+
+ARG NODE_VERSION=20-alpine
+
+# ---------- deps ----------
+FROM node:${NODE_VERSION} AS deps
+RUN apk add --no-cache libc6-compat openssl
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY prisma ./prisma
+# --ignore-scripts pra evitar postinstall (prisma generate) rodar aqui;
+# rodamos manualmente no stage build. Precisamos de devDeps (tsx, prisma).
+RUN npm ci --ignore-scripts
+
+# ---------- build ----------
+FROM node:${NODE_VERSION} AS build
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+# Gera o Prisma Client (binary + esquema) — indispensável em runtime.
+# NÃO rodamos `next build` — worker não usa Next runtime.
+RUN npx prisma generate
+
+# ---------- runtime ----------
+FROM node:${NODE_VERSION} AS runtime
+RUN apk add --no-cache libc6-compat openssl tini
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Usuário não-root pra runtime
+RUN addgroup --system --gid 1001 nodejs \
+  && adduser --system --uid 1001 worker
+
+COPY --from=build --chown=worker:nodejs /app/node_modules ./node_modules
+COPY --from=build --chown=worker:nodejs /app/prisma ./prisma
+COPY --from=build --chown=worker:nodejs /app/src ./src
+COPY --from=build --chown=worker:nodejs /app/tsconfig.json ./
+COPY --from=build --chown=worker:nodejs /app/package.json ./
+COPY --from=build --chown=worker:nodejs /app/package-lock.json ./
+
+USER worker
+
+# tini = init leve; garante SIGTERM/SIGINT chegando ao Node
+# (evita zumbi ao rodar em plataforma que faz stop/restart frequente).
+# `npx tsx` em vez de instalar tsx global — usa o binário já em node_modules.
+ENTRYPOINT ["/sbin/tini", "--"]
+CMD ["npx", "tsx", "src/jobs/index.ts"]

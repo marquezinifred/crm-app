@@ -760,6 +760,22 @@ avaliar migração pra QStash como decisão de Sprint 16.
 
 **Esforço:** ~2h pra subir worker no Railway.
 
+**Status (2026-07-04):** ⏸️ Artefatos prontos, aguardando execução
+manual pelo Fred (autenticar Railway CLI + criar projeto):
+- `Dockerfile.worker` na raiz — multi-stage Node 20 Alpine, `tini`
+  como init, roda `npx tsx src/jobs/index.ts`
+- `railway.json` na raiz — aponta pro Dockerfile.worker com
+  `restartPolicyType: ON_FAILURE` (max 10 retries)
+- `docs/DEPLOY_Railway_Worker.md` — guia passo-a-passo (~150 linhas):
+  criar projeto → colar env vars do Vercel → validação end-to-end
+  em 3 cenários (inbound-lead-create, cron diário, import CSV) →
+  rollback + manutenção
+
+Worker entry (`src/jobs/index.ts`) já tinha SIGTERM/SIGINT handler
+com `Promise.all([...].close())` desde Sprint 15D — não precisou
+ajuste. Estimativa Fred: 30min-2h de execução manual (autenticar
+Railway + colar ~10 env vars + validar).
+
 ### ~~P-22. Convite de usuário sem indicação do tenant de destino~~ ✅ FECHADO
 **Resolvido em 2026-06-30 pelo commit `a1affec`.** Novo router
 `src/server/trpc/routers/tenants.ts` com procedure `current`

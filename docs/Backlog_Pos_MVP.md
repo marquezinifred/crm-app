@@ -692,24 +692,18 @@ recursos agentic + performance).
 
 **Esforço:** ~30s.
 
-### P-34. Clerk dev instance atrasa propagação de public_metadata
-**Severidade:** Baixa (documental — não é bug do app). Quando o
-webhook Clerk atualiza `user.public_metadata.tenantId` no dev
-instance, propagação leva ~30s pra chegar no session token de
-sessões ativas.
+### ~~P-34. Clerk dev instance atrasa propagação de public_metadata~~ ✅ FECHADO
+**Resolvido em 2026-07-04 (documental).** Criado
+[`docs/Runbook_Staging.md`](Runbook_Staging.md) novo com seção
+"Cai em /onboarding após primeiro login" documentando o delay
+de ~30s do Clerk dev instance e a mitigação (aguardar / sign
+out + sign in). Seção "Troubleshooting comum" adicionada em
+[`DEPLOY_Vercel_Guide.md`](DEPLOY_Vercel_Guide.md) espelha o
+sintoma pro guia técnico.
 
-**Sintoma:** tester logado imediatamente após ser convidado pode
-ver /dashboard "sem tenant" por alguns segundos antes de redirect
-correto.
-
-**Mitigação:** documentar no roteiro do PO — "se cair em
-/onboarding ou sem tenant, aguarde 30s e sign out+sign in".
-
-**Não fazer:** migrar pra Clerk production instance — Sprint 16
-já prevê isso como parte de hardening. Dev instance suficiente
-pra teste.
-
-**Esforço:** ~15min de doc (README ou runbook staging).
+Sprint 16 mantém prevista a migração pra Clerk production
+instance como parte de hardening; enquanto isso, dev instance
+segue suficiente pro roteiro do PO.
 
 ### P-35. 📊 Sentry + Axiom sem wiring (débito Sprint 0)
 **Severidade:** Média. Env vars existem mas SDK não foi

@@ -66,6 +66,11 @@ Consulte [`docs/Backlog_Pos_MVP.md`](Backlog_Pos_MVP.md) — vai até P-26. Esta
 | P-25 | Rollout Sprint 15F em produção | Fred decide quando |
 | **P-27** (implícito, mencionado no chip P-24) | Delete de `AiFeature` no marketplace | Nice-to-have |
 
+**Fechados após snapshot (2026-07-04):**
+| ID | Item | Como |
+|---|---|---|
+| ✅ P-34 | Clerk dev instance atrasa propagação de public_metadata | Documental — [`Runbook_Staging.md`](Runbook_Staging.md) novo + seção Troubleshooting em [`DEPLOY_Vercel_Guide.md`](DEPLOY_Vercel_Guide.md) |
+
 **Sprints planejados (não iniciados):**
 - Nenhum — Sprint 15E é o último da série. Roadmap Sprints 16+ está em `docs/Backlog_Pos_MVP.md`.
 

@@ -850,20 +850,59 @@ log em success/failure.
 
 **Esforço:** ~2h. Não bloqueia — candidato Sprint 16.
 
-### P-39. Fixture Clerk mock para QA/dev local
-**Severidade:** Média (bloqueia Playwright em worktrees). Descoberto
-por QA automation em 2026-07-04.
+### ~~P-39. Fixture Clerk mock para QA/dev local~~ ✅ FECHADO
+**Resolvido em 2026-07-04** (docs-only, sem código de app).
 
-Sem `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` real (só dummy), Clerk rejeita
-com "Publishable key not valid" e `next dev` fica inutilizável pra
-smoke/Playwright em worktrees isoladas. Bypass `NODE_ENV=test` em
-`/api/e2e/login` já existe (Sprint 11) mas não cobre sign-in real.
+Investigação da fonte do `@clerk/shared/dist/keys.js` mostrou que
+`isPublishableKey` valida só (1) prefixo `pk_test_`/`pk_live_` e (2)
+que o segmento base64-decoded termina em `$` — sem checagem de rede
+na inicialização. `parsePublishableKey` decoda a mesma coisa e
+extrai o `frontendApi` sem contactar o Clerk. A rejeição
+"Publishable key not valid" só aparece quando a chave falha esses
+2 checks.
 
-**Escopo:** documentar em `.env.example` uma dummy publishable key
-válida base64-decoded (algo tipo `pk_test_...` gerado por Clerk pra
-sandbox) — se Clerk oferece, ou setup de mock dedicado.
+**Fix aplicado:** substituídos os placeholders `pk_test_xxxx...` /
+`sk_test_xxxx...` em [.env.example](../.env.example#L21) pela dupla:
+- `pk_test_ZmFrZS5jbGVyay5hY2NvdW50cy5kZXYk` (base64 decoda para
+  `fake.clerk.accounts.dev$` — passa `isPublishableKey`)
+- `sk_test_dummy_do_not_use_in_prod` (Zod `min(1)` passa; SDK só
+  valida quando chama Clerk API, retornando `clerk_key_invalid`)
 
-**Esforço:** ~1h. Não bloqueia unit tests, só E2E Playwright.
+Comentário de 10 linhas acima das vars explica quando usar dummy
+(dev/QA local, worktree isolado, Playwright) vs quando exigir chaves
+reais (staging/prod). E direciona pro bypass `NODE_ENV=test` em
+[tests/e2e/fixtures/auth.ts](../tests/e2e/fixtures/auth.ts) pros E2E.
+
+**Verificação manual:**
+```
+$ cp .env.example .env.local
+$ ln -sf ../node_modules node_modules  # worktree resolve modules
+$ rm -rf .next && npm run dev
+> next dev
+  ▲ Next.js 14.2.35
+  - Environments: .env.local
+ ✓ Ready in 1228ms
+ HEAD / 200 in 3212ms
+ HEAD /sign-in 200 in 754ms
+```
+Sem "Publishable key not valid". Header `x-clerk-auth-reason:
+dev-browser-missing` confirma middleware Clerk rodando. Runtime
+warning `Missing CLERK_ENCRYPTION_KEY` aparece mas é sobre outra
+var (não relacionada à pub key) e não crasha.
+
+**Escopo NÃO tocado:** src/middleware.ts, ClerkProvider,
+`src/lib/env.ts` (Zod continua exigindo min(1)). Mock provider sob
+flag `NEXT_PUBLIC_CLERK_MOCK` não foi necessário — path (A) já
+resolve o caso de uso.
+
+**Débitos residuais identificados:**
+- `docs/Roteiro_QA_Homologacao_Staging.md` §0 baseline de testes
+  ainda diz "609 passing / 10 failed" — desatualizado (baseline
+  atual 715/168). P-41 fechou isso em CLAUDE.md e Metodologia mas
+  não no Roteiro. Sub-débito ~15min; não bloqueia P-39.
+- Runtime warning `CLERK_ENCRYPTION_KEY` aparece com dummies —
+  não crasha, só aviso do SDK. Se virar ruído, adicionar var
+  no `.env.example` ou suprimir. Não prioritário.
 
 ### P-40. Conflito .eslintrc.json em worktree
 **Severidade:** Baixa. Descoberto por QA automation em 2026-07-04.

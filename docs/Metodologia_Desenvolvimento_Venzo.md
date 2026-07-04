@@ -237,7 +237,7 @@ Touch targets ≥ 44×44px.
 - 168 skipped inclui ~166 estáticos (features/casos ainda não cobertos) + 2
   conditional (RBAC + tenant-isolation guardados por `DATABASE_URL_TEST`)
 - Type-check: zero
-- Lint: zero (na paterna; worktree pode falhar por [P-40](Backlog_Pos_MVP.md))
+- Lint: zero (paterna e worktrees, pós-P-40)
 
 **Novo chip não pode piorar baseline.** Se piorar, chip volta pra worktree
 com plano de correção do QA automation.

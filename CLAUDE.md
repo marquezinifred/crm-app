@@ -1297,6 +1297,21 @@ foram fechados na Sprint 11.
   ad-hoc
 
 **Débitos zerados em 2026-07-04:**
+- P-40 Conflito `.eslintrc.json` em worktree — fix defensivo
+  adicionando `"root": true` no topo de `.eslintrc.json` do repo.
+  ESLint para de subir a árvore de diretórios procurando eslintrc
+  parent — qualquer config em pasta acima (existente ou futura) é
+  ignorada. Investigação confirmou que hoje não existe
+  `.eslintrc.json` em `/Users/fredmarqueziniyahoo.com.br/Claude/`;
+  o conflito reportado em 2026-07-04 provavelmente foi transitório,
+  mas `root: true` é boa prática de qualquer forma pra configs raiz.
+  Validação: `npm run lint` zero na paterna + `npm run lint` zero
+  em worktree efêmera criada de HEAD com node_modules symlinkado.
+  Baseline testes preservado (709 passing + 6 falhas pré-existentes
+  em communication-summary-errors por env vars + 168 skipped — as
+  falhas reproduzem na paterna antes e depois do fix). Type-check
+  zero. QA automation exception aplicada (config-only sem impacto
+  runtime; validação inclui npm test + lint em worktree efêmera)
 - P-37 Roteiro de QA fragmentado — [`docs/Roteiro_QA_Homologacao_Staging.md`](docs/Roteiro_QA_Homologacao_Staging.md)
   novo consolida cenários de homologação staging que estavam
   espalhados entre chat + `Backlog_Pos_MVP.md` + `HANDOFF_Estado_Atual_2026-07-01.md` +

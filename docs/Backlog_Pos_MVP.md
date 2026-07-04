@@ -806,6 +806,90 @@ com `Promise.all([...].close())` desde Sprint 15D — não precisou
 ajuste. Estimativa Fred: 30min-2h de execução manual (autenticar
 Railway + colar ~10 env vars + validar).
 
+### P-37. Cobertura hooks P-35 nos services (dispatch + ai-usage)
+**Severidade:** Média. Descoberto por QA automation em 2026-07-04.
+`src/lib/ai/dispatch.ts` = **21%** e `src/server/services/ai-usage.service.ts`
+= **10%** de cobertura statements. P-35 adicionou hooks (logAiUsage
+→ Axiom, breadcrumb Sentry) mas testes cobrem só wrappers puros de
+`src/lib/monitoring/*` (82-90% ok). Cobertura baixa era pré-existente
+(depende de Redis/BullMQ/Anthropic real); P-35 não piorou, só expôs
+o gap.
+
+**Escopo:**
+- Testes puros de `logAiUsage()` verificando `provider`,
+  `used_fallback`, custo em BRL
+- Teste de `audit()` breadcrumb Sentry com/sem `tenantIdOverride`
+- Alvo: dispatch.ts → 60%+, ai-usage.service.ts → 60%+
+
+**Esforço:** ~4h. Não bloqueia — candidato Sprint 16.
+
+### P-38. Cobertura worker duration em queues.ts
+**Severidade:** Média. Descoberto por QA automation em 2026-07-04.
+`src/jobs/queues.ts` = **0%** cobertura. P-35 tocou pra adicionar
+Sentry span + Axiom log em success/failure de worker, mas nenhum
+teste executa `makeWorker()`.
+
+**Escopo:** teste puro do wrapper capturando Sentry span + Axiom
+log em success/failure.
+
+**Esforço:** ~2h. Não bloqueia — candidato Sprint 16.
+
+### P-39. Fixture Clerk mock para QA/dev local
+**Severidade:** Média (bloqueia Playwright em worktrees). Descoberto
+por QA automation em 2026-07-04.
+
+Sem `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` real (só dummy), Clerk rejeita
+com "Publishable key not valid" e `next dev` fica inutilizável pra
+smoke/Playwright em worktrees isoladas. Bypass `NODE_ENV=test` em
+`/api/e2e/login` já existe (Sprint 11) mas não cobre sign-in real.
+
+**Escopo:** documentar em `.env.example` uma dummy publishable key
+válida base64-decoded (algo tipo `pk_test_...` gerado por Clerk pra
+sandbox) — se Clerk oferece, ou setup de mock dedicado.
+
+**Esforço:** ~1h. Não bloqueia unit tests, só E2E Playwright.
+
+### P-40. Conflito .eslintrc.json em worktree
+**Severidade:** Baixa. Descoberto por QA automation em 2026-07-04.
+`npm run lint` em worktree quebra com `Plugin "@next/next" was
+conflicted` porque `.eslintrc.json` na raiz `crm-app/` (fora da
+worktree) conflita com o do repo. Não é regressão de P-35 — problema
+ambiental do setup de worktrees.
+
+**Escopo:** renomear parent `.eslintrc.json` pra `.eslintrc.local.json`
+OU ajustar worktree pra `--no-eslintrc` explícito. Investigar por
+que parent tem plugin duplicado (talvez outro projeto Next.js na
+mesma pasta pai).
+
+**Esforço:** ~30min. Não bloqueia — lint funciona na paterna.
+
+### P-41. Baseline de testes desatualizado no CLAUDE.md
+**Severidade:** Baixa (só documentação). Descoberto por QA automation
+em 2026-07-04.
+
+CLAUDE.md cita "576 passing / ~10 pré-existentes / 2 skipped" em
+várias seções, mas estado real com env dummy é **715/883 passing /
+168 skipped**. As "10 falhas pré-existentes" eram env vars ausentes
+(11 test files falhando quando sem env, não 10 tests individuais).
+
+**Escopo:** atualizar `CLAUDE.md` §Sprint atual + memory
+`crm-app-setup-state.md` com baseline correto (715 passing / 168
+skipped conforme QA report 2026-07-04). Mencionar que 168 skipped
+inclui ~166 estáticos + 2 conditional (RBAC/tenant-isolation guardados
+por `DATABASE_URL_TEST`).
+
+**Esforço:** ~15min. Fica pro próximo chip que atualizar CLAUDE.md
+naturalmente.
+
+---
+
+## 🎯 QA Automation report — main @ a4726fa
+
+
+com `Promise.all([...].close())` desde Sprint 15D — não precisou
+ajuste. Estimativa Fred: 30min-2h de execução manual (autenticar
+Railway + colar ~10 env vars + validar).
+
 ### ~~P-37. Roteiro de QA fragmentado entre chat/docs~~ ✅ FECHADO
 **Resolvido em 2026-07-04.** Cenários de homologação estavam
 espalhados entre chat (task #22/#23 do HANDOFF), `Backlog_Pos_MVP.md`,

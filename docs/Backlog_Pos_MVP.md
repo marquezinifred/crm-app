@@ -665,6 +665,104 @@ notifica o vendedor. Precisamos:
 atrasar. Baixa prioridade porque o vendedor vê o novo card no
 pipeline mesmo sem push.
 
+### P-32. 🔒 Rotacionar senha do Neon staging (compartilhada no chat)
+**Severidade:** 🔴 Crítica (segurança). Identificado no deploy
+Vercel 2026-07-XX. Durante configuração das env vars, a connection
+string do Neon staging passou pelo chat — a senha embutida deve
+ser considerada comprometida.
+
+**Ação imediata:**
+1. Neon dashboard → project → Roles → resetar senha do role
+2. Atualizar `DATABASE_URL` no Vercel (`vercel env rm DATABASE_URL production`
+   + add com nova string) e no `.env.local` local
+3. Redeploy: `vercel --prod` (pega env var nova)
+4. Confirmar app volta a subir; se der 500, checar log Vercel
+
+**Bloqueia:** nada (staging ainda acessível), mas manter connection
+comprometida é risco de exfiltração dos dados de teste (users,
+tenants, opps de exemplo).
+
+**Esforço:** ~10min. **Fazer HOJE.**
+
+### P-33. Vercel CLI outdated (54.18.7 → 54.20.1)
+**Severidade:** Baixa. Não bloqueia deploy, só otimiza (novos
+recursos agentic + performance).
+
+**Ação:** `npm i -g vercel@latest` (ou `pnpm add -g vercel@latest`).
+
+**Esforço:** ~30s.
+
+### P-34. Clerk dev instance atrasa propagação de public_metadata
+**Severidade:** Baixa (documental — não é bug do app). Quando o
+webhook Clerk atualiza `user.public_metadata.tenantId` no dev
+instance, propagação leva ~30s pra chegar no session token de
+sessões ativas.
+
+**Sintoma:** tester logado imediatamente após ser convidado pode
+ver /dashboard "sem tenant" por alguns segundos antes de redirect
+correto.
+
+**Mitigação:** documentar no roteiro do PO — "se cair em
+/onboarding ou sem tenant, aguarde 30s e sign out+sign in".
+
+**Não fazer:** migrar pra Clerk production instance — Sprint 16
+já prevê isso como parte de hardening. Dev instance suficiente
+pra teste.
+
+**Esforço:** ~15min de doc (README ou runbook staging).
+
+### P-35. 📊 Sentry + Axiom sem wiring (débito Sprint 0)
+**Severidade:** Média. Env vars existem mas SDK não foi
+inicializado nem os workers escrevem logs estruturados.
+
+**Impacto atual:** logs de produção ficam só no Vercel dashboard
+(rotação curta, não pesquisável, sem alertas). Erros silenciosos
+não geram notificação.
+
+**Escopo do wiring (Sprint 16):**
+- `@sentry/nextjs` init em `src/sentry.client.config.ts` e
+  `src/sentry.server.config.ts`
+- Sourcemap upload no build (Sentry integration Vercel)
+- Breadcrumbs em `audit()`, `dispatchChat`, error boundaries
+- Axiom via `@axiom-monitor/nextjs` ou dataset direto — logs de
+  workers BullMQ + latência tRPC + custo IA por tenant
+
+**Esforço:** ~1-2 dias. Parte do Sprint 16 (Hardening produção).
+
+### P-36. ⏰ Workers BullMQ não estão rodando
+**Severidade:** 🔴 Alta (features degradadas silenciosamente).
+Redis conectado (Upstash), queues criadas — mas nenhum processo
+consumindo. Vercel serverless não sustenta long-running workers.
+
+**Features impactadas:**
+- `alerts-scan` (07:00 BRT) — alertas diários de relacionamento
+  e pipeline não disparam
+- `ai-usage-rollup` (00:30 BRT) — agregação diária pra `/platform/ai-ops`
+  não roda; dashboard cross-tenant fica desatualizado
+- `health-score-rollup` (02:00 BRT) — snapshots `/platform/health`
+  não atualizam; buckets RED/YELLOW/GREEN congelam
+- `email-send` — reação em fila mas nenhum destinatário
+  recebe. Impacta convites Clerk (redundante) e alertas
+- `import-run` — importações CSV ficam pending pra sempre
+- `inbound-lead-create` — leads inbound acumulam na queue,
+  nunca viram opportunities
+
+**Opções de fix:**
+1. **Worker separado no Railway/Render** (recomendado, ~R$50/mês)
+   — processo Node.js dedicado rodando `npm run worker`. Docker
+   image pronta; só configurar env vars (mesmo Neon + Redis do
+   Vercel).
+2. **Vercel Cron Jobs pra cada worker** — troca BullMQ por
+   handlers HTTP disparados por cron. Requer refactor pesado
+   (~5 dias). Perde durabilidade da queue (retry, backoff).
+3. **Upstash QStash** — plataforma de queue serverless da Upstash
+   com handlers HTTP. Migração ~2 dias.
+
+**Recomendação:** Opção 1 no curto prazo (staging pra PO) e
+avaliar migração pra QStash como decisão de Sprint 16.
+
+**Esforço:** ~2h pra subir worker no Railway.
+
 ### ~~P-22. Convite de usuário sem indicação do tenant de destino~~ ✅ FECHADO
 **Resolvido em 2026-06-30 pelo commit `a1affec`.** Novo router
 `src/server/trpc/routers/tenants.ts` com procedure `current`

@@ -58,6 +58,8 @@ Consulte [`docs/Backlog_Pos_MVP.md`](Backlog_Pos_MVP.md) — vai até P-26. Esta
 
 **Fechados nesta sessão (20+):** P-02, P-04, P-06, P-07, P-08, P-09, P-10, P-11, P-12, P-13, P-14, P-15, P-16, P-17, P-19, P-20, P-21, P-22, P-23 (+ refino), P-24, P-26.
 
+**Fechados após handoff:** P-33 (Vercel CLI 54.18.7 → 54.20.1, 2026-07-04).
+
 **Abertos:**
 | ID | Item | Bloqueador |
 |---|---|---|
@@ -65,6 +67,7 @@ Consulte [`docs/Backlog_Pos_MVP.md`](Backlog_Pos_MVP.md) — vai até P-26. Esta
 | P-05 | Lighthouse CI | Depende de STAGING_URL |
 | P-25 | Rollout Sprint 15F em produção | Fred decide quando |
 | **P-27** (implícito, mencionado no chip P-24) | Delete de `AiFeature` no marketplace | Nice-to-have |
+| ~~P-33~~ | ~~Vercel CLI outdated~~ | ✅ FECHADO 2026-07-04 |
 
 **Sprints planejados (não iniciados):**
 - Nenhum — Sprint 15E é o último da série. Roadmap Sprints 16+ está em `docs/Backlog_Pos_MVP.md`.

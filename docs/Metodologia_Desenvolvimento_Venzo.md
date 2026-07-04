@@ -62,6 +62,7 @@ Sessão paterna faz merge --no-ff na branch main (nunca push)
 Validação local: npx tsc --noEmit && npm run lint
    ↓
 Spawn chip QA Automation — skill anthropic-skills:qa-automation
+(OBRIGATÓRIO — não opcional. Comportamento default da sessão paterna.)
    ↓
 Consumir plano de correção do QA:
    • Zero falhas → task fecha
@@ -364,9 +365,59 @@ mesmo chip — vira PR bagunçado, conflito de merge complicado, rollback difíc
 ### 9.3. Chips paralelos ok se áreas disjuntas
 Até 5-6 chips simultâneos toleráveis. Coordenar via git pull antes de mergir.
 
-### 9.4. Após merge → QA automation
+### 9.4. Após merge → QA automation (OBRIGATÓRIO)
 Regra permanente 2026-07-04: **sempre spawnar chip QA automation após mergir
-chip com código de app**. Exceção: chips puramente docs/tooling/infra.
+chip com código de app**. É comportamento default da sessão paterna, não
+opcional — não requer confirmação do Fred, é parte do fluxo canônico §2.
+
+**Exceções raras (justificar por escrito):**
+- Docs-only: sem código app, nada a testar
+- Tooling/infra sem impacto runtime: `.gitignore`, `Dockerfile.worker`, etc
+- Config puramente declarativa: env.example update sem mudança de código
+
+**Regra prática:** se ficar em dúvida se pula ou não → **NÃO pula, spawn o QA**.
+Custo do chip QA (~20-40min local) < custo de deixar regressão passar.
+
+### 9.5. Prompt canônico do chip QA (template)
+
+Personalize apenas os 3 blocos marcados `<...>`; o resto fica fixo:
+
+```
+Execute a skill anthropic-skills:qa-automation contra o estado atual do main (@<commit>).
+
+Contexto — últimos merges relevantes:
+<listar 3-5 commits recentes com descrição curta>
+
+Foco crítico: <arquivo(s) tocados pelo chip que acabou de mergir>
+
+Fases obrigatórias:
+1. Baseline pré (checkout do commit ANTES do último merge de código) — capturar counts npm test / tsc / lint
+2. Baseline pós (main atual) — mesmos comandos
+3. Diff pre vs post
+4. Playwright se conseguir subir dev server
+5. Cobertura das áreas tocadas (--coverage.include específico)
+6. Análise de cada regressão com arquivo:linha + causa raiz + fix sugerido
+
+Formato de entrega:
+# QA Automation Report — main @ <commit>
+## 1. Baseline (pré/pós/diff)
+## 2. Type-check
+## 3. Lint
+## 4. Playwright
+## 5. Cobertura das áreas tocadas
+## 6. Regressões críticas (teste | file:line | erro | causa | fix | prioridade)
+## 7. Débitos residuais candidatos P-XX
+## 8. Recomendação final (OK seguir OU STOP spawn chip de fix)
+
+Regras:
+- Reporte é o único artefato — nenhum commit
+- git só read-only (checkout/log/diff/status)
+- Números exatos, sem arredondar
+- Se algo travar (env var, porta, cred), documenta como P-XX candidato
+- NÃO corrigir bugs — fixes vêm em chip separado
+```
+
+Task list mantém 1 task ativa por QA (padrão: "Aguardar QA automation pós-<X>").
 
 Prompt padrão pro chip QA:
 ```

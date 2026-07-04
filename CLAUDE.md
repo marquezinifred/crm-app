@@ -1276,6 +1276,31 @@ foram fechados na Sprint 11.
   `/contacts`, `/imports`, `/more`, `/reports`) ainda têm `<h1>`
   ad-hoc
 
+**Débitos zerados em 2026-07-04:**
+- P-37 Roteiro de QA fragmentado — [`docs/Roteiro_QA_Homologacao_Staging.md`](docs/Roteiro_QA_Homologacao_Staging.md)
+  novo consolida cenários de homologação staging que estavam
+  espalhados entre chat + `Backlog_Pos_MVP.md` + `HANDOFF_Estado_Atual_2026-07-01.md` +
+  `Runbook_Staging.md` + `DEPLOY_Vercel_Guide.md` + `DEPLOY_Railway_Worker.md`.
+  Checklist executável em 7 seções (§0 pré-deploy bloqueadores · §1
+  smoke 5min · §2 funcional ~1h com blocos por feature · §3 segurança
+  · §4 degradado · §5 automatizado · §6 rollback · §7 sign-off PO) +
+  3 anexos (env vars por ambiente, endpoints com rate limit,
+  referências rápidas). Cada checkbox tem passo + critério pass/fail
+  explícito; comandos curl/npm executáveis onde aplicável. Cobre
+  Pipeline 7 estágios, `/admin/ai` 4 Cards (P-23), drilldown por
+  tenant (P-06), Inbound Marketing (Sprint 15D), RBAC Granular
+  (Sprint 15E) com guard anti-escalada, Command Palette ⌘K (P-16),
+  multi-tenancy cross-tenant, vazamento de chave IA, audit_logs em
+  mutations. 4 blocos com variações completas preenchidas (§2.3.a
+  8 variações /admin/ai · §2.3.b 6 drilldown P-06 · §2.4 8 Inbound
+  Sprint 15D · §2.6 9 Command Palette), extraídas do código real
+  (admin/ai/page.tsx, admin-alerts.ts, inbound-parser.service.ts,
+  CommandPalette.tsx). Zero placeholder residual — 691 linhas total.
+  Manutenção: quando cenário virar release-blocker recorrente,
+  promover pra §3; quando cenário virar automatizado, mover pra §5.
+  Backlog atualizado (P-37 ✅) + HANDOFF §7 referências ganha entrada
+  nova
+
 **Débitos zerados em 2026-07-01:**
 - P-26 PageHeader em rotas fora de `/admin` e `/platform` — refactor
   mecânico substituindo `<h1>` + descrição ad-hoc por

@@ -806,6 +806,51 @@ com `Promise.all([...].close())` desde Sprint 15D — não precisou
 ajuste. Estimativa Fred: 30min-2h de execução manual (autenticar
 Railway + colar ~10 env vars + validar).
 
+### ~~P-37. Roteiro de QA fragmentado entre chat/docs~~ ✅ FECHADO
+**Resolvido em 2026-07-04.** Cenários de homologação estavam
+espalhados entre chat (task #22/#23 do HANDOFF), `Backlog_Pos_MVP.md`,
+`HANDOFF_Estado_Atual_2026-07-01.md`, `Runbook_Staging.md`,
+`DEPLOY_Vercel_Guide.md` e `DEPLOY_Railway_Worker.md`. PO tinha que
+juntar as fontes na mão a cada release. Fix documental:
+
+[`docs/Roteiro_QA_Homologacao_Staging.md`](Roteiro_QA_Homologacao_Staging.md)
+novo — checklist único e executável estruturado em 7 seções (§0
+pré-deploy bloqueadores · §1 smoke 5min · §2 funcional ~1h · §3
+segurança · §4 degradado · §5 automatizado (referência) · §6
+rollback · §7 sign-off) + 3 anexos (env vars por ambiente, endpoints
+com rate limit, referências rápidas). Cada checkbox tem passo +
+critério pass/fail explícito. Comandos executáveis onde faz sentido
+(curl, npm test, prisma migrate status). Cenários do Sprint 15D
+inbound, RBAC granular (Sprint 15E), IA multi-provider (P-23),
+Command Palette (P-16), Pipeline 7 estágios, drilldown por tenant
+(P-06), segurança (multi-tenancy cross-tenant, chave IA vazamento,
+audit_logs, anti-escalada RBAC) cobertos com pass/fail explícito.
+
+**Variações completas** — 4 blocos preenchidos (§2.3.a /admin/ai 8
+variações · §2.3.b drilldown P-06 6 variações · §2.4 Inbound Sprint
+15D 8 variações · §2.6 Command Palette 9 variações). Extraído
+diretamente do código real:
+- `src/app/admin/ai/page.tsx` + `src/lib/ai/admin-alerts.ts`
+  (Card A/B/C/D + 4 tipos de alerta CIRCUIT_OPEN/MISSING_KEY/
+  FALLBACK_FREQUENT/COST_ABOVE_THRESHOLD).
+- `src/app/platform/tenants/[id]/ai/page.tsx` +
+  `.../features/page.tsx` (5 seções tela 1 + tela 2 features).
+- `src/server/services/inbound-parser.service.ts` (5 matchers:
+  webhook-custom-json 0.99 / typeform-v1 0.95 / rd-station-v1 0.9 /
+  html-table 0.9 / plain-key-value 0.85) + `.../inbound-lead-creator.
+  service.ts` (`MIN_CONFIDENCE=0.4`, 4 reasons de rejeição).
+- `src/components/search/CommandPalette.tsx` +
+  `src/server/trpc/routers/search.ts` (debounce 200ms, 4 buckets,
+  navegação teclado ↑/↓/Enter/ESC, RBAC gracioso).
+
+Total: 691 linhas. Cada variação: passo executável + pass/fail
+explícito + comando curl/SQL onde aplicável. Zero placeholder
+residual.
+
+Manutenção: quando cenário virar release-blocker recorrente, promover
+pra §3. Quando cenário virar teste automatizado, mover pra §5.
+Referenciado em CLAUDE.md changelog e HANDOFF §7.
+
 ### ~~P-22. Convite de usuário sem indicação do tenant de destino~~ ✅ FECHADO
 **Resolvido em 2026-06-30 pelo commit `a1affec`.** Novo router
 `src/server/trpc/routers/tenants.ts` com procedure `current`

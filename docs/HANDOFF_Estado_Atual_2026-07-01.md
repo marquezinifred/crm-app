@@ -150,8 +150,13 @@ npx prisma migrate deploy
 
 ## 7. Referências rápidas
 
+- **Roteiro homologação staging (novo):** [`Roteiro_QA_Homologacao_Staging.md`](Roteiro_QA_Homologacao_Staging.md) — checklist executável do PO/QA rodar após cada deploy (§0-§7 + anexos), consolida cenários que estavam fragmentados entre chat + backlog + runbook + deploy guides
+- **Runbook staging (troubleshooting):** [`Runbook_Staging.md`](Runbook_Staging.md) — sintomas conhecidos que **não são bug do app** (Clerk dev delay, workers desligados, etc.)
 - **Handoff técnico principal:** [`HANDOFF_Sprints_15B_a_15E.md`](HANDOFF_Sprints_15B_a_15E.md) — 431 linhas, cobre 15B → 15F + 15D + 15E + 20 débitos
-- **Backlog vivo:** [`Backlog_Pos_MVP.md`](Backlog_Pos_MVP.md) — P-01 a P-26 + Sprints 15D/E + roadmap
+- **Backlog vivo:** [`Backlog_Pos_MVP.md`](Backlog_Pos_MVP.md) — P-01 a P-37 + Sprints 15D/E + roadmap
+- **Automação QA Sprint 15E:** [`QA_Automation_Report_Sprint_15E.md`](QA_Automation_Report_Sprint_15E.md) — 17 arquivos cobrindo 26 ACs RBAC
+- **Deploy Vercel:** [`DEPLOY_Vercel_Guide.md`](DEPLOY_Vercel_Guide.md)
+- **Deploy Railway (worker):** [`DEPLOY_Railway_Worker.md`](DEPLOY_Railway_Worker.md)
 - **Spec 15E v3:** [`Sprint_15E_RBAC_Granular.md`](Sprint_15E_RBAC_Granular.md) — 1271 linhas
 - **Matriz permissions:** [`permission-matrix.md`](permission-matrix.md) — 65 × 7 células validadas
 - **Spec 15F v2:** [`Sprint_15F_IA_Multi_Provider.md`](Sprint_15F_IA_Multi_Provider.md)

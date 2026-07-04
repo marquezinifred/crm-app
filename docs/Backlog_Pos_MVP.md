@@ -865,19 +865,27 @@ sandbox) — se Clerk oferece, ou setup de mock dedicado.
 
 **Esforço:** ~1h. Não bloqueia unit tests, só E2E Playwright.
 
-### P-40. Conflito .eslintrc.json em worktree
-**Severidade:** Baixa. Descoberto por QA automation em 2026-07-04.
-`npm run lint` em worktree quebra com `Plugin "@next/next" was
-conflicted` porque `.eslintrc.json` na raiz `crm-app/` (fora da
-worktree) conflita com o do repo. Não é regressão de P-35 — problema
-ambiental do setup de worktrees.
+### ~~P-40. Conflito .eslintrc.json em worktree~~ ✅ FECHADO
+**Resolvido em 2026-07-04** (config-only). Fix defensivo:
+adicionado `"root": true` no topo de `.eslintrc.json` do repo. ESLint
+para de subir a árvore de diretórios procurando eslintrc — qualquer
+config em pasta parent (existente ou futura) é ignorada. Escolhida
+solução B em vez de renomear parent (que ficaria fora do controle
+do repo).
 
-**Escopo:** renomear parent `.eslintrc.json` pra `.eslintrc.local.json`
-OU ajustar worktree pra `--no-eslintrc` explícito. Investigar por
-que parent tem plugin duplicado (talvez outro projeto Next.js na
-mesma pasta pai).
+Investigação confirmou que hoje NÃO existe `.eslintrc.json` em
+`/Users/fredmarqueziniyahoo.com.br/Claude/` — o conflito reportado
+em 2026-07-04 provavelmente foi transitório (algum editor/tool
+gravando um eslintrc temporário). `root: true` é boa prática de
+qualquer forma pra configs raiz de projeto.
 
-**Esforço:** ~30min. Não bloqueia — lint funciona na paterna.
+Validação: `npm run lint` zero na paterna + `npm run lint` zero
+em worktree efêmera criada de HEAD com node_modules symlinkado.
+Baseline testes preservado (6 falhas pré-existentes em
+communication-summary-errors por env vars — reproduzem na paterna
+antes e depois do fix).
+
+QA automation exception aplicada (config-only sem impacto runtime).
 
 ### ~~P-41. Baseline de testes desatualizado no CLAUDE.md~~ ✅ FECHADO
 **Resolvido em 2026-07-04** (inline na paterna, docs-only). Baseline

@@ -324,3 +324,32 @@ vercel --prod
 - **Preview deployments por PR:** replicar env vars com escopo `preview`
   (script tem bloco 5 explicando). Recomendo criar 2º Neon branch
   chamado `preview` pra isolar de staging.
+
+---
+
+## Troubleshooting comum
+
+Sintomas conhecidos que aparecem em staging Vercel + Clerk dev + BullMQ
+desligado. Runbook enxuto pro PO/tester está em
+[`Runbook_Staging.md`](Runbook_Staging.md).
+
+- **"Tester logado sem tenant após convite"** — Clerk dev instance atrasa
+  propagação de `public_metadata` em ~30s. Aguarde ou faça sign out +
+  sign in. Sprint 16 vai migrar pra Clerk production.
+- **Lead inbound não aparece em `/inbox/prospects`** — workers BullMQ
+  desligados em staging (P-36). Queue enfileira mas nada consome. Fred
+  precisa rodar `npm run worker` manualmente ou subir worker separado
+  no Railway.
+- **Alertas diários (07:00 BRT) não chegam** — mesma raiz de P-36.
+  `alerts-scan` só roda se worker BullMQ estiver ativo.
+- **Erro `[tenant-isolation] X.update sem tenantId no payload`** — modelo
+  ainda não está no allowlist do backstop. Adicionar a
+  `ALLOW_MISSING_TENANT_ON_WRITE` em `src/server/db/client.ts` e
+  redeployar.
+- **"Unable to transform response from server" ao salvar form** — sessão
+  Clerk expirou. F5 na página; se persistir, sign out + sign in
+  (session-guard do P-13 recarrega automaticamente na maioria dos casos).
+- **Sign-in dá erro de origin/CORS** — domínio Vercel não foi adicionado
+  no Clerk dashboard (Etapa 6).
+- **Webhook Clerk 401** — `CLERK_WEBHOOK_SECRET` no Vercel diferente do
+  Signing secret atual no dashboard Clerk.

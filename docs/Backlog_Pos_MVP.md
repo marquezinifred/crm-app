@@ -665,24 +665,40 @@ notifica o vendedor. Precisamos:
 atrasar. Baixa prioridade porque o vendedor vê o novo card no
 pipeline mesmo sem push.
 
-### P-32. 🔒 Rotacionar senha do Neon staging (compartilhada no chat)
-**Severidade:** 🔴 Crítica (segurança). Identificado no deploy
-Vercel 2026-07-XX. Durante configuração das env vars, a connection
-string do Neon staging passou pelo chat — a senha embutida deve
-ser considerada comprometida.
+### ~~P-32. 🔒 Rotacionar senha do Neon staging (compartilhada no chat)~~ ✅ FECHADO 2026-07-04
 
-**Ação imediata:**
-1. Neon dashboard → project → Roles → resetar senha do role
-2. Atualizar `DATABASE_URL` no Vercel (`vercel env rm DATABASE_URL production`
-   + add com nova string) e no `.env.local` local
-3. Redeploy: `vercel --prod` (pega env var nova)
-4. Confirmar app volta a subir; se der 500, checar log Vercel
+**Resolvido em 2026-07-04.** Rotação executada (3 tentativas —
+duas primeiras vazaram novamente durante troubleshooting: awk
+com regex ambíguo imprimiu URL completa; usuário compartilhou
+senha antiga tentando debugar formato). Todas as senhas
+comprometidas foram queimadas antes do fechamento.
 
-**Bloqueia:** nada (staging ainda acessível), mas manter connection
-comprometida é risco de exfiltração dos dados de teste (users,
-tenants, opps de exemplo).
+**Ação executada:**
+1. ✅ Neon dashboard → Roles → reset password no `neondb_owner` (3x)
+2. ✅ `DATABASE_URL` atualizada no `.env.local` local (BBEdit save)
+3. ✅ `vercel env rm DATABASE_URL production` + `vercel env add DATABASE_URL production`
+4. ✅ `vercel --prod` redeploy sem erros
+5. ✅ Validação: `curl https://crm-app-pi-eight.vercel.app/api/v1/health`
+   retornou `{"status":"ok","checks":{"app":"ok","db":"ok","dbLatencyMs":2457}}`
+   — HTTP 200 confirma app + banco funcionando com credenciais novas
 
-**Esforço:** ~10min. **Fazer HOJE.**
+**Débitos adjacentes registrados como memory permanente:**
+- `feedback_never_parse_secrets.md` — nunca fazer awk/sed/regex em
+  linha com secret embutido; incidente 2026-07-04 vazou senha via
+  regex ambíguo. Rev 2 acrescentou proibição de `xxd`/`hexdump`
+  em linhas com secret.
+
+**Hardening pra próximo incidente (não bloqueia):**
+- Considerar migrar dev pra Neon branch dedicada com role isolado
+  (não compartilhar `neondb_owner` entre staging e production)
+- Registrar em runbook procedimento visual passo-a-passo do Neon UI
+  (screenshot dos botões Connect vs Reset — Fred perdeu tempo
+  procurando)
+
+**Tempo real:** ~1h (esperado ~10min). Overhead veio de 2 vazamentos
+adjacentes + copy/paste truncado no primeiro reset.
+
+**Esforço:** ✅ Concluído.
 
 ### P-33. Vercel CLI outdated (54.18.7 → 54.20.1) — ✅ FECHADO 2026-07-04
 **Severidade:** Baixa. Não bloqueia deploy, só otimiza (novos

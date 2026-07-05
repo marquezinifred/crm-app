@@ -13,6 +13,73 @@ Mantido em sincronia com `CLAUDE.md` e memory `MEMORY.md`.
 
 ## 🔥 Pendências de curto prazo (próximas 2 semanas)
 
+### P-42. 🔴 Backstop tenant-isolation quebra TODOS os `.update` de routers
+**Severidade:** 🔴 Alta (features quebradas em produção). Descoberto
+em uso real 2026-07-05 pelo Fred no Vercel prod
+(`crm-app-pi-eight.vercel.app/pipeline/<id>` estágio Lead → botão
+"Salvar alterações" → 500 Internal Server Error).
+
+**Anatomia:**
+- `src/server/db/client.ts:122-131` (backstop) lança `Error` cru
+  quando payload de `update` não tem `tenantId` no `data` e o
+  modelo não está em `ALLOW_MISSING_TENANT_ON_WRITE`
+- Só `User.update` e `Task.update` estão na allowlist
+- Todos os outros `.update` em routers passam `data: { ...data,
+  updatedBy: ctx.user.id }` **sem `tenantId`** (Zod schemas de
+  update também não incluem tenantId)
+- Backstop dispara `Error("[tenant-isolation] <Model>.update sem
+  tenantId no payload")` → tRPC vira 500 (Error cru, não TRPCError)
+
+**Modelos afetados** (grep confirmado em `src/server/trpc/routers/`):
+- `Opportunity.update` — opportunities.ts:202, inbound.ts:261,
+  partner-engagements.ts:113 (+ soft delete opp em partner-engagements.ts)
+- `Company.update` — companies.ts:106 (update), 128 (soft delete),
+  partners.ts:99 (partner config)
+- `Contact.update` — contacts.ts:107 (update), 129 (soft delete),
+  158 (approval status)
+- `Product.update` — products.ts:59 (update), 83 (soft delete)
+- `Proposal.update` — proposals.ts:103
+- `Approval.update` — proposals.ts (decide)
+- `PartnerEngagement.update` — partner-engagements.ts:113, 149
+- `InboundLeadRejected.update` — inbound.ts (discard)
+
+**Por que só apareceu agora:** Fred usou pela primeira vez o botão
+"Salvar alterações" do estágio Lead (meetingScheduledAt +
+meetingHappened) em produção. Todos os outros CRUDs que ele tocou
+(criar company/contact/product via modal) fizeram `create`, não
+`update`. `create` requer tenantId legitimamente. Assim que ele
+tentar EDITAR qualquer entidade via UI em prod, mesmo bug.
+
+**Fix arquitetural proposto** (não só workaround):
+- Backstop atual é over-engineered. Comentário dele mesmo reconhece
+  que "WHERE já injeta tenantId; data não pode mover row de tenant
+  por não conter tenantId (undefined ignora)"
+- Reformar backstop pra:
+  - `create`: exigir `tenantId` no data (mantido — não há WHERE)
+  - `update`/`upsert`: **só bloquear se `tenantId` presente E ≠
+    contexto** (defesa contra tentativa de mover row cross-tenant).
+    Ausente = OK (WHERE já protege)
+- Eliminar `ALLOW_MISSING_TENANT_ON_WRITE` (fica vazio) ou usar só
+  como safeguard secundário
+
+**Testes obrigatórios:**
+- Regressão: `tests/unit/tenant-backstop.test.ts` novo cobrindo
+  os 3 cenários (create sem tenantId → throws;
+  update sem tenantId → passa; update com tenantId ≠ ctx → throws)
+- Integration: `tests/integration/opportunities-update.test.ts`
+  chamando update via tRPC com meetingScheduledAt + meetingHappened
+  e confirmando resposta 200 (não 500)
+- Smoke UI: cenário no Roteiro §2 pra estágio Lead salvar meeting
+
+**Escopo:** ~3-4h. Escopo cirúrgico (client.ts + 1 teste unit + 1
+integration). Não toca nos 13 call sites de update (fica mais limpo).
+
+**Rollback:** trivial — reverter mudança em client.ts.
+
+**Bloqueia:** validação P-08 a P-12 (Task #22 Fred) porque qualquer
+edit vai falhar; rollout Sprint 15F (P-25) porque IA update em
+opportunities.
+
 ### ~~P-01. Fix `/companies` + `/contacts` CRUD 404~~ ✅ FECHADO
 **Resolvido em 2026-06-30 pelo commit `54dab90`.** Modal inline
 para criar/editar empresa e contato; DetailSheet via intercepting

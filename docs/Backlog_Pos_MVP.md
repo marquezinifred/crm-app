@@ -13,38 +13,60 @@ Mantido em sincronia com `CLAUDE.md` e memory `MEMORY.md`.
 
 ## 🔥 Pendências de curto prazo (próximas 2 semanas)
 
-### P-54. Botão "Salvar alterações" sem feedback visual (UX gap crítico)
-**Severidade:** Alta (UX). Descoberto em uso real 2026-07-05 pelo Fred:
-"não tem retorno de mensagem alguma na tela".
+### P-54. Botão Salvar sem feedback + edits não limpos + IA bloqueada indefinidamente
+**Severidade:** 🔴 Alta (UX crítico — bloqueia uso da IA + confunde
+usuário). Descoberto em uso real 2026-07-05 pelo Fred:
+- Bug 1: "não tem retorno de mensagem alguma na tela" ao salvar
+- Bug 2: "não consigo usar a IA sem ter salvo a reunião" mesmo tendo
+  salvo — 3 bugs relacionados no mesmo `onSuccess`
 
-Anatomia (`src/app/pipeline/[id]/page.tsx:23-34`):
+**Anatomia** (`src/app/pipeline/[id]/page.tsx:23-34`):
 - `update`, `advance`, `cancel` mutations só chamam
   `utils.opportunities.byId.invalidate` no `onSuccess`
-- **Sem `useToast`** — usuário clica Salvar, dados atualizam silenciosamente,
-  UI não mostra "Salvo!" nem confirmação
-- **Sem `onError`** — quando dá erro (foi o caso do 500 do P-42), só
-  aparece no console DevTools. Usuário fica sem sinal
-- Padrão já estabelecido (Sprint 14 `useToast` + P-21 `friendlyTrpcError`)
-  mas não foi aplicado aqui
+- **Sem `useToast`** — dados atualizam silenciosamente, UI não mostra "Salvo!"
+- **Sem `onError`** — erros só aparecem no console DevTools
+- **Sem `setEditStageFields({})` no onSuccess** — bug crítico que
+  trava a IA:
+  1. Usuário edita campo de estágio → `editStageFields` ganha chave
+     → prop `stageHasDirtyChanges=true` passa pro CommunicationIntake
+  2. Clica Salvar → mutation success → cache invalida → **mas
+     `editStageFields` continua com a chave**
+  3. Botão "Salvar alterações" continua visível
+     (`Object.keys.length > 0`)
+  4. `CommunicationIntake:73,90-91` bloqueia botão "Resumir com IA"
+     com mensagem "Salve a reunião antes de resumir com IA" —
+     indefinidamente, até Descartar ou F5
+- Padrão `useToast` + `friendlyTrpcError` (P-21) existe mas não foi
+  aplicado aqui
 
 **Fix escopo:**
-- `src/app/pipeline/[id]/page.tsx` — 3 mutations (update/advance/cancel)
-  ganham `onSuccess` com toast success + `onError` com toast error via
-  `friendlyTrpcError`
-- Verificar `src/app/pipeline/new/page.tsx` — mesmo pattern?
-- Auditar outros forms de pipeline: TasksSection, CommunicationIntake,
-  DocumentsSection — quais têm/não têm toast?
-- Listar débitos residuais se auditar tomar tempo demais
+- `src/app/pipeline/[id]/page.tsx` — 3 mutations ganham:
+  - `onSuccess: () => { utils.opportunities.byId.invalidate({...});
+    setEditStageFields({}); toast({ kind: 'success', title: 'Salvo!' }); }`
+  - `onError: (err) => toast({ kind: 'error', title: friendlyTrpcError(err) })`
+- Auditoria de outros forms de pipeline: TasksSection,
+  CommunicationIntake, DocumentsSection, ProposalsSection — quais
+  têm/não têm toast + limpeza de state?
+- Verificar `pipeline/new/page.tsx` — mesmo pattern faltando?
 
-**Regressão a caçar:** ProposalsSection já tem toast? (verificar)
-Sprint 15C aplicou toasts em `/companies`, `/contacts` mas talvez
-tenha pulado pipeline.
+**Regressão a caçar:**
+- CommunicationIntake bloqueio pode ficar over-conservador se limpar
+  edits parcialmente. Considerar: se depois de salvar o usuário
+  edita de novo, dirty volta corretamente
+- Toast pode conflitar com outros toasts em cadeia (`advance`
+  seguido de `update`)
 
-**Esforço:** ~2h (só pipeline/[id] + pipeline/new). +2h se auditoria
-completa de todas as seções. Bloqueia adoção real do CRM porque
-usuário nunca sabe se salvou.
+**Débito adjacente candidato P-57**: mesmo com fix, o design
+"bloquear IA por dirty em campos NÃO relacionados" é questionável
+— IA só consome texto do Receptor, não deveria bloquear por dirty
+em briefing/valor/datas. Decisão de produto. Não incluir no P-54.
 
-**Prioridade:** disparar após ciclo P-45+P-46+P-47 fechar.
+**Esforço:** ~2h (só pipeline/[id] + pipeline/new). +2h se
+auditoria completa de todas as seções.
+
+**Prioridade:** 🔴 disparar imediatamente após QA automation do
+bloco A+B+C fechar (código em `src/app/pipeline/[id]/page.tsx`
+não conflita com nenhum chip rodando).
 
 ### ~~P-51. Playwright `smoke.spec.ts` desatualizada (Sprint 14 copy)~~ ✅ FECHADO 2026-07-05
 Chip `claude/p51-smoke-copy` — fixture-only. 2 seletores em

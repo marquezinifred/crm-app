@@ -1318,6 +1318,54 @@ foram fechados na Sprint 11.
   ad-hoc
 
 **Débitos zerados em 2026-07-05:**
+- **P-54** Botão Salvar sem feedback + edits não limpos + IA bloqueada
+  indefinidamente — bug crítico de UX descoberto em prod pelo Fred:
+  ao salvar edits de estágio em `/pipeline/<id>`, tela ficava muda +
+  botão "Resumir com IA" travava com mensagem "Salve a reunião antes
+  de resumir com IA" mesmo depois de salvar. Fix cirúrgico em
+  `src/app/pipeline/[id]/page.tsx:22-51` (as 3 mutations
+  `update`/`advance`/`cancel`):
+  - `update.onSuccess`: `invalidate` + `setEditStageFields({})` +
+    `toast success "Alterações salvas."` — o clear do dirty state é o
+    fix crítico que desbloqueia `CommunicationIntake` (prop
+    `stageHasDirtyChanges` volta pra `false` porque
+    `Object.keys(editStageFields).length === 0`)
+  - `advance.onSuccess`: mesmo pattern com toast "Estágio avançado."
+  - `cancel.onSuccess`: mantido `invalidate + router.push('/pipeline')`
+    sem toast (redirect é o feedback)
+  - Todos os 3 têm `onError: toast error com friendlyTrpcError` (P-21
+    pattern — expande automaticamente `data.zodError.fieldErrors` e
+    `data.tenantIsolation` do P-46)
+  - Import novo: `useToast` de `@/components/ui/toast`. State
+    declarations (`showCancel`, `cancelForm`, `editStageFields`)
+    movidas pra cima das mutations pra `setEditStageFields` ficar em
+    escopo (rules-of-hooks preservado — ordem consistente entre
+    renders)
+  Auditoria dos outros forms de pipeline:
+  - `pipeline/new/page.tsx`: **OK** (toast success + `friendlyTrpcError`
+    inline)
+  - `TasksSection`: **OK** (toast success + `onError` com friendly)
+  - `CommunicationIntake` / `DocumentsSection` / `ProposalsSection`:
+    🟡 sem toast (feedback via state change). Registrado como **P-58**
+    — cosmético, não é o bug reportado. Fica pra chip futuro
+  Débitos residuais registrados:
+  - **P-57**: `stageHasDirtyChanges` bloqueia IA por dirty em campos
+    NÃO relacionados ao Receptor (briefing/valor/datas). Decisão de
+    produto — bloqueio defensivo vs liberar IA imediatamente.
+  - **P-58**: padronizar toast success em 3 subseções listadas acima
+  Testes: `tests/unit/pipeline-detail-page.test.tsx` novo com **7
+  casos** (update onSuccess dispara toast + limpa state, update onError
+  com friendly, click Salvar → dirty limpo → botão Salvar some, advance
+  onSuccess dispara toast + limpa state + invalidate, advance onError
+  com friendly, cancel onError com friendly, cancel onSuccess redireciona
+  sem toast). Padrão: mock `@/lib/trpc/client` capturando
+  `onSuccess/onError` das 3 mutations, `ToastProvider` real, dispara
+  handlers manualmente e verifica `[role="status"]/[role="alert"]` +
+  botões renderizados. Baseline: **723 passing (+7 novos) / 10
+  pré-existentes por env vars em `field-encryption` (4) +
+  `communication-summary-errors` (6) — confirmado idênticas no HEAD
+  antes do fix via stash / 172 skipped**. Type-check zero. Lint zero.
+  Rollback trivial (reverter 1 arquivo). Zero mudança em backend
 - **P-51** Playwright `smoke.spec.ts` desatualizada (Sprint 14 copy) —
   2 asserts falhavam desde Sprint 14 (nunca eram rodados em CI por
   falta de env vars E2E). Fix cirúrgico: 2 edits em

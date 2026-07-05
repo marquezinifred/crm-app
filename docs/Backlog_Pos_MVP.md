@@ -85,7 +85,7 @@ verde em staging real.
 **Esforço:** ~3h (mock caminho B) OU ~30min (docs "requer staging").
 
 ### P-60. `communication-summary-errors.test.ts` 6 falhas — potencial regressão silenciosa
-**✅ FECHADO em 2026-07-05.** Commit `<pending>` na branch
+**✅ FECHADO em 2026-07-05.** Commit `4f44496` na branch
 `claude/p60-comm-summary-regression`.
 
 **Diagnóstico (bisect):** commit culpado `9aef608` (Sprint 15F,

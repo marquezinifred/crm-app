@@ -1445,6 +1445,49 @@ foram fechados na Sprint 11.
   Baseline canônico documentado em §Baseline atual acima. QA automation
   exception aplicada (config-only, sem código de app). Type-check zero.
   Lint zero
+- **QA automation pós-bloco A+B+C** — chip QA (worktree
+  `agitated-rosalind-5bf78c`) verificou main `@d86ad14` contra baseline
+  `@008f410`. Verdict: **OK seguir, zero regressão**. Baseline pós:
+  **764/6/172** (bate 1:1 com modelo: 741 dummies pós-P-47 + 8 P-45 + 15
+  P-46). Reconciliação do +71: +23 fresh + 48 resurrected suites que
+  falhavam por env vars não carregadas (P-47 corrigiu import-time
+  failures em ai-pricing, document-compare, documents-upload-router,
+  inbound-parser, inbound-router-shape, rate-limiter, summary-parser,
+  field-encryption). Coverage `error-format.ts` = 100% linhas / 88.88%
+  branches; `tenant-isolation-error.ts` = 100% linhas / 93.33% branches;
+  `client.ts` `assertTenantWritePayload` 93.33% branches; extension
+  Prisma runtime coberto por integration `opportunities-update.test.ts`
+  gated por `DATABASE_URL_TEST`. Callers de `.createMany` (companies.ts:75,
+  contacts.ts:76) confirmam compat com novo branch iterativo P-45.
+  Grep de `throw new Error()` em src/server/{trpc,services} = 13
+  ocorrências, nenhuma com prefixo `[tenant-isolation]` — mapErrors do
+  P-46 não intercepta indevidamente. Playwright BLOCKED por infra
+  (Clerk dummy rejeita browser real com "Invalid host"), HTML SSR
+  confirma que fixes P-51/P-52 estão certos. Type-check zero, lint zero.
+  Débitos residuais registrados: **P-59** (Playwright infra Clerk
+  worktree), **P-60** (communication-summary-errors regressão silenciosa
+  — média severidade), **P-61** (trpc.ts 0% coverage estático apesar
+  de replay). Recomendação: **OK seguir**, sem chip de fix.
+- **P-54** Botão Salvar sem feedback + edits não limpos + IA bloqueada
+  — descoberto em uso real 2026-07-05 pelo Fred: "não tem retorno de
+  mensagem alguma na tela" + "não consigo usar a IA sem ter salvo a
+  reunião" mesmo tendo salvo. 3 bugs consolidados em 1 fix cirúrgico
+  em `src/app/pipeline/[id]/page.tsx:22-51` — as 3 mutations
+  `update`/`advance`/`cancel` agora seguem padrão canônico Sprint 14
+  (`useToast`) + P-21 (`friendlyTrpcError`) + P-46 (tenantIsolation
+  message): `onSuccess` invalida cache + `setEditStageFields({})` +
+  toast success; `onError` renderiza `friendlyTrpcError`. State
+  declarations movidas pra cima das mutations (rules-of-hooks
+  preservado). Auditoria dos outros forms confirmou `pipeline/new` e
+  `TasksSection` já seguem padrão; débito residual **P-58** registrado
+  pros 3 subforms remanescentes (CommunicationIntake, Documents,
+  Proposals). 7 testes novos em `tests/unit/pipeline-detail-page.test.tsx`
+  com mock de `trpc.opportunities` + `ToastProvider` real (padrão
+  admin-ai-page.test.tsx). Baseline: **723 passing (+7 novos)** /
+  10 pré-existentes por env vars / 172 skipped. Type-check zero,
+  lint zero. Rollback trivial. Débito adjacente **P-57** registrado
+  como decisão de produto (design "IA bloqueia por qualquer dirty"
+  do P-09 original é questionável mesmo após P-54 corrigir persistência)
 - **P-50** Campo "Valor estimado (R$)" sem máscara pt-BR — descoberto
   em uso real 2026-07-05 pelo Fred em prod. Input `type="number"` cru
   mostrava `289311` sem separador. Fix: `src/lib/utils/format.ts`

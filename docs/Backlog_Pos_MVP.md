@@ -13,6 +13,117 @@ Mantido em sincronia com `CLAUDE.md` e memory `MEMORY.md`.
 
 ## 🔥 Pendências de curto prazo (próximas 2 semanas)
 
+### P-56. `billing.status` bloqueia todo role não-ADMIN (falso 403 no AppShell)
+**Severidade:** Média (ruído no console + banner Past Due inutilizável
+para DIRETOR/GESTOR/ANALISTA/PARCEIRO). Descoberto em uso 2026-07-05
+pelo Fred logado como DIRETOR_COMERCIAL:
+`GET /api/trpc/billing.status?batch=1 → 403 (Forbidden)` em toda
+carga de página.
+
+`billing.status` usa `withRoles('ADMIN')` legado. Widget que informa
+"assinatura vencida" deveria ser visível pra qualquer role autenticado
+(read-only, não expõe billing detail). Gate excessivo faz banner Past
+Due nunca aparecer pra não-ADMINs em prod.
+
+**Fix:** trocar `withRoles('ADMIN')` por
+`withPermission('billing:read_status')` (permission nova no catalog
+Sprint 15E, default GRANTED em todos os roles). Ou: procedure separada
+`billing.statusForBanner` que retorna só `{isPastDue: boolean}` sem
+detalhes financeiros, protegida por `protectedProcedure` (autenticado
+basta).
+
+**Esforço:** ~1h. Não bloqueia mas ruído contínuo no console.
+
+### P-57. IA bloqueia por dirty em campos NÃO relacionados ao Receptor
+**Severidade:** Baixa (decisão de produto). Registrado ao fechar P-54
+em 2026-07-05.
+
+Mesmo com P-54 fixado (state limpa após Salvar), o design
+`CommunicationIntake.tsx:73` bloqueia botão "Resumir com IA" sempre
+que `editStageFields` tem QUALQUER chave. Se usuário está editando
+briefing/valor/datas E paralelamente cola comunicação no Receptor
+pra resumir, IA fica bloqueada.
+
+Argumento contra: IA só consome texto do Receptor, não briefing/valor.
+Argumento a favor (P-09 original): evita ambiguidade — usuário salva
+tudo antes de invocar IA.
+
+**Decisão:** produto/PO. Sem ação técnica imediata.
+
+**Esforço:** ~30min se aprovar mudança.
+
+### P-58. Toast padronizado em CommunicationIntake / Documents / Proposals
+**Severidade:** Baixa (cosmético — pattern inconsistente). Registrado
+ao fechar P-54 em 2026-07-05.
+
+Auditoria do chip P-54 confirmou que `pipeline/new` e `TasksSection`
+já seguem padrão Sprint 14 (`useToast` + `friendlyTrpcError`), mas
+`CommunicationIntake`, `DocumentsSection` e `ProposalsSection` não
+têm toast em success/error de mutations.
+
+**Fix:** aplicar mesmo pattern P-54 em cada.
+
+**Esforço:** ~2h (3 componentes × ~30min).
+
+### P-59. Playwright E2E em worktree efêmera sem instância Clerk real
+**Severidade:** Baixa. Descoberto pelo QA automation pós-bloco A+B+C
+em 2026-07-05.
+
+Chip QA rodou `smoke.spec.ts` e `axe-smoke.spec.ts` no worktree
+efêmero — todos falham porque browser real do Playwright recebe
+página `"Invalid host"` do Clerk SDK (dummy publishable key satisfaz
+o SDK-init mas rejeita request real de browser). curl HTML SSR
+confirma que os fixes P-51 e P-52 estão corretos — só o browser
+real trava.
+
+**Fix sugerido:** ampliar bypass `NODE_ENV=test` (Sprint 11 —
+`tests/e2e/fixtures/auth.ts`) pra smoke/axe. Ou `webServer` com
+env `CLERK_MOCK=true` que substitui `ClerkProvider` por mock
+(caminho B do P-39 spec). Ou documentar que Playwright só roda
+verde em staging real.
+
+**Esforço:** ~3h (mock caminho B) OU ~30min (docs "requer staging").
+
+### P-60. `communication-summary-errors.test.ts` 6 falhas — potencial regressão silenciosa
+**Severidade:** 🟡 Média (pode mascarar bug real). Descoberto pelo
+QA automation pós-bloco A+B+C em 2026-07-05.
+
+6 declarações falham em pré `@008f410` E pós `@d86ad14` (idêntico).
+Causa provável (do chip QA): `summarizeCommunication` resolve
+`{themes:[], adjustments:[]}` em vez de rejeitar quando
+`callAiFeature` mock throw. Ou o código foi refatorado silenciosamente
+pra engolir erro (regressão introduzida ANTES do range pré/pós deste
+chip), OU o teste espera comportamento antigo.
+
+**Impacto:** sem cobertura real do path de propagação de
+`FeatureNotAvailableError` / `AiLimitExceededError` / erros
+Anthropic 400/401/429. Feature gate existe e é usada em prod
+(Sprint 15F multi-provider) — sem teste passando pra confirmar
+propagação, regressão pode passar despercebida.
+
+**Fix:** git bisect entre Sprint 15F rollout e agora pra localizar
+onde comportamento divergiu. Reajustar código OU teste conforme
+decisão de design.
+
+**Esforço:** ~3h investigação + fix. Bloqueia confiança no baseline
+"6 failings pré-existentes" — se descobrir que é bug real, sobe pra
+🔴 Alta.
+
+### P-61. `src/server/trpc/trpc.ts` reporta 0% coverage estático
+**Severidade:** Baixa. Descoberto pelo QA automation pós-bloco A+B+C
+em 2026-07-05.
+
+Módulo é exercido por replay em `tests/unit/tenant-isolation-error-map.test.ts:121-179`
+(bloco "errorFormatter — integração com tRPC") sem instanciar
+servidor. Coverage estático não conta o replay. Comportamento
+validado semanticamente mas relatório fica ruim.
+
+**Fix:** teste dedicado que instancia `mapErrors` middleware isolado
+OU comentário `/* istanbul ignore next */` documentando a razão da
+gap estatística.
+
+**Esforço:** ~1h. Nice-to-have.
+
 ### ~~P-54. Botão Salvar sem feedback + edits não limpos + IA bloqueada indefinidamente~~ ✅ FECHADO 2026-07-05
 Chip `claude/p54-salvar-feedback` (worktree `blissful-zhukovsky-24abed`),
 commit `89f5a95` — fix cirúrgico em `src/app/pipeline/[id]/page.tsx:22-51`. As 3 mutations

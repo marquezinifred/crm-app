@@ -14,7 +14,7 @@ Mantido em sincronia com `CLAUDE.md` e memory `MEMORY.md`.
 ## 🔥 Pendências de curto prazo (próximas 2 semanas)
 
 ### P-56. `billing.status` bloqueia todo role não-ADMIN (falso 403 no AppShell)
-**✅ FECHADO 2026-07-05** — commit `12d76f0`
+**✅ FECHADO 2026-07-05** — commit `61a572b`
 
 `billing.status` usava `withRoles('ADMIN')` legado. Banner Past Due
 e Trial Expiry no AppShell nunca apareciam pra não-ADMINs em prod

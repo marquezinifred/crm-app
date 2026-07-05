@@ -6,16 +6,38 @@ import { ForbiddenError } from '@/lib/auth/rbac';
 import { logTrpc } from '@/lib/monitoring/axiom';
 import { captureException, shouldReportTrpcError } from '@/lib/monitoring/sentry';
 import { env } from '@/lib/env';
+import {
+  isTenantIsolationMessage,
+  parseTenantIsolationMessage,
+  TENANT_ISOLATION_PUBLIC_MESSAGE,
+  type TenantIsolationInfo,
+} from '@/lib/trpc/tenant-isolation-error';
 
 const t = initTRPC.context<Context>().create({
   transformer: superjson,
   errorFormatter({ shape, error }) {
+    // P-46 — detecta Error crua do backstop de tenant-isolation. `mapErrors`
+    // já wrappa com cause preservado; checamos também `error.message` como
+    // fallback caso algum ponto tenha bypassado o middleware.
+    let tenantIsolation: TenantIsolationInfo | null = null;
+    if (error.cause instanceof Error) {
+      tenantIsolation = parseTenantIsolationMessage(error.cause.message);
+    }
+    if (!tenantIsolation) {
+      tenantIsolation = parseTenantIsolationMessage(error.message);
+    }
+
     return {
       ...shape,
+      // Sanitiza a mensagem pública se o payload vazou o texto cru.
+      message: tenantIsolation
+        ? TENANT_ISOLATION_PUBLIC_MESSAGE
+        : shape.message,
       data: {
         ...shape.data,
         zodError:
           error.cause instanceof ZodError ? error.cause.flatten() : null,
+        tenantIsolation,
       },
     };
   },
@@ -44,6 +66,19 @@ const mapErrors = t.middleware(async ({ next }) => {
   } catch (err) {
     if (err instanceof ForbiddenError) {
       throw new TRPCError({ code: 'FORBIDDEN', message: err.message });
+    }
+    // P-46 — Backstop de tenant-isolation (src/server/db/client.ts) dispara
+    // Error crua com prefixo `[tenant-isolation]`. Sem esse wrap, a UI mostra
+    // "Unable to transform response from server" (o mapper de fetchRequestHandler
+    // não sabe serializar Error puro). Convertemos em TRPCError legível com
+    // `cause` preservado — Sentry e monitor middleware continuam recebendo o
+    // erro original. errorFormatter injeta `data.tenantIsolation`.
+    if (err instanceof Error && isTenantIsolationMessage(err.message)) {
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: TENANT_ISOLATION_PUBLIC_MESSAGE,
+        cause: err,
+      });
     }
     throw err;
   }

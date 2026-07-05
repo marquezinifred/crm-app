@@ -13,9 +13,73 @@ Mantido em sincronia com `CLAUDE.md` e memory `MEMORY.md`.
 
 ## 🔥 Pendências de curto prazo (próximas 2 semanas)
 
-### P-50. Campo "Valor estimado (R$)" sem máscara pt-BR nos forms ✅ FECHADO 2026-07-05
-Branch `claude/p50-brl-input-mask` (aguarda push+merge; hash final
-sai no merge).
+### P-51. Playwright `smoke.spec.ts` desatualizada (Sprint 14 copy)
+**Severidade:** Baixa. Descoberto pelo QA automation pós-P-50 em
+2026-07-05.
+
+Fixtures esperam copy pré-Sprint 14 ("CRM B2B", "Auto-cadastro") mas
+Sprint 14 substituiu pra "Feche mais. Vença sempre." (landing) e
+"Fale com a gente" (`/p/[slug]/contact`). 2 asserts falham em qualquer
+run local.
+
+**Fix:** atualizar seletores em `tests/e2e/smoke.spec.ts` pra
+`/Feche mais/i` e `/Fale com a gente/i`.
+
+**Esforço:** ~15min. Não bloqueia — CI já skipa E2E na ausência de
+env vars.
+
+### P-52. `axe-smoke.spec.ts` reporta violações `html-has-lang`
+**Severidade:** Baixa. Descoberto pelo QA automation pós-P-50 em
+2026-07-05.
+
+5 rotas públicas violam `html-has-lang`. `<html lang="pt-BR">` está
+correto em `src/app/layout.tsx`, então violação vem de tag `<html>`
+secundária (provável iframe Clerk). Investigar se é falso positivo
+do axe (subframe do provider) ou tag oculta genuína.
+
+**Fix:** ignorar iframe Clerk no `axe.include()`, ou configurar
+`axe.exclude(['iframe[src*="clerk"]'])`.
+
+**Esforço:** ~30min investigação + fix.
+
+### P-53. Pipeline pages `.tsx` sem coverage — falta harness React
+**Severidade:** Média (débito arquitetural). Descoberto pelo QA
+automation pós-P-50 em 2026-07-05.
+
+`vitest.config.ts:16-19` exclui `src/app/**/{layout,page,...}.tsx`
+do coverage report. Wiring de UI de forms críticos (pipeline/new,
+pipeline/[id], companies, contacts) não tem teste de componente.
+QA valida via smoke Playwright + código estático — insuficiente.
+
+**Fix:** adicionar Testing Library + jsdom no vitest setup, criar
+`tests/component/pipeline-new.test.tsx` como piloto cobrindo:
+digitação no Valor estimado, submissão do form, coerção de campos.
+Se piloto der bom sinal, expandir pra outros forms críticos.
+
+**Esforço:** ~4h (piloto). Não bloqueia — mas todo chip novo que
+toca form vai ter mesma gap. Candidato Sprint 16.
+
+### ~~P-50. Campo "Valor estimado (R$)" sem máscara pt-BR nos forms~~ ✅ FECHADO 2026-07-05
+Chip `claude/p50-brl-input-mask` mergido no commit `9b4c831`. Fix
+seguindo padrão Sprint 15C (CNPJ/CEP bidirecional):
+- `formatBRLInput`/`unformatBRLInput` novos em
+  `src/lib/utils/format.ts` — aceita `.` OU `,` como decimal,
+  normaliza pra `,` no display, cap 12 dígitos inteiros + 2 decimais
+- Aplicado em `src/app/pipeline/new/page.tsx:186-192` e
+  `src/app/pipeline/[id]/page.tsx:319-323` + `coerceFields()`
+- Preserva compatibilidade com valores legados (número puro sem
+  escala de centavos)
+- 15 testes novos em `tests/unit/format-brl-input.test.ts`
+
+QA automation verde (`9b4c831` vs `a69b0ce`): 741 passing (+15) / 6
+pré-existentes por env vars / 172 skipped. Coverage `format.ts`:
+100% linhas / 95.16% branches / 100% funcs. Grep de `estimatedValue`
+em outros forms = 0 (refactor cirurgicamente completo). Type-check
+zero, lint zero.
+
+Débitos residuais registrados: **P-51** (smoke.spec desatualizada),
+**P-52** (axe html-has-lang), **P-53** (falta harness React
+Testing Library).
 
 Entregue conforme escopo:
 - `src/lib/utils/format.ts` — `formatBRLInput(raw)` e

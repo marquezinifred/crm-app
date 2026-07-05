@@ -1328,6 +1328,19 @@ foram fechados na Sprint 11.
   pré-existentes por env vars em `communication-summary-errors.test.ts`
   (confirmado idêntico ANTES do fix) / 172 skipped**. Type-check zero.
   Lint zero. Sem dependência nova (Intl + regex puro)
+- **QA automation pós-P-50** — chip QA verificou main `@9b4c831` contra
+  baseline `@a69b0ce`. Verdict: **OK seguir, zero regressão**. Baseline
+  pós: 741/6/172 bate 1:1 com o esperado. Coverage `format.ts`: **100%
+  linhas / 95.16% branches / 100% funcs**. Grep de `estimatedValue` em
+  outros forms confirmou refactor cirurgicamente completo (5 outros
+  usos são leituras de persistência via `Number(o.estimatedValue)` em
+  routers/services, não escritas — intactos). `coerceFields` em
+  `pipeline/[id]` preservou branches dos outros campos. Playwright
+  rodou (browsers disponíveis) — 7 falhas pré-existentes por fixture
+  Sprint 14 desatualizada e violação `html-has-lang` (não P-50).
+  Novos débitos registrados: **P-51** (smoke.spec desatualizada
+  ~15min), **P-52** (axe html-has-lang ~30min), **P-53** (falta
+  harness Testing Library pra forms ~4h piloto)
 - **Housekeeping cycle** — residuais R1/R2/R3 dos chips P-39 e P-40
   fechados em um único commit docs+config (sem código de app):
   - **R1** — dummy `CLERK_ENCRYPTION_KEY` documentada no `.env.example`

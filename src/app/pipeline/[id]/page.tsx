@@ -12,30 +12,43 @@ import { CommunicationIntake } from '@/components/pipeline/CommunicationIntake';
 import { DocumentsSection } from '@/components/pipeline/DocumentsSection';
 import { ProposalsSection } from '@/components/pipeline/ProposalsSection';
 import { TasksSection } from '@/components/pipeline/TasksSection';
+import { useToast } from '@/components/ui/toast';
 import { OpportunityLossReason } from '@prisma/client';
 
 export default function OpportunityDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const utils = trpc.useUtils();
+  const { toast } = useToast();
   const { data: opp, isLoading, error } = trpc.opportunities.byId.useQuery({ id: params.id });
 
+  const [showCancel, setShowCancel] = useState(false);
+  const [cancelForm, setCancelForm] = useState({ reason: '', lossReason: '' as string });
+  const [editStageFields, setEditStageFields] = useState<Record<string, string>>({});
+
   const update = trpc.opportunities.update.useMutation({
-    onSuccess: () => utils.opportunities.byId.invalidate({ id: params.id }),
+    onSuccess: () => {
+      utils.opportunities.byId.invalidate({ id: params.id });
+      setEditStageFields({});
+      toast({ kind: 'success', title: 'Alterações salvas.' });
+    },
+    onError: (err) => toast({ kind: 'error', title: friendlyTrpcError(err) }),
   });
   const advance = trpc.opportunities.advanceStage.useMutation({
-    onSuccess: () => utils.opportunities.byId.invalidate({ id: params.id }),
+    onSuccess: () => {
+      utils.opportunities.byId.invalidate({ id: params.id });
+      setEditStageFields({});
+      toast({ kind: 'success', title: 'Estágio avançado.' });
+    },
+    onError: (err) => toast({ kind: 'error', title: friendlyTrpcError(err) }),
   });
   const cancel = trpc.opportunities.cancel.useMutation({
     onSuccess: () => {
       utils.opportunities.byId.invalidate({ id: params.id });
       router.push('/pipeline');
     },
+    onError: (err) => toast({ kind: 'error', title: friendlyTrpcError(err) }),
   });
-
-  const [showCancel, setShowCancel] = useState(false);
-  const [cancelForm, setCancelForm] = useState({ reason: '', lossReason: '' as string });
-  const [editStageFields, setEditStageFields] = useState<Record<string, string>>({});
 
   if (isLoading) return <main className="p-6">Carregando…</main>;
   if (error) return <main className="p-6 text-danger">{error.message}</main>;

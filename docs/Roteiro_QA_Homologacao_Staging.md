@@ -164,6 +164,17 @@ Cria uma opp end-to-end e move pelos 7 estágios respeitando validações.
      - **Passa se:** toast Venzo verde de sucesso + campos persistem após F5 (`meetingScheduledAt` aparece preenchido). Network tab mostra `POST /api/trpc/opportunities.update?batch=1` com HTTP **200**.
      - **Falha se:** modal/toast danger com "Unable to transform response from server" OU Network tab mostra **500** com body `Error: [tenant-isolation] Opportunity.update sem tenantId no payload`. Nesse caso, P-42 regrediu — reverter e reabrir o débito.
    - Repetir o mesmo padrão em OPORTUNIDADE (campo `briefing`) e PROPOSTA (`proposalPresentedAt` + `decisionExpectedAt`) — todo `.update` de opp deve responder 200. Vale ampliar spot-checks em `/companies/<id>` "Editar", `/contacts/<id>` "Editar", `/admin/products` edição e `/admin/alerts` update de config: todos passam pelo mesmo backstop reformado, o padrão de falha é idêntico.
+
+4.b. **Feedback de Salvar + desbloqueio da IA (regressão P-54 fechada 2026-07-05)**
+   - Ainda no estágio LEAD, editar de novo `meetingScheduledAt` (mudar pra outra data). O botão "Salvar alterações" deve **aparecer** no rodapé do card de estágio (aparece só quando há edições pendentes).
+   - Clicar "Salvar alterações":
+     - **Passa se:** (a) toast Venzo verde "Alterações salvas." aparece no canto inferior direito; (b) botão "Salvar alterações" **desaparece** imediatamente após o sucesso (dirty state limpo).
+     - **Falha se:** tela fica muda sem toast E botão "Salvar alterações" continua visível — bug P-54 regrediu (dirty state não foi limpo no `onSuccess`).
+   - Rolar até a seção "Receptor de comunicações" (`CommunicationIntake`):
+     - **Passa se:** botão "Resumir com IA" está **habilitado** (sem alerta amarelo "Salve a reunião antes de resumir com IA."). Colar texto ≥10 chars → botão fica ativo.
+     - **Falha se:** mensagem amarela "Salve a reunião antes de resumir com IA." aparece mesmo após salvar — bug crítico P-54 regrediu (`stageHasDirtyChanges=true` bloqueia IA indefinidamente).
+   - **Loop Edit → Save → Edit:** editar campo de novo → botão Salvar reaparece → salvar → botão some + toast dispara. Repetir 3x; sem toast em cadeia empilhado (max 3 visíveis via `ToastProvider`).
+   - **Erro de Salvar (opcional):** simular payload inválido via DevTools OU forçar 500 no server; toast Venzo vermelho aparece com mensagem legível vinda de `friendlyTrpcError` (não é JSON cru).
 5. **Avançar pelos 7 estágios**
    Para cada transição, clicar botão "Avançar →" na `/pipeline/<id>`:
    - **LEAD → OPORTUNIDADE:** pede briefing preenchido.

@@ -13,60 +13,58 @@ Mantido em sincronia com `CLAUDE.md` e memory `MEMORY.md`.
 
 ## 🔥 Pendências de curto prazo (próximas 2 semanas)
 
-### P-54. Botão Salvar sem feedback + edits não limpos + IA bloqueada indefinidamente
-**Severidade:** 🔴 Alta (UX crítico — bloqueia uso da IA + confunde
-usuário). Descoberto em uso real 2026-07-05 pelo Fred:
-- Bug 1: "não tem retorno de mensagem alguma na tela" ao salvar
-- Bug 2: "não consigo usar a IA sem ter salvo a reunião" mesmo tendo
-  salvo — 3 bugs relacionados no mesmo `onSuccess`
+### ~~P-54. Botão Salvar sem feedback + edits não limpos + IA bloqueada indefinidamente~~ ✅ FECHADO 2026-07-05
+Chip `claude/p54-salvar-feedback` (worktree `blissful-zhukovsky-24abed`)
+— fix cirúrgico em `src/app/pipeline/[id]/page.tsx:22-51`. As 3 mutations
+`update`/`advance`/`cancel` agora seguem o padrão canônico:
+- `update.onSuccess`: `invalidate` + `setEditStageFields({})` + `toast
+  success "Alterações salvas."`
+- `advance.onSuccess`: `invalidate` + `setEditStageFields({})` + `toast
+  success "Estágio avançado."`
+- `cancel.onSuccess`: `invalidate` + `router.push('/pipeline')` (redirect
+  é o feedback — sem toast redundante)
+- Todos os 3 têm `onError: toast error com friendlyTrpcError`
 
-**Anatomia** (`src/app/pipeline/[id]/page.tsx:23-34`):
-- `update`, `advance`, `cancel` mutations só chamam
-  `utils.opportunities.byId.invalidate` no `onSuccess`
-- **Sem `useToast`** — dados atualizam silenciosamente, UI não mostra "Salvo!"
-- **Sem `onError`** — erros só aparecem no console DevTools
-- **Sem `setEditStageFields({})` no onSuccess** — bug crítico que
-  trava a IA:
-  1. Usuário edita campo de estágio → `editStageFields` ganha chave
-     → prop `stageHasDirtyChanges=true` passa pro CommunicationIntake
-  2. Clica Salvar → mutation success → cache invalida → **mas
-     `editStageFields` continua com a chave**
-  3. Botão "Salvar alterações" continua visível
-     (`Object.keys.length > 0`)
-  4. `CommunicationIntake:73,90-91` bloqueia botão "Resumir com IA"
-     com mensagem "Salve a reunião antes de resumir com IA" —
-     indefinidamente, até Descartar ou F5
-- Padrão `useToast` + `friendlyTrpcError` (P-21) existe mas não foi
-  aplicado aqui
+Import novo: `useToast` de `@/components/ui/toast`. State declarations
+movidas pra cima das mutations pra `setEditStageFields` ficar em escopo
+(sem impacto em rules-of-hooks — ordem preservada entre renders).
 
-**Fix escopo:**
-- `src/app/pipeline/[id]/page.tsx` — 3 mutations ganham:
-  - `onSuccess: () => { utils.opportunities.byId.invalidate({...});
-    setEditStageFields({}); toast({ kind: 'success', title: 'Salvo!' }); }`
-  - `onError: (err) => toast({ kind: 'error', title: friendlyTrpcError(err) })`
-- Auditoria de outros forms de pipeline: TasksSection,
-  CommunicationIntake, DocumentsSection, ProposalsSection — quais
-  têm/não têm toast + limpeza de state?
-- Verificar `pipeline/new/page.tsx` — mesmo pattern faltando?
+Auditoria dos outros forms de pipeline:
+- `pipeline/new/page.tsx` — **OK**, tem toast success + inline error via
+  `create.error` + `friendlyTrpcError`
+- `TasksSection` — **OK**, tem toast success + `onError` com friendly
+- `CommunicationIntake` — 🟡 sem toast (state change é o feedback:
+  summary aparece). Inline error existe. Registrado em **P-58**
+- `DocumentsSection` — 🟡 sem toast (multi-step upload). Inline banner
+  de erro existe. Registrado em **P-58**
+- `ProposalsSection` — 🟡 sem toast (form fecha + lista atualiza).
+  Registrado em **P-58**
 
-**Regressão a caçar:**
-- CommunicationIntake bloqueio pode ficar over-conservador se limpar
-  edits parcialmente. Considerar: se depois de salvar o usuário
-  edita de novo, dirty volta corretamente
-- Toast pode conflitar com outros toasts em cadeia (`advance`
-  seguido de `update`)
+Testes: `tests/unit/pipeline-detail-page.test.tsx` novo com **7 casos**
+(update onSuccess dispara toast + limpa state, update onError com
+friendly, click Salvar → Save → dirty limpo → botão Salvar some,
+advance onSuccess dispara toast + limpa state + invalidate, advance
+onError com friendly, cancel onError com friendly, cancel onSuccess
+redireciona sem toast). Padrão: mock `@/lib/trpc/client` capturando
+`onSuccess/onError` das 3 mutations, `ToastProvider` real, dispara
+handlers manualmente e verifica `[role="status"]/[role="alert"]`.
 
-**Débito adjacente candidato P-57**: mesmo com fix, o design
-"bloquear IA por dirty em campos NÃO relacionados" é questionável
-— IA só consome texto do Receptor, não deveria bloquear por dirty
-em briefing/valor/datas. Decisão de produto. Não incluir no P-54.
+Baseline: **723 passing (+7 novos) / 10 pré-existentes por env vars em
+`field-encryption` (4) + `communication-summary-errors` (6) — confirmado
+idênticas no HEAD sem fix / 172 skipped**. Type-check zero. Lint zero.
 
-**Esforço:** ~2h (só pipeline/[id] + pipeline/new). +2h se
-auditoria completa de todas as seções.
+**Débitos residuais registrados:**
+- **P-57** — decisão de produto: `stageHasDirtyChanges` bloqueia IA
+  mesmo pra edits em campos NÃO relacionados ao Receptor (briefing/
+  valor/datas). Deveria só bloquear se edit for em campo que impacta
+  o resumo? Não escopo P-54.
+- **P-58** — padronizar toast success em CommunicationIntake +
+  DocumentsSection + ProposalsSection (todos hoje usam state change
+  como único feedback). Cosmético mas melhora consistência.
 
-**Prioridade:** 🔴 disparar imediatamente após QA automation do
-bloco A+B+C fechar (código em `src/app/pipeline/[id]/page.tsx`
-não conflita com nenhum chip rodando).
+Regressões caçadas: nenhuma. Toasts em cadeia funcionam (`ToastProvider`
+limita 3 visíveis). Após salvar, dirty volta normalmente ao editar de
+novo. CommunicationIntake desbloqueia (`stageHasDirtyChanges=false`).
 
 ### ~~P-51. Playwright `smoke.spec.ts` desatualizada (Sprint 14 copy)~~ ✅ FECHADO 2026-07-05
 Chip `claude/p51-smoke-copy` — fixture-only. 2 seletores em
@@ -136,6 +134,57 @@ Se piloto der bom sinal, expandir pra outros forms críticos.
 
 **Esforço:** ~4h (piloto). Não bloqueia — mas todo chip novo que
 toca form vai ter mesma gap. Candidato Sprint 16.
+
+**Update 2026-07-05 (P-54 fix)**: chip P-54 escreveu
+`tests/unit/pipeline-detail-page.test.tsx` com 7 casos mockando
+`@/lib/trpc/client` no padrão do `admin-ai-page.test.tsx` — sem
+Testing Library, apenas `createRoot` + `act` + `ToastProvider`.
+Mostrou que dá pra testar comportamento de mutation handler +
+DOM assertions sem harness Testing Library. Se P-53 for reavaliado,
+considerar manter esse padrão em vez de adicionar dep nova.
+
+### P-57. IA bloqueia por dirty em campos NÃO relacionados ao Receptor
+**Severidade:** Baixa (decisão de produto). Descoberto no P-54 fix
+em 2026-07-05.
+
+`CommunicationIntake:73,90-91` bloqueia botão "Resumir com IA"
+sempre que `stageHasDirtyChanges=true`, ou seja, qualquer edit em
+qualquer campo do estágio (briefing, valor estimado, data prevista,
+data de reunião, etc). Mas o Receptor de IA só consome o texto colado
+pelo usuário — não deveria depender de edits em outros campos.
+
+**Fix sugerido:** remover o gate ou trocar por gate contextual —
+só bloquear se o edit for em campo que impacta o prompt IA
+(hoje: nenhum). Discutir com produto: manter bloqueio como
+"lembrete de salvar antes de gerar resumo" (defensivo) OU liberar
+IA imediatamente (usuário decide quando salvar).
+
+**Esforço:** ~15min código + decisão de produto. Não bloqueia.
+
+### P-58. Padronizar toast success em Communication/Documents/Proposals sections
+**Severidade:** Baixa (consistência UX). Descoberto no P-54 fix
+em 2026-07-05.
+
+Auditoria do P-54 identificou 3 componentes que não seguem o
+padrão canônico `useToast + friendlyTrpcError` do TasksSection:
+- `src/components/pipeline/CommunicationIntake.tsx` — sem toast
+  em `summarize`/`confirmSummary`; feedback via state change
+  (summary aparece)
+- `src/components/pipeline/DocumentsSection.tsx` — sem toast em
+  `getUploadIntent`/`uploadProxy`/`create`; feedback via banner
+  inline + lista atualizada
+- `src/components/pipeline/ProposalsSection.tsx` — sem toast em
+  `createProposal`/`addVersion`; feedback via form fechado + lista
+  atualizada. Também tem `TasksSection.updateStatus` (checkbox
+  toggle) sem toast em erro — falha silenciosa se rollback do
+  checkbox não for possível
+
+**Fix:** aplicar padrão `TasksSection.create.onSuccess = { invalidate;
+toast success }` + `onError = { toast error com friendlyTrpcError }`
+nos 3 arquivos. Escopo mecânico ~1h.
+
+**Esforço:** ~1h. Não bloqueia — feedback visual já existe via
+state change; padronizar reduz confusão em fluxos de erro.
 
 ### ~~P-50. Campo "Valor estimado (R$)" sem máscara pt-BR nos forms~~ ✅ FECHADO 2026-07-05
 Chip `claude/p50-brl-input-mask` mergido no commit `9b4c831`. Fix

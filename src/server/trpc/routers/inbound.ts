@@ -5,6 +5,7 @@ import { router } from '@/server/trpc/trpc';
 import { withPermission } from '@/server/trpc/middlewares';
 import { prisma } from '@/server/db/client';
 import { audit } from '@/server/services/audit.service';
+import { sendPushToUser } from '@/server/services/push-sender.service';
 import { zUuid } from '@/lib/validators';
 
 /**
@@ -233,7 +234,12 @@ export const inboundRouter = router({
           ownerId: null,
           deletedAt: null,
         },
-        select: { id: true, title: true, stage: true },
+        select: {
+          id: true,
+          title: true,
+          stage: true,
+          clientCompany: { select: { razaoSocial: true } },
+        },
       });
       if (!opp) {
         throw new TRPCError({
@@ -273,6 +279,21 @@ export const inboundRouter = router({
         recordId: opp.id,
         after: { ownerId: input.ownerId, assignedBy: ctx.user.id },
         tenantIdOverride: ctx.tenantId,
+      });
+
+      // P-31 — Push best-effort pro vendedor alocado. Falha não desfaz a
+      // alocação (usuário vê o card no /pipeline mesmo sem push).
+      const empresa = opp.clientCompany?.razaoSocial ?? 'Empresa';
+      void sendPushToUser(input.ownerId, {
+        title: 'Novo prospect atribuído',
+        body: `${empresa} — comece a qualificação.`,
+        url: `/pipeline/${opp.id}`,
+      }).catch((err) => {
+        console.warn('[inbound.assignInbound] push falhou (ignorado):', {
+          ownerId: input.ownerId,
+          opportunityId: opp.id,
+          err,
+        });
       });
 
       return updated;

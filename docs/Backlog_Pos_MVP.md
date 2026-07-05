@@ -1185,19 +1185,49 @@ os created. Falta uma tela dedicada com:
 que ninguém quer processar. Volta quando parser começar a ter
 falsos negativos.
 
-### P-31. Push nativo pro vendedor quando alocado (mobile)
-**Severidade:** Baixa. Registrado ao fechar Sprint 15D.
+### ~~P-31. Push nativo pro vendedor quando alocado (mobile)~~ ✅ FECHADO 2026-07-05
 
-`inboundRouter.assignInbound` audita e retorna sucesso mas não
-notifica o vendedor. Precisamos:
-- Chamada a `sendPushToUser(ownerId, ...)` dentro da mutation
-- Push message: "Novo prospect atribuído: {empresa}. Comece a
-  qualificação."
-- URL: `/pipeline/{opp.id}`
+**Resolvido em 2026-07-05** (commit desta branch).
 
-**Esforço:** ~1h. Trivial mas foi cortado do Sprint 15D pra não
-atrasar. Baixa prioridade porque o vendedor vê o novo card no
-pipeline mesmo sem push.
+`inboundRouter.assignInbound` agora dispara `sendPushToUser` em
+paralelo à alocação (best-effort — falha não desfaz a alocação).
+Mudanças cirúrgicas em `src/server/trpc/routers/inbound.ts`:
+
+- Query `opp = findFirst` estendida com `clientCompany: { select:
+  { razaoSocial: true } }` para compor o body da push
+- Após o `audit()`, dispara `void sendPushToUser(input.ownerId,
+  {title, body, url}).catch(...)` — fire-and-forget com
+  `.catch(console.warn)` pra não propagar rejection
+- Título: "Novo prospect atribuído"
+- Body: `${razaoSocial ?? 'Empresa'} — comece a qualificação.`
+- URL: `/pipeline/${opp.id}`
+- Import novo de `sendPushToUser` do
+  `@/server/services/push-sender.service` (Sprint 10)
+
+Data masking N/A — payload de push tem só razão social
+(informação comercial, não PII sensível).
+
+**Testes** (`tests/unit/inbound-assign-push.test.ts` novo, 5 casos):
+1. Alocação bem-sucedida dispara push com args esperados
+2. Push falha (mock throw) → mutation ainda retorna sucesso +
+   console.warn com prefixo `[inbound.assignInbound] push falhou`
+3. Cross-tenant: opp de outro tenant → NOT_FOUND, push NÃO chamada,
+   audit não chamado (regressão P-42 preservada; `findFirst` filtra
+   por `tenantId: ctx.tenantId`)
+4. `clientCompany` nulo → fallback "Empresa" no body
+5. Vendedor inativo → BAD_REQUEST, sem update, sem push
+
+Padrão de mock (padrão `tasks-router.test.ts` P-20): Prisma spy
+via `vi.mock('@/server/db/client')`, permissions.service com
+`hasPermission: async () => true`, audit + push como spies com
+`vi.fn()`. `flushMicrotasks()` (setImmediate) garante que o
+`.catch` do fire-and-forget rode antes das assertions.
+
+**Baseline:** 728 passing (baseline pré-P-31 = 723 + 5 novos) /
+10 pré-existentes por env vars em `field-encryption` (4) +
+`communication-summary-errors` (6) — confirmado idêntico ANTES
+via `git stash` / 172 skipped. Type-check zero. Lint zero.
+Rollback trivial (reverter `inbound.ts` + remover test file).
 
 ### ~~P-32. 🔒 Rotacionar senha do Neon staging (compartilhada no chat)~~ ✅ FECHADO 2026-07-04
 

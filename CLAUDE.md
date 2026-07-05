@@ -1306,6 +1306,42 @@ foram fechados na Sprint 11.
   ad-hoc
 
 **Débitos zerados em 2026-07-05:**
+- **P-46** Mapear `Error("[tenant-isolation] ...")` pra TRPCError
+  estruturado — débito residual do P-42. Sem esse mapping, se algum
+  backstop remanescente disparasse em prod, UI mostrava "Unable to
+  transform response from server" (o mapper de `fetchRequestHandler`
+  não serializa Error puro). Fix em 3 pontos:
+  - Novo `src/lib/trpc/tenant-isolation-error.ts` — parser puro
+    `parseTenantIsolationMessage` reconhece 2 razões
+    (`missing_tenant_id` — payload sem `tenantId`;
+    `tenant_id_mismatch` — payload com `tenantId` ≠ contexto) +
+    constante `TENANT_ISOLATION_PUBLIC_MESSAGE`. Regex captura
+    `Model.op` + tail.
+  - `src/server/trpc/trpc.ts` — `mapErrors` middleware catch de
+    `Error` com prefixo `[tenant-isolation]` → throw
+    `TRPCError({code:'INTERNAL_SERVER_ERROR', message: sanitizada,
+    cause: originalError})`. `errorFormatter` detecta cause (e
+    fallback via `error.message` pra bypass do middleware) e
+    injeta `data.tenantIsolation = { model, op, reason }` +
+    sanitiza `shape.message` (evita vazar payload cru mesmo sem
+    middleware).
+  - `src/lib/trpc/error-format.ts` — `friendlyTrpcError` reconhece
+    `data.tenantIsolation` com precedence sobre `zodError` e
+    renderiza "Erro de isolamento de dados. Reporte à equipe
+    (modelo: X, operação: Y)." — só metadata sanitizada.
+  Zero mudança em `src/server/db/client.ts` (fonte do error) —
+  escopo cirúrgico conforme spec. `cause` preservado ao longo do
+  fluxo pra Sentry + monitor middleware continuarem recebendo
+  stack + mensagem original. +15 testes novos em
+  `tests/unit/tenant-isolation-error-map.test.ts` (parser: 8 casos
+  incluindo tail desconhecido / não-string / falso positivo;
+  friendlyTrpcError: 4 casos com precedence tenantIsolation vs
+  zodError; errorFormatter replay: 3 casos cobrindo mapErrors
+  wrap + fallback bypass + non-tenant-isolation compat). Baseline:
+  **756 passing (+15 novos) / 6 pré-existentes por env vars em
+  `communication-summary-errors.test.ts` (confirmado idêntico ANTES
+  do fix via stash) / 172 skipped**. Type-check zero. Lint zero.
+  Rollback trivial (reverter 2 arquivos + apagar helper)
 - **P-50** Campo "Valor estimado (R$)" sem máscara pt-BR — descoberto
   em uso real 2026-07-05 pelo Fred em prod. Input `type="number"` cru
   mostrava `289311` sem separador. Fix: `src/lib/utils/format.ts`

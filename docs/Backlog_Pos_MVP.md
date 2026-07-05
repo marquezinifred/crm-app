@@ -209,16 +209,42 @@ seria mais defensivo iterar as rows no backstop.
 
 **Esforço:** ~1h.
 
-### P-46. Mapear `Error("[tenant-isolation] ...")` pra TRPCError (P-42 residual)
-**Severidade:** Média. Registrado ao fechar P-42 em 2026-07-05.
+### ~~P-46. Mapear `Error("[tenant-isolation] ...")` pra TRPCError~~ ✅ FECHADO 2026-07-05
+Chip `claude/p46-error-mapping`. Middleware wrapper +
+`errorFormatter` extendidos em `src/server/trpc/trpc.ts` reconhecem
+o prefixo `[tenant-isolation]` do backstop de
+`src/server/db/client.ts::assertTenantWritePayload` e convertem em
+`TRPCError(INTERNAL_SERVER_ERROR)` com:
+- `message` sanitizada (`TENANT_ISOLATION_PUBLIC_MESSAGE`, não vaza
+  detalhe interno)
+- `cause` preservado (Sentry + monitor middleware continuam vendo o
+  erro original com stack)
+- `data.tenantIsolation = { model, op, reason }` injetado pelo
+  errorFormatter
 
-Se algum backstop remanescente disparar em prod, UI mostra "Unable
-to transform response" em vez de mensagem legível. Solução:
-`errorFormatter` em `src/server/trpc/trpc.ts` detecta prefixo
-`[tenant-isolation]` e converte pra `TRPCError(INTERNAL_SERVER_ERROR)`
-com payload estruturado. Casa bem com `friendlyTrpcError` (P-21).
+`friendlyTrpcError` (P-21) reconhece `data.tenantIsolation` com
+precedence sobre `zodError` e renderiza "Erro de isolamento de
+dados. Reporte à equipe (modelo: X, operação: Y)." — apenas
+metadata sanitizada, sem payload cru.
 
-**Esforço:** ~1h.
+Parser puro em `src/lib/trpc/tenant-isolation-error.ts`
+(`parseTenantIsolationMessage`) reconhece 2 razões:
+- `missing_tenant_id` — payload sem `tenantId`
+- `tenant_id_mismatch` — payload com `tenantId` ≠ contexto
+
+15 testes novos em `tests/unit/tenant-isolation-error-map.test.ts`
+(parser: 8 casos + friendlyTrpcError: 4 casos + errorFormatter
+replay: 3 casos). Zero mudança em `src/server/db/client.ts` — só
+mapping do lado tRPC conforme escopo. Baseline preservado:
+**756 passing (+15 novos) / 6 pré-existentes por env vars em
+`communication-summary-errors.test.ts` (idênticos ANTES do fix
+via stash) / 172 skipped**. Type-check zero. Lint zero.
+
+**Rollback:** trivial — reverter `src/server/trpc/trpc.ts` +
+`src/lib/trpc/error-format.ts` e apagar
+`src/lib/trpc/tenant-isolation-error.ts`. Comportamento pré-P-46
+era "Unable to transform response from server" no browser mas
+sem impacto funcional em rotas que já não disparam o backstop.
 
 ### ~~P-42. Backstop tenant-isolation quebra TODOS os `.update` de routers~~ ✅ FECHADO
 **Resolvido em 2026-07-05.** Refactor cirúrgico em

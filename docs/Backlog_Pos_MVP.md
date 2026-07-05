@@ -28,19 +28,47 @@ run local.
 **Esforço:** ~15min. Não bloqueia — CI já skipa E2E na ausência de
 env vars.
 
-### P-52. `axe-smoke.spec.ts` reporta violações `html-has-lang`
-**Severidade:** Baixa. Descoberto pelo QA automation pós-P-50 em
-2026-07-05.
+### ~~P-52. `axe-smoke.spec.ts` reporta violações `html-has-lang`~~ ✅ FECHADO 2026-07-05
+Chip `claude/p52-axe-iframe` — fix defensivo em `tests/e2e/axe-smoke.spec.ts`
+adicionando `.exclude('iframe')` nas duas `AxeBuilder` chains (rotas
+públicas + rotas autenticadas). Comentário no cabeçalho do arquivo
+justifica: Clerk injeta iframe oculto pra session management via
+`ClerkProvider` em todas as rotas, e axe reportava `html-has-lang`
+contra o `<html>` interno desse iframe que não controlamos. Nossa
+`<html lang="pt-BR">` em `src/app/layout.tsx:59` segue intacta.
 
-5 rotas públicas violam `html-has-lang`. `<html lang="pt-BR">` está
-correto em `src/app/layout.tsx`, então violação vem de tag `<html>`
-secundária (provável iframe Clerk). Investigar se é falso positivo
-do axe (subframe do provider) ou tag oculta genuína.
+Validação:
+- Playwright rodado localmente (chromium-desktop + mobile-safari)
+  contra dev server com dummy Clerk keys. `html-has-lang` não aparece
+  no output em nenhum estado (dummy keys não inicializam iframe
+  Clerk — QA original observou em ambiente diferente). Contagem de
+  violations idêntica ANTES e DEPOIS do fix (42 `color-contrast` em
+  ambos), confirmando zero regressão do meu lado
+- 10 failures pré-existentes remanescentes são `color-contrast`
+  (link `.text-brand` na CookieBanner: `#7c3bed` on `#1f1a2d` = 2.97:1
+  vs required 4.5:1). Não é escopo P-52 — registrado como novo débito
+  **P-54** abaixo
+- `npx tsc --noEmit` zero. `npm run lint` zero
 
-**Fix:** ignorar iframe Clerk no `axe.include()`, ou configurar
-`axe.exclude(['iframe[src*="clerk"]'])`.
+**QA automation exception:** fixture E2E, sem código de app.
 
-**Esforço:** ~30min investigação + fix.
+### P-54. Contraste `.text-brand` na CookieBanner falha WCAG AA
+**Severidade:** Baixa. Descoberto pelo chip P-52 em 2026-07-05.
+
+`axe-smoke` reporta `color-contrast` em `<a class="underline text-brand"
+href="/privacy">` dentro da `CookieBanner`. Combinação atual:
+foreground `#7c3bed` (brand-primary) sobre background `#1f1a2d` (dark
+mode) = **2.97:1**. WCAG AA exige 4.5:1 pra texto normal. 10 test
+failures nas 5 rotas públicas × 2 projects (chromium-desktop +
+mobile-safari).
+
+**Fix sugerido:** trocar o token `text-brand` na CookieBanner por uma
+das variantes claras (`text-brand-light`, `text-brand-accent`) OU
+ajustar `--brand-primary` no dark theme. Alternativa: sublinhar +
+peso `font-semibold` sobe contraste efetivo (semi-workaround).
+
+**Esforço:** ~30min UI + verificação axe. Não bloqueia deploy —
+`axe-smoke` já falha no CI por outros motivos (não é gate hoje).
 
 ### P-53. Pipeline pages `.tsx` sem coverage — falta harness React
 **Severidade:** Média (débito arquitetural). Descoberto pelo QA

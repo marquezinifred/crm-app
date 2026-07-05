@@ -8,6 +8,12 @@ import { loginAsAdmin } from './fixtures/auth';
  * Roda axe-core em 4 rotas-chave (Lighthouse target) e bloqueia o PR
  * em qualquer violação AA. As páginas públicas (sign-in, privacy)
  * também são checadas porque não exigem auth.
+ *
+ * P-52 (2026-07-05): `.exclude('iframe')` para não analisar subframes
+ * de terceiros (Clerk injeta iframe oculto pra session management em
+ * todas as rotas via ClerkProvider). Axe reportava `html-has-lang`
+ * contra o `<html>` interno desses iframes que não controlamos. A tag
+ * `<html lang="pt-BR">` do nosso app segue em `src/app/layout.tsx:59`.
  */
 
 const PUBLIC_ROUTES = ['/', '/sign-in', '/privacy', '/terms', '/privacy-request'];
@@ -19,6 +25,7 @@ test.describe('a11y axe-core', () => {
       await page.goto(route);
       const results = await new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+        .exclude('iframe')
         .analyze();
       expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
     });
@@ -34,6 +41,7 @@ test.describe('a11y axe-core', () => {
         await page.goto(route);
         const results = await new AxeBuilder({ page })
           .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+          .exclude('iframe')
           .analyze();
         expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
       });

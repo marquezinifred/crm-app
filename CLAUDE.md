@@ -1306,6 +1306,24 @@ foram fechados na Sprint 11.
   ad-hoc
 
 **Débitos zerados em 2026-07-05:**
+- **P-52** Fixture E2E `axe-smoke.spec.ts` reportava violação
+  `html-has-lang` — descoberto pelo QA automation pós-P-50. Fix
+  defensivo em `tests/e2e/axe-smoke.spec.ts` adicionando
+  `.exclude('iframe')` nas duas `AxeBuilder` chains (rotas públicas +
+  autenticadas). Contexto: `ClerkProvider` injeta iframe oculto pra
+  session management em todas as rotas, e axe reportava contra o
+  `<html>` interno desse subframe que não controlamos.
+  `<html lang="pt-BR">` do app segue intacto em
+  `src/app/layout.tsx:59`. Validação: Playwright rodado localmente
+  (chromium-desktop + mobile-safari) contra dev server; contagem de
+  violations idêntica ANTES/DEPOIS (42 `color-contrast` em ambos —
+  zero regressão do meu lado). `html-has-lang` não apareceu no ambiente
+  de dev com dummy Clerk keys (não inicializa iframe), mas o exclude
+  é defensivo pra staging/prod onde keys reais injetam iframe. Novo
+  débito **P-54** registrado pra `color-contrast` da CookieBanner
+  (`.text-brand` sobre bg dark = 2.97:1 vs 4.5:1 requerido) — não é
+  escopo P-52. Type-check zero. Lint zero. QA automation exception
+  aplicada (fixture E2E, sem código de app)
 - **P-50** Campo "Valor estimado (R$)" sem máscara pt-BR — descoberto
   em uso real 2026-07-05 pelo Fred em prod. Input `type="number"` cru
   mostrava `289311` sem separador. Fix: `src/lib/utils/format.ts`

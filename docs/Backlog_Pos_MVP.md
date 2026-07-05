@@ -13,6 +13,69 @@ Mantido em sincronia com `CLAUDE.md` e memory `MEMORY.md`.
 
 ## 🔥 Pendências de curto prazo (próximas 2 semanas)
 
+### P-47. Vitest sem carregamento automático de `.env.local`
+**Severidade:** Média. Descoberto pelo QA automation report pós-P-42
+em 2026-07-05. **Causa raiz do P-43** — consolide os dois quando
+implementar.
+
+`vitest.config.ts` não invoca `dotenv/config`, então rodar
+`npx vitest run` sem `source .env.local` primeiro faz 11 test files
+falharem no import com `Invalid environment variables` (Zod rejeita
+`DATABASE_URL` ausente etc). QA report confirmou: com dummy
+`sk-ant-xxxxxxxx…` no env, `communication-summary-errors.test.ts`
+passa (mock não bate na Anthropic real) — isso explica a variância
+709/715/726/732 documentada em P-43.
+
+**Impacto:**
+- False-positive em QA autônomo, CI, worktrees efêmeras
+- Dev novo roda `npm test` limpo e vê "regressão" fantasma
+- Baseline "verde" depende de shell pré-carregado
+
+**Fix sugerido:**
+- Opção A: `setupFiles: ['dotenv/config', 'tests/setup.ts']` no
+  `vitest.config.ts` com precedence `.env.test → .env.local → .env`
+- Opção B: `"test": "dotenv -e .env.local -- vitest run"` no
+  `package.json` (usa `dotenv-cli`, menor invasão)
+
+**Esforço:** ~2h. Não bloqueia — mas fecha P-43 ao mesmo tempo.
+Candidato Sprint 16.
+
+### P-48. Playwright browsers ausentes em worktree efêmera
+**Severidade:** Baixa. Descoberto pelo QA automation report pós-P-42
+em 2026-07-05.
+
+Worktrees `git worktree add` não têm `~/.cache/ms-playwright`
+populado. `npm ci` na worktree não roda `playwright install` porque
+a lib está listada como devDep. E2E autônomo em chip fica BLOCKED.
+
+**Fix sugerido:**
+- Adicionar `scripts/bootstrap-worktree.sh` que roda `npm ci &&
+  npx playwright install chromium`
+- Alternativa: `postinstall` no `package.json` com `playwright
+  install chromium` — mas afeta todos que fazem `npm install`
+  (custo cross-cutting)
+
+**Esforço:** ~30min. Não bloqueia CI (Playwright roda em job
+dedicado).
+
+### P-49. Integration tests skipam sem Postgres local em worktree
+**Severidade:** Baixa (known trade-off). Descoberto pelo QA
+automation report pós-P-42 em 2026-07-05.
+
+4 tests de `opportunities-update.test.ts` + N tests de
+`tests/integration/rbac.test.ts` e `tenant-isolation.test.ts`
+pulam sem `DATABASE_URL_TEST`. Em worktree efêmera não há Docker
+nem Postgres local — cobertura de `src/server/db/client.ts` cai
+de ~85% pra 32.63%.
+
+**Fix sugerido:** documentar em
+`docs/Roteiro_QA_Homologacao_Staging.md` §5 que integration puro
+só roda em CI com service Postgres; local exige
+`docker-compose up postgres` (Fred tem docker desktop). NÃO mockar
+Prisma — descaracteriza os testes.
+
+**Esforço:** ~15min (só documental — decisão consciente).
+
 ### P-43. Baseline testes tem 3 leituras diferentes por ambiente
 **Severidade:** Média (afeta reporting de QA automation). Descoberto
 pelo chip housekeeping em 2026-07-05.

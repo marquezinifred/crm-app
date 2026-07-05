@@ -1352,9 +1352,20 @@ foram fechados na Sprint 11.
   do fix via stash) / 172 skipped. Type-check zero. Lint zero.
   Rollback: reverter `src/server/db/client.ts`. Débitos residuais
   registrados: **P-44** (caller tRPC), **P-45** (audit createMany),
-  **P-46** (map Error pra TRPCError com friendlyTrpcError). QA
-  automation report deve rodar após merge (Metodologia §9.4 — core
-  layer tocado)
+  **P-46** (map Error pra TRPCError com friendlyTrpcError).
+- **QA automation pós-P-42** — chip QA verificou main `@636a9cc`
+  contra baseline `@79dc437`. Verdict: **OK seguir, zero regressão**.
+  Baseline pós: 732 passing (+17 do P-42 unit) / 0 failing / 172
+  skipped (+4 do P-42 integration guarded por `DATABASE_URL_TEST`).
+  Cobertura `assertTenantWritePayload` = 100% linhas, 93.75% branches.
+  Extension Prisma runtime (linhas 71-185) fica em 32.63% — coberta
+  pelos 4 integration tests ativáveis por `DATABASE_URL_TEST` (padrão
+  do repo desde Sprint 11). Type-check zero, lint zero. Playwright
+  BLOCKED por infra (worktree sem browsers nem Postgres) — não por
+  P-42; registrados como P-48 e P-49. Novo débito P-47 identificado
+  (Vitest sem `dotenv/config` = causa raiz do P-43). QA report
+  bate 1:1 com o que o chip P-42 documentou (+21 tests, mesma
+  distribuição unit/integration)
 
 **Débitos zerados em 2026-07-04:**
 - P-40 Conflito `.eslintrc.json` em worktree — fix defensivo

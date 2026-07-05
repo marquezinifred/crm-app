@@ -115,3 +115,78 @@ describe('assertTenantWritePayload — modelos afetados por P-42', () => {
     },
   );
 });
+
+describe('assertTenantWritePayload — createMany (P-45)', () => {
+  it('array com 3 rows todas com tenantId correto → OK', () => {
+    const err = assertTenantWritePayload('Activity', 'createMany', CTX, [
+      { tenantId: CTX, kind: 'CALL' },
+      { tenantId: CTX, kind: 'EMAIL' },
+      { tenantId: CTX, kind: 'MEETING' },
+    ]);
+    expect(err).toBeNull();
+  });
+
+  it('array com 1 row sem tenantId → erro identificando índice', () => {
+    const err = assertTenantWritePayload('Activity', 'createMany', CTX, [
+      { tenantId: CTX, kind: 'CALL' },
+      { kind: 'EMAIL' },
+      { tenantId: CTX, kind: 'MEETING' },
+    ]);
+    expect(err).toMatch(/row 1 sem tenantId no payload/);
+  });
+
+  it('array com 1 row tenantId ≠ contexto → erro identificando índice', () => {
+    const err = assertTenantWritePayload('Activity', 'createMany', CTX, [
+      { tenantId: CTX, kind: 'CALL' },
+      { tenantId: CTX, kind: 'EMAIL' },
+      { tenantId: 'tenant-outro', kind: 'MEETING' },
+    ]);
+    expect(err).toMatch(/row 2 tenantId no payload difere do contexto/);
+  });
+
+  it('array vazio → OK (nada a checar)', () => {
+    const err = assertTenantWritePayload('Activity', 'createMany', CTX, []);
+    expect(err).toBeNull();
+  });
+
+  it('payload undefined → OK (Prisma rejeita por outro caminho)', () => {
+    const err = assertTenantWritePayload('Activity', 'createMany', CTX, undefined);
+    expect(err).toBeNull();
+  });
+
+  it('array com row null intercalada → ignora null, valida restantes', () => {
+    // Cenário defensivo: null como row nunca deveria chegar aqui, mas o
+    // backstop deve ignorar em vez de crashar. Cast através de unknown[].
+    const payload = [
+      { tenantId: CTX, kind: 'CALL' },
+      null,
+      { tenantId: CTX, kind: 'EMAIL' },
+    ] as unknown as Record<string, unknown>[];
+    const err = assertTenantWritePayload('Activity', 'createMany', CTX, payload);
+    expect(err).toBeNull();
+  });
+
+  it('array como payload de create (op errada) → OK (ignora)', () => {
+    // Defensivo: arrays só fazem sentido em createMany; outras ops
+    // recebendo array (não deveriam) são ignoradas em vez de crash.
+    const err = assertTenantWritePayload('Activity', 'create', CTX, [
+      { tenantId: 'tenant-outro', kind: 'CALL' },
+    ]);
+    expect(err).toBeNull();
+  });
+
+  it('createMany com row única (não-array) → semântica de create', () => {
+    // Prisma aceita `data` como objeto único em createMany; backstop
+    // aplica a mesma regra de create (exige tenantId).
+    const errMissing = assertTenantWritePayload('Activity', 'createMany', CTX, {
+      kind: 'CALL',
+    });
+    expect(errMissing).toMatch(/sem tenantId no payload/);
+
+    const errOk = assertTenantWritePayload('Activity', 'createMany', CTX, {
+      tenantId: CTX,
+      kind: 'CALL',
+    });
+    expect(errOk).toBeNull();
+  });
+});

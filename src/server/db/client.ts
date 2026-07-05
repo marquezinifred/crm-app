@@ -15,6 +15,10 @@ const TENANT_ROOT_MODELS = new Set(['Tenant']);
 // - `create` continua exigindo tenantId no data (a extension já injeta,
 //   então o assert protege contra bypass explícito com data.tenantId
 //   diferente do contexto).
+// - `createMany` (P-45, 2026-07-05): itera as rows do array e assert em
+//   cada uma. A extension acima já injeta tenantId em cada row, mas o
+//   backstop confirma defensivamente (bypass explícito com row.tenantId
+//   ≠ contexto é rejeitado por row, identificando o índice).
 // - `update`/`upsert.update` NÃO exigem mais tenantId no data. A defesa
 //   primária é o WHERE injection acima (linhas ~109-118), que só permite
 //   afetar rows do tenant corrente. Rejeitamos apenas quando o caller
@@ -28,11 +32,34 @@ export function assertTenantWritePayload(
   model: string,
   op: TenantWriteOp,
   ctxTenantId: string,
-  payload: Record<string, unknown> | undefined,
+  payload: Record<string, unknown> | Record<string, unknown>[] | undefined,
 ): string | null {
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+  if (payload == null) return null;
+
+  // createMany: `data` pode ser um array de rows ou (raro) uma row única.
+  // Iteramos defensivamente cada row identificando o índice em caso de
+  // bypass explícito com tenantId ≠ contexto.
+  if (Array.isArray(payload)) {
+    if (op !== 'createMany') {
+      // Arrays só fazem sentido em createMany; outras ops não devem receber.
+      return null;
+    }
+    for (let i = 0; i < payload.length; i++) {
+      const row = payload[i];
+      if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
+      const declared = (row as Record<string, unknown>).tenantId;
+      if (declared == null) {
+        return `[tenant-isolation] ${model}.${op} row ${i} sem tenantId no payload`;
+      }
+      if (typeof declared === 'string' && declared !== ctxTenantId) {
+        return `[tenant-isolation] ${model}.${op} row ${i} tenantId no payload difere do contexto`;
+      }
+    }
     return null;
   }
+
+  if (typeof payload !== 'object') return null;
+
   const declared = payload.tenantId;
   const isCreate = op === 'create' || op === 'createMany';
 
@@ -151,9 +178,15 @@ function createPrismaClient(): PrismaClient {
           // P-42: backstop refeito. Semântica em `assertTenantWritePayload`.
           // - create: exige tenantId (a extension injeta acima, mas assertamos
           //   em profundidade contra bypass explícito com tenantId ≠ contexto).
+          // - createMany (P-45, 2026-07-05): itera rows do array; a extension
+          //   acima já injeta tenantId em cada row, backstop confirma
+          //   defensivamente (bypass explícito é rejeitado por índice).
           // - update / upsert.update: ausente OK (WHERE injection protege),
           //   presente ≠ contexto = throw (tentativa de mover row cross-tenant).
-          if (model && (op === 'create' || op === 'update' || op === 'upsert')) {
+          if (
+            model &&
+            (op === 'create' || op === 'createMany' || op === 'update' || op === 'upsert')
+          ) {
             if (op === 'upsert') {
               // upsert usa `create` + `update`, não `data`.
               const createErr = assertTenantWritePayload(
@@ -175,7 +208,7 @@ function createPrismaClient(): PrismaClient {
                 model,
                 op as TenantWriteOp,
                 tenantId,
-                a.data as Record<string, unknown> | undefined,
+                a.data as Record<string, unknown> | Record<string, unknown>[] | undefined,
               );
               if (err) throw new Error(err);
             }

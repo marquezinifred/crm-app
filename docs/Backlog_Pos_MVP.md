@@ -199,15 +199,47 @@ fixture de user autenticado local (relacionado com P-39 dummy Clerk).
 
 **Esforço:** ~2h.
 
-### P-45. Auditar `createMany` no backstop (P-42 residual)
-**Severidade:** Baixa. Registrado ao fechar P-42 em 2026-07-05.
+### ~~P-45. Auditar `createMany` no backstop (P-42 residual)~~ ✅ FECHADO
+**Resolvido em 2026-07-05.** Refactor cirúrgico em
+`src/server/db/client.ts`:
 
-`assertTenantWritePayload` atual retorna sem checar quando `data` é
-array (caso `createMany`). A Prisma extension injeta `tenantId` em
-cada row (linha ~135 de `client.ts`), então proteção existe — mas
-seria mais defensivo iterar as rows no backstop.
+- **Função pura `assertTenantWritePayload`** ganhou branch pra array:
+  quando `Array.isArray(payload)`, itera cada row identificando o
+  índice em caso de bypass (`row 2 tenantId no payload difere do
+  contexto`). Rows `null`/não-objeto são ignoradas defensivamente
+  (Prisma vai rejeitar por outro caminho). Signature estendida de
+  `Record<string, unknown> | undefined` pra `Record<string, unknown>
+  | Record<string, unknown>[] | undefined`.
+- **Extension `$allOperations`** agora inclui `'createMany'` no set
+  de ops que disparam o backstop (linha ~156 do `client.ts`). A
+  injeção de `tenantId` por row (linha ~132-137) continua sendo a
+  defesa primária; backstop confirma em profundidade contra bypass
+  explícito de caller.
+- **Compat total:** semântica de `create`/`update`/`upsert` intacta,
+  todos os 17 testes originais P-42 seguem passando. `createMany`
+  com data única (não-array) segue semântica de `create`.
 
-**Esforço:** ~1h.
+**Testes:** +8 novos em `tests/unit/tenant-backstop.test.ts` bloco
+"createMany (P-45)":
+1. Array 3 rows tenantId correto → OK
+2. Array com row sem tenantId → erro com índice
+3. Array com row tenantId ≠ ctx → erro com índice
+4. Array vazio → OK
+5. Payload undefined → OK
+6. Array com null intercalado → ignora null, valida restantes
+7. Array em op errada (create) → ignora defensivamente
+8. Data única em createMany (não-array) → semântica de create
+
+Total: **709 passing (baseline HEAD 693 - env vars) + 8 novos =
+701 passing** no worktree com env vars sensitive; **741+8 = 749 pass**
+esperado em env dummy consistente. Zero regressão (as 10 falhas
+pré-existentes em field-encryption/rate-limiter/ai-pricing/document-compare/
+summary-parser/communication-summary-errors são todas por env vars
+ausentes, confirmadas idênticas no HEAD via `git stash`).
+Type-check zero. Lint zero.
+
+Débitos residuais **P-44** (caller tRPC) e **P-46** (map Error pra
+TRPCError) continuam abertos.
 
 ### P-46. Mapear `Error("[tenant-isolation] ...")` pra TRPCError (P-42 residual)
 **Severidade:** Média. Registrado ao fechar P-42 em 2026-07-05.

@@ -60,6 +60,12 @@ Rodar antes de subir qualquer coisa em staging. Se um item falha, corrigir antes
 - [ ] **Feature flags conferidas antes do rollout**
   - `RBAC_GRANULAR_ENABLED=false` no 1º deploy (ligar só depois de §2.5 passar).
   - `MULTI_AI_ENABLED` casa em Vercel e Railway (mesmo valor).
+  - **P-60 (2026-07-05):** parsing de booleanas agora interpreta literal
+    (`"true|1|yes|on"` liga, `"false|0|no|off|""` desliga). Antes disso
+    `z.coerce.boolean("false") === true` LIGAVA silenciosamente qualquer
+    flag escrita como `=false`. Se subiu antes de 2026-07-05 com
+    `MULTI_AI_ENABLED=false` esperando desligar, reveja o estado atual
+    (o path novo pode ter ficado ligado).
 - [ ] **Chaves Clerk reais em staging/prod (NUNCA dummies)** — o `.env.example`
   documenta dummies (`pk_test_ZmFrZS5jbGVyay5hY2NvdW50cy5kZXYk` +
   `sk_test_dummy_do_not_use_in_prod`) só para dev/QA local em worktree —

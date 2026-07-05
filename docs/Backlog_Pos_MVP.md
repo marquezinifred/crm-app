@@ -85,29 +85,68 @@ verde em staging real.
 **Esforço:** ~3h (mock caminho B) OU ~30min (docs "requer staging").
 
 ### P-60. `communication-summary-errors.test.ts` 6 falhas — potencial regressão silenciosa
-**Severidade:** 🟡 Média (pode mascarar bug real). Descoberto pelo
-QA automation pós-bloco A+B+C em 2026-07-05.
+**✅ FECHADO em 2026-07-05.** Commit `4f44496` na branch
+`claude/p60-comm-summary-regression`.
 
-6 declarações falham em pré `@008f410` E pós `@d86ad14` (idêntico).
-Causa provável (do chip QA): `summarizeCommunication` resolve
-`{themes:[], adjustments:[]}` em vez de rejeitar quando
-`callAiFeature` mock throw. Ou o código foi refatorado silenciosamente
-pra engolir erro (regressão introduzida ANTES do range pré/pós deste
-chip), OU o teste espera comportamento antigo.
+**Diagnóstico (bisect):** commit culpado `9aef608` (Sprint 15F,
+2026-06-30). Sprint 15F trocou a superfície de IA de `callAiFeature`
+(path legado) por `dispatchChat` (roteador que respeita
+`MULTI_AI_ENABLED`). `summarizeCommunication` migrou; os testes NÃO.
+Continuaram mockando `callAiFeature` — mas quando `MULTI_AI_ENABLED`
+resolve `true`, `dispatchChat` chama `callAiWithFallback` +
+`resolveAiConfig` (Prisma direto), bypassando o mock. Resultado: mock
+não intercepta, Prisma tenta ir ao banco com `tenantId:'tenant-1'`
+(não-UUID), throw genérico, service catch-all resulta em
+`aiGenerated:false`. 6 asserts que esperavam `rejects.toBeInstanceOf(...)`
+recebem resolve. **Hipótese vencedora: B (teste velho pós-Sprint 15F).**
+Contrato do service está correto — só o mock estava no nível errado.
 
-**Impacto:** sem cobertura real do path de propagação de
-`FeatureNotAvailableError` / `AiLimitExceededError` / erros
-Anthropic 400/401/429. Feature gate existe e é usada em prod
-(Sprint 15F multi-provider) — sem teste passando pra confirmar
-propagação, regressão pode passar despercebida.
+**Bug secundário descoberto (bônus arquitetural):**
+`z.coerce.boolean()` no `src/lib/env.ts` fazia `Boolean("false") ===
+true`. Isso silenciosamente LIGAVA `MULTI_AI_ENABLED=false` no `.env`
+(além de `AXIOM_LOG_QUERIES` e `RBAC_GRANULAR_ENABLED`). Rollback
+via env var não funcionava — quem escrevesse "false" esperando
+desligar, ligava. Ver memory `env-boolean-parsing.md`.
 
-**Fix:** git bisect entre Sprint 15F rollout e agora pra localizar
-onde comportamento divergiu. Reajustar código OU teste conforme
-decisão de design.
+**Fix (2 partes, 1 commit):**
+1. **`tests/unit/communication-summary-errors.test.ts`** — substitui
+   `vi.mock('@/lib/ai/feature-gate')` por `vi.mock('@/lib/ai/dispatch')`.
+   Cada teste agora define `vi.mocked(dispatchChat).mockImplementation(...)`.
+   As 8 assertions cobrem exatamente o contrato do service:
+   `FeatureNotAvailableError`/`AiLimitExceededError` → rethrow;
+   `Anthropic.APIError` 400/401/429 → `mapAnthropicError` → `TRPCError`;
+   erro genérico ou 5xx → `aiGenerated:false` gracioso. Independente
+   da flag `MULTI_AI_ENABLED`.
+2. **`src/lib/env.ts`** — novo helper `envBoolean(default)` que
+   interpreta strings literalmente (`"true|1|yes|on"` → true;
+   `"false|0|no|off|""` → false; ausente → default; desconhecido →
+   default). Aplicado em `AXIOM_LOG_QUERIES`, `MULTI_AI_ENABLED`,
+   `RBAC_GRANULAR_ENABLED`. 10 testes novos em
+   `tests/unit/env-boolean-parsing.test.ts` cobrindo undefined /
+   boolean direto / cada string comum / case-insensitive / vazia /
+   valor desconhecido → default.
 
-**Esforço:** ~3h investigação + fix. Bloqueia confiança no baseline
-"6 failings pré-existentes" — se descobrir que é bug real, sobe pra
-🔴 Alta.
+**Resultado (as 6 assertions específicas):**
+
+| # | Assertion | Antes | Depois |
+|---|-----------|-------|--------|
+| 1 | `FeatureNotAvailableError` propaga | resolve `{themes:[]}` | rejects instanceof ✓ |
+| 2 | `AiLimitExceededError.kind='MONTHLY_TOKENS'` propaga | resolve | rejects toMatchObject ✓ |
+| 3 | 400 credit balance → `TRPCError PRECONDITION_FAILED` + créditos + console URL | resolve | rejects toSatisfy ✓ |
+| 4 | 401 → `TRPCError UNAUTHORIZED` + /admin/ai | resolve | rejects toSatisfy ✓ |
+| 5 | 429 sem retry-after → `TRPCError TOO_MANY_REQUESTS` + "alguns segundos" | resolve | rejects toSatisfy ✓ |
+| 6 | 429 com retry-after:30 → `TOO_MANY_REQUESTS` + "30s" | resolve | rejects toSatisfy ✓ |
+
+Assertions 7 (5xx fallback silencioso) e 8 (500 genérico → aiGenerated:false)
+já passavam por coincidência (path novo do resolve.ts também falhava
+com erro genérico não-mapeado que caía no ramo aiGenerated:false).
+
+**Baseline testes:**
+- Antes: 733 passing / 10 failing (4 field-encryption + 6 comm-summary) / 172 skipped
+- Depois: **739 passing / 4 failing (só field-encryption pré-existentes) / 172 skipped**
+- +6 comm-summary corrigidos, +10 env-boolean-parsing novos, 0 regressão
+
+Type-check zero. Lint zero.
 
 ### P-61. `src/server/trpc/trpc.ts` reporta 0% coverage estático
 **Severidade:** Baixa. Descoberto pelo QA automation pós-bloco A+B+C

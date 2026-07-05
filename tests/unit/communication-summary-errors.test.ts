@@ -8,15 +8,14 @@ import Anthropic from '@anthropic-ai/sdk';
 import { TRPCError } from '@trpc/server';
 import { AiLimitExceededError, FeatureNotAvailableError } from '@/lib/ai/feature-gate';
 
-vi.mock('@/lib/ai/feature-gate', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/ai/feature-gate')>(
-    '@/lib/ai/feature-gate',
-  );
-  return {
-    ...actual,
-    callAiFeature: vi.fn(),
-  };
-});
+// P-60 — Sprint 15F trocou `callAiFeature` (path legado) por `dispatchChat`
+// (roteador MULTI_AI_ENABLED). O mock precisa interceptar o `dispatchChat`,
+// que é a única superfície que `summarizeCommunication` chama hoje.
+// Mockar `callAiFeature` só cobria o path legado; com `MULTI_AI_ENABLED=true`
+// o teste era silenciosamente bypassado e caía no Prisma real.
+vi.mock('@/lib/ai/dispatch', () => ({
+  dispatchChat: vi.fn(),
+}));
 
 vi.mock('@/lib/ai/claude', () => ({
   getAnthropic: () => ({ messages: { create: vi.fn() } }),
@@ -31,7 +30,7 @@ vi.mock('@/server/services/ai-usage.service', () => ({
   AI_PRICING: {},
 }));
 
-import { callAiFeature } from '@/lib/ai/feature-gate';
+import { dispatchChat } from '@/lib/ai/dispatch';
 import { summarizeCommunication, __test } from '@/server/services/communication-summary.service';
 
 describe('summarizeCommunication — propagação de erros', () => {
@@ -41,7 +40,7 @@ describe('summarizeCommunication — propagação de erros', () => {
   });
 
   it('propaga FeatureNotAvailableError em vez de retornar aiGenerated:false', async () => {
-    vi.mocked(callAiFeature).mockImplementation(async () => {
+    vi.mocked(dispatchChat).mockImplementation(async () => {
       throw new FeatureNotAvailableError(
         'Resumo de comunicação está disponível como add-on. Habilite em /admin/billing.',
       );
@@ -57,7 +56,7 @@ describe('summarizeCommunication — propagação de erros', () => {
   });
 
   it('propaga AiLimitExceededError com kind correto', async () => {
-    vi.mocked(callAiFeature).mockImplementation(async () => {
+    vi.mocked(dispatchChat).mockImplementation(async () => {
       throw new AiLimitExceededError(
         'Limite mensal de tokens atingido.',
         'MONTHLY_TOKENS',
@@ -77,7 +76,7 @@ describe('summarizeCommunication — propagação de erros', () => {
   });
 
   it('falha de provider real (500/timeout) cai em aiGenerated:false sem lançar', async () => {
-    vi.mocked(callAiFeature).mockImplementation(async () => {
+    vi.mocked(dispatchChat).mockImplementation(async () => {
       throw new Error('Anthropic 500 Internal Server Error');
     });
 
@@ -93,7 +92,7 @@ describe('summarizeCommunication — propagação de erros', () => {
   });
 
   it('400 credit balance vira PRECONDITION_FAILED com msg de créditos', async () => {
-    vi.mocked(callAiFeature).mockImplementation(async () => {
+    vi.mocked(dispatchChat).mockImplementation(async () => {
       throw new Anthropic.APIError(
         400,
         { error: { type: 'invalid_request_error', message: 'Your credit balance is too low to access the Anthropic API.' } },
@@ -119,7 +118,7 @@ describe('summarizeCommunication — propagação de erros', () => {
   });
 
   it('401 vira UNAUTHORIZED com msg apontando /admin/ai', async () => {
-    vi.mocked(callAiFeature).mockImplementation(async () => {
+    vi.mocked(dispatchChat).mockImplementation(async () => {
       throw new Anthropic.APIError(
         401,
         { error: { type: 'authentication_error', message: 'invalid x-api-key' } },
@@ -144,7 +143,7 @@ describe('summarizeCommunication — propagação de erros', () => {
   });
 
   it('429 sem retry-after vira TOO_MANY_REQUESTS com msg genérica', async () => {
-    vi.mocked(callAiFeature).mockImplementation(async () => {
+    vi.mocked(dispatchChat).mockImplementation(async () => {
       throw new Anthropic.APIError(
         429,
         { error: { type: 'rate_limit_error', message: 'rate limit' } },
@@ -169,7 +168,7 @@ describe('summarizeCommunication — propagação de erros', () => {
   });
 
   it('429 com retry-after: 30 formata a mensagem com o tempo', async () => {
-    vi.mocked(callAiFeature).mockImplementation(async () => {
+    vi.mocked(dispatchChat).mockImplementation(async () => {
       throw new Anthropic.APIError(
         429,
         { error: { type: 'rate_limit_error', message: 'rate limit' } },
@@ -194,7 +193,7 @@ describe('summarizeCommunication — propagação de erros', () => {
   });
 
   it('5xx mantém fallback silencioso (aiGenerated:false + circuit breaker)', async () => {
-    vi.mocked(callAiFeature).mockImplementation(async () => {
+    vi.mocked(dispatchChat).mockImplementation(async () => {
       throw new Anthropic.APIError(
         500,
         { error: { type: 'api_error', message: 'internal' } },

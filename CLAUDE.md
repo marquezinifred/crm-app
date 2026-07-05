@@ -1378,6 +1378,30 @@ foram fechados na Sprint 11.
   (4) + `communication-summary-errors` (6) — confirmados idênticos ANTES
   do fix / 172 skipped**. Type-check zero. Lint zero. Rollback trivial
   (reverter 3 arquivos)
+- **P-31** Push nativo pro vendedor quando alocado a lead inbound —
+  débito residual do Sprint 15D fechado. `inboundRouter.assignInbound`
+  agora dispara `sendPushToUser(ownerId, {title, body, url})` em
+  paralelo à alocação (best-effort — `.catch(console.warn)` não
+  propaga rejection). Fix em `src/server/trpc/routers/inbound.ts`:
+  (1) query `opp = findFirst` ganha `clientCompany: { select: {
+  razaoSocial: true } }` no select pra compor o body; (2) após o
+  audit, `void sendPushToUser(input.ownerId, ...)` fire-and-forget
+  com fallback "Empresa" quando `razaoSocial` é null; (3) URL
+  `/pipeline/${opp.id}`. Reusa `sendPushToUser` do Sprint 10 (webpush
+  + VAPID + `deletedAt` em 410 Gone), zero dependência nova. Data
+  masking N/A (razão social é info comercial, não PII sensível).
+  +5 testes em `tests/unit/inbound-assign-push.test.ts` (padrão mock
+  de `tasks-router.test.ts` P-20): alocação dispara push com args
+  esperados; push falha → mutation ainda ok + `console.warn` com
+  prefixo `[inbound.assignInbound] push falhou`; cross-tenant NOT_FOUND
+  não chama push (regressão P-42); clientCompany nulo → "Empresa"
+  fallback; vendedor inativo → BAD_REQUEST sem push. `flushMicrotasks`
+  (setImmediate) garante que `.catch` do fire-and-forget rode antes
+  das assertions. Baseline: **728 passing** (baseline pré-P-31 = 723
+  + 5 novos) / 10 pré-existentes por env vars em `field-encryption`
+  (4) + `communication-summary-errors` (6) — confirmado idêntico
+  ANTES via `git stash` / 172 skipped. Type-check zero. Lint zero.
+  Rollback trivial (reverter `inbound.ts` + remover test file)
 - **P-54** Botão Salvar sem feedback + edits não limpos + IA bloqueada
   indefinidamente — bug crítico de UX descoberto em prod pelo Fred:
   ao salvar edits de estágio em `/pipeline/<id>`, tela ficava muda +

@@ -149,8 +149,13 @@ Cria uma opp end-to-end e move pelos 7 estágios respeitando validações.
    - `/contacts` → "+ Novo contato" → nome "QA Test", email "qa+test@venzo.com", vincular à "QA Test SA".
      - **Passa se:** contato salva + aparece na tabela.
 3. **Criar Opportunity**
-   - `/pipeline/new` → selecionar Company "QA Test SA" (autocomplete deve mostrar), título "Deal QA #1", valor R$ 10.000, data prevista +30d → salvar.
-     - **Passa se:** redireciona pra `/pipeline/<id>` com header "Deal QA #1" + badge "LEAD" + valor destacado.
+   - `/pipeline/new` → selecionar Company "QA Test SA" (autocomplete deve mostrar), título "Deal QA #1", data prevista +30d.
+   - **Máscara Valor estimado (P-50 fechado 2026-07-05):** digitar `289311` no campo "Valor estimado (R$)".
+     - **Passa se:** input mostra `289.311` (separador milhar `.` pt-BR) ao digitar. Continuar digitando `,50` → mostra `289.311,50`.
+     - **Falha se:** input mostra `289311` cru sem separador, ou aceita apenas dígitos (bug P-50 regrediu).
+   - Salvar.
+     - **Passa se:** redireciona pra `/pipeline/<id>` com header "Deal QA #1" + badge "LEAD" + valor destacado como `R$ 289.311,50` (Sprint 14.5 `formatBRL`). Payload da mutation `opportunities.create` (Network tab) devolve `estimatedValue: 289311.5` (número puro, não string). Se digitou só `289311`, payload = `289311`.
+   - **Cross-check edição:** ainda em `/pipeline/<id>`, avançar até estágio OPORTUNIDADE. Campo "Valor estimado (R$)" no form do estágio deve exibir o mesmo valor com máscara pt-BR. Digitar `500000,75` → mostra `500.000,75`. Salvar → payload `opportunities.update` devolve `estimatedValue: 500000.75`.
 4. **Salvar campos por estágio (regressão P-42 fechada 2026-07-05)**
    - Ainda no estágio LEAD do `/pipeline/<id>`, preencher os campos do estágio:
      - `meetingScheduledAt` = data/hora futura qualquer

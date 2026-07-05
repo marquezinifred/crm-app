@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { trpc } from '@/lib/trpc/client';
 import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { brl, initials } from '@/lib/utils/hooks';
+import { formatBRLInput, unformatBRLInput } from '@/lib/utils/format';
 import { STAGES, STAGE_LABELS } from '@/components/pipeline/types';
 import { STAGE_INTENT_LABEL } from '@/lib/constants/pipeline-stages';
 import { CommunicationIntake } from '@/components/pipeline/CommunicationIntake';
@@ -318,9 +319,10 @@ function StageFields({
             <label>
               <span className="mb-1 block font-medium">Valor estimado (R$)</span>
               <input
-                type="number"
-                value={v('estimatedValue', opp.estimatedValue)}
-                onChange={(e) => set('estimatedValue', e.target.value)}
+                type="text"
+                inputMode="decimal"
+                value={formatBRLInput(v('estimatedValue', opp.estimatedValue))}
+                onChange={(e) => set('estimatedValue', formatBRLInput(e.target.value))}
                 className="w-full rounded border px-2 py-1.5"
               />
             </label>
@@ -415,7 +417,7 @@ function coerceFields(edits: Record<string, string>) {
     } else if (k === 'meetingHappened') {
       out[k] = v === 'true';
     } else if (k === 'estimatedValue') {
-      out[k] = Number(v);
+      out[k] = unformatBRLInput(v);
     } else if (['meetingScheduledAt', 'acceptedAt'].includes(k)) {
       out[k] = new Date(v);
     } else if (['expectedCloseDate', 'proposalPresentedAt', 'decisionExpectedAt'].includes(k)) {

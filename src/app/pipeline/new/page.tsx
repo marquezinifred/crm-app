@@ -11,6 +11,7 @@ import { Input, Select, Textarea } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
 import { QuickCreateTrigger } from '@/components/ui/quick-create-trigger';
+import { formatBRLInput, unformatBRLInput } from '@/lib/utils/format';
 
 export default function NewOpportunityPage() {
   const router = useRouter();
@@ -73,7 +74,7 @@ export default function NewOpportunityPage() {
             ownerId: form.ownerId || me.data?.id || '',
             source: form.source,
             sourceDetail: form.sourceDetail || undefined,
-            estimatedValue: form.estimatedValue ? Number(form.estimatedValue) : undefined,
+            estimatedValue: form.estimatedValue ? unformatBRLInput(form.estimatedValue) : undefined,
             expectedCloseDate: form.expectedCloseDate
               ? new Date(form.expectedCloseDate)
               : undefined,
@@ -185,11 +186,13 @@ export default function NewOpportunityPage() {
         <div className="grid grid-cols-2 gap-4">
           <Field label="Valor estimado (R$)">
             <Input
-              type="number"
-              min="0"
-              step="100"
+              type="text"
+              inputMode="decimal"
               value={form.estimatedValue}
-              onChange={(e) => setForm({ ...form, estimatedValue: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, estimatedValue: formatBRLInput(e.target.value) })
+              }
+              placeholder="0"
             />
           </Field>
           <Field label="Data prevista de fechamento">

@@ -13,35 +13,27 @@ Mantido em sincronia com `CLAUDE.md` e memory `MEMORY.md`.
 
 ## 🔥 Pendências de curto prazo (próximas 2 semanas)
 
-### P-50. Campo "Valor estimado (R$)" sem máscara pt-BR nos forms
-**Severidade:** Média (UX). Descoberto em uso real 2026-07-05 pelo
-Fred em prod (`/pipeline/<id>` estágio Oportunidade → briefing form).
+### P-50. Campo "Valor estimado (R$)" sem máscara pt-BR nos forms ✅ FECHADO 2026-07-05
+Branch `claude/p50-brl-input-mask` (aguarda push+merge; hash final
+sai no merge).
 
-Hoje o input é `type="number"` cru (`289311` sem separador). Deve
-mostrar `289.311` (milhar `.`, decimal `,` opcional para
-`289.311,50`), seguindo padrão pt-BR e casando com `formatBRL` já
-usado em display (Sprint 14.5).
-
-**Compatibilidade:** valor legado no banco é número puro sem escala
-de centavos (Prisma Decimal). Máscara deve preservar isso — usuário
-digita "289311" → mostra "289.311" (não 100× menor). Escola "cente
-como último dígito" **não** — quebra dados existentes.
-
-**Escopo:**
-- `src/lib/utils/format.ts` — adicionar `formatBRLInput(raw: string)`
-  e `unformatBRLInput(value: string): number` seguindo padrão
-  Sprint 15C (CNPJ/CEP)
-- 2 pontos de aplicação:
-  - `src/app/pipeline/new/page.tsx:186-192` (criação)
-  - `src/app/pipeline/[id]/page.tsx:319-323` (edição por estágio)
-- Trocar `type="number"` por `type="text" inputMode="decimal"` +
-  máscara on-change
-- Ao submeter: `unformatBRLInput` → número puro no payload
-- Testes unit em `tests/unit/format-brl-input.test.ts` cobrindo:
-  digitação incremental, decimal opcional, empty → 0, valor > 1
-  bilhão, colar valor pré-formatado, submissão
-
-**Esforço:** ~2h. Não bloqueia — mas UX ruim em uso ao vivo.
+Entregue conforme escopo:
+- `src/lib/utils/format.ts` — `formatBRLInput(raw)` e
+  `unformatBRLInput(value)`. Regra: último `.` ou `,` seguido de 0-2
+  dígitos = decimal (display); 1-2 dígitos = decimal (unformat).
+  Cap 12 dígitos inteiros + 2 decimais. Zeros à esquerda strippados.
+  Normaliza `.` decimal em `,` no display (compat calculadora).
+- `src/app/pipeline/new/page.tsx:186-193` — `type="text"
+  inputMode="decimal"`, `formatBRLInput` on-change, `unformatBRLInput`
+  no submit (linha 76).
+- `src/app/pipeline/[id]/page.tsx:319-325` — mesmo pattern +
+  `coerceFields` linha 417 troca `Number(v)` por `unformatBRLInput(v)`.
+- 15 testes novos em `tests/unit/format-brl-input.test.ts`
+  (vazio, incremental, decimal opcional, cap 12 dígitos, colar valor,
+  round-trip, ponto-como-decimal). Total pós-P-50: **741 passing
+  (+15 novos) / 6 pré-existentes (env vars em
+  `communication-summary-errors`) / 172 skipped**. Type-check zero.
+  Lint zero.
 
 ### P-47. Vitest sem carregamento automático de `.env.local`
 **Severidade:** Média. Descoberto pelo QA automation report pós-P-42

@@ -13,6 +13,36 @@ Mantido em sincronia com `CLAUDE.md` e memory `MEMORY.md`.
 
 ## 🔥 Pendências de curto prazo (próximas 2 semanas)
 
+### P-50. Campo "Valor estimado (R$)" sem máscara pt-BR nos forms
+**Severidade:** Média (UX). Descoberto em uso real 2026-07-05 pelo
+Fred em prod (`/pipeline/<id>` estágio Oportunidade → briefing form).
+
+Hoje o input é `type="number"` cru (`289311` sem separador). Deve
+mostrar `289.311` (milhar `.`, decimal `,` opcional para
+`289.311,50`), seguindo padrão pt-BR e casando com `formatBRL` já
+usado em display (Sprint 14.5).
+
+**Compatibilidade:** valor legado no banco é número puro sem escala
+de centavos (Prisma Decimal). Máscara deve preservar isso — usuário
+digita "289311" → mostra "289.311" (não 100× menor). Escola "cente
+como último dígito" **não** — quebra dados existentes.
+
+**Escopo:**
+- `src/lib/utils/format.ts` — adicionar `formatBRLInput(raw: string)`
+  e `unformatBRLInput(value: string): number` seguindo padrão
+  Sprint 15C (CNPJ/CEP)
+- 2 pontos de aplicação:
+  - `src/app/pipeline/new/page.tsx:186-192` (criação)
+  - `src/app/pipeline/[id]/page.tsx:319-323` (edição por estágio)
+- Trocar `type="number"` por `type="text" inputMode="decimal"` +
+  máscara on-change
+- Ao submeter: `unformatBRLInput` → número puro no payload
+- Testes unit em `tests/unit/format-brl-input.test.ts` cobrindo:
+  digitação incremental, decimal opcional, empty → 0, valor > 1
+  bilhão, colar valor pré-formatado, submissão
+
+**Esforço:** ~2h. Não bloqueia — mas UX ruim em uso ao vivo.
+
 ### P-47. Vitest sem carregamento automático de `.env.local`
 **Severidade:** Média. Descoberto pelo QA automation report pós-P-42
 em 2026-07-05. **Causa raiz do P-43** — consolide os dois quando

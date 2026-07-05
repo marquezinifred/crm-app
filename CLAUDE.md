@@ -1353,6 +1353,31 @@ foram fechados na Sprint 11.
     via `git stash`) / 172 skipped**. Type-check zero. Lint zero.
   - Memory `env-boolean-parsing.md` nova documenta a lição: nunca
     usar `z.coerce.boolean()` pra env — usar `envBoolean()`
+- **P-56** `billing.status` bloqueia todo role não-ADMIN (falso 403 no
+  AppShell) — descoberto em uso 2026-07-05 pelo Fred logado como
+  DIRETOR_COMERCIAL: `GET /api/trpc/billing.status?batch=1 → 403
+  (Forbidden)` em toda carga de página, banner Past Due e Trial Expiry
+  nunca apareciam pra não-ADMINs. Fix cirúrgico (caminho A da spec —
+  procedure separada, sem tocar em `permissions-catalog.ts` nem
+  requerer backfill): nova `billing.statusForBanner` em
+  `src/server/trpc/routers/billing.ts:34-77` protegida só por
+  `protectedProcedure` (autenticado basta). Retorna `{plan,
+  subscriptionStatus, trialEndsAt, isPastDue, isTrialExpiring}` com
+  computação server-side (`isPastDue` = PAST_DUE|CANCELED; `isTrialExpiring`
+  = plan=TRIAL && trialEndsAt<7d). `billing.status` original **preservado**
+  com `adminOnlyProcedure` — `/admin/billing` continua expondo
+  `stripeCustomerId`, `currentPeriodEnd` só pra ADMIN. Consumers migrados:
+  `src/components/layout/PastDueBanner.tsx:14` e
+  `src/components/billing/TrialExpiryBanner.tsx:12`. Testes:
+  `tests/unit/billing-status-for-banner.test.ts` novo com **13 casos**
+  (PAST_DUE=true, CANCELED=true, trial<7d=true, trial>7d=false, plan≠TRIAL
+  ignora trialEndsAt, ACTIVE+sem trial=ambos false, tenant não encontrado
+  retorna defaults, cross-tenant filtra por ctx.tenantId, DIRETOR_COMERCIAL
+  não lança FORBIDDEN, 4 roles não-ADMIN funcionam). Baseline: **736
+  passing (+13 novos) / 10 pré-existentes por env vars em `field-encryption`
+  (4) + `communication-summary-errors` (6) — confirmados idênticos ANTES
+  do fix / 172 skipped**. Type-check zero. Lint zero. Rollback trivial
+  (reverter 3 arquivos)
 - **P-54** Botão Salvar sem feedback + edits não limpos + IA bloqueada
   indefinidamente — bug crítico de UX descoberto em prod pelo Fred:
   ao salvar edits de estágio em `/pipeline/<id>`, tela ficava muda +

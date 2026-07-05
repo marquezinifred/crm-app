@@ -13,20 +13,15 @@ Mantido em sincronia com `CLAUDE.md` e memory `MEMORY.md`.
 
 ## 🔥 Pendências de curto prazo (próximas 2 semanas)
 
-### P-51. Playwright `smoke.spec.ts` desatualizada (Sprint 14 copy)
-**Severidade:** Baixa. Descoberto pelo QA automation pós-P-50 em
-2026-07-05.
+### ~~P-51. Playwright `smoke.spec.ts` desatualizada (Sprint 14 copy)~~ ✅ FECHADO 2026-07-05
+Chip `claude/p51-smoke-copy` — fixture-only. 2 seletores em
+`tests/e2e/smoke.spec.ts` atualizados: `/CRM B2B/i` → `/Feche mais/i`
+(landing) e `/Auto-cadastro/i` → `/Fale com a gente/i`
+(`/p/[slug]/contact`). Sem código de app tocado.
 
-Fixtures esperam copy pré-Sprint 14 ("CRM B2B", "Auto-cadastro") mas
-Sprint 14 substituiu pra "Feche mais. Vença sempre." (landing) e
-"Fale com a gente" (`/p/[slug]/contact`). 2 asserts falham em qualquer
-run local.
-
-**Fix:** atualizar seletores em `tests/e2e/smoke.spec.ts` pra
-`/Feche mais/i` e `/Fale com a gente/i`.
-
-**Esforço:** ~15min. Não bloqueia — CI já skipa E2E na ausência de
-env vars.
+Validação: `npx playwright test tests/e2e/smoke.spec.ts
+--project=chromium-desktop` = **3/3 passing (7.7s)**. Type-check
+zero, lint zero. QA automation exception aplicada (fixture E2E).
 
 ### P-52. `axe-smoke.spec.ts` reporta violações `html-has-lang`
 **Severidade:** Baixa. Descoberto pelo QA automation pós-P-50 em

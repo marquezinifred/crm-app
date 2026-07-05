@@ -1306,6 +1306,19 @@ foram fechados na Sprint 11.
   ad-hoc
 
 **Débitos zerados em 2026-07-05:**
+- **P-51** Playwright `smoke.spec.ts` desatualizada (Sprint 14 copy) —
+  2 asserts falhavam desde Sprint 14 (nunca eram rodados em CI por
+  falta de env vars E2E). `page.getByRole('heading', { name: /CRM B2B/i })`
+  não batia porque landing virou "Feche mais. Vença sempre." em
+  `src/app/page.tsx:10`; `/Auto-cadastro/i` também não batia porque
+  `/p/[tenantSlug]/contact` virou "Fale com a gente" em
+  `src/app/p/[tenantSlug]/contact/page.tsx:43`. Fix cirúrgico: 2 edits
+  em `tests/e2e/smoke.spec.ts` linhas 10 e 23 trocando os regex pra
+  `/Feche mais/i` e `/Fale com a gente/i`. Sem código de app tocado.
+  Validação local: `npx playwright test tests/e2e/smoke.spec.ts
+  --project=chromium-desktop` = **3/3 passing (7.7s)** (com `.env.local`
+  symlinkado da paterna). Type-check zero. Lint zero. QA automation
+  exception aplicada (fixture E2E, sem código de app)
 - **P-50** Campo "Valor estimado (R$)" sem máscara pt-BR — descoberto
   em uso real 2026-07-05 pelo Fred em prod. Input `type="number"` cru
   mostrava `289311` sem separador. Fix: `src/lib/utils/format.ts`

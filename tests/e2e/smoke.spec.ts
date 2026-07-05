@@ -7,7 +7,7 @@ import { test, expect } from '@playwright/test';
 
 test('home renderiza', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /CRM B2B/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Feche mais/i })).toBeVisible();
 });
 
 test('health endpoint retorna ok ou 503', async ({ request }) => {
@@ -20,6 +20,6 @@ test('health endpoint retorna ok ou 503', async ({ request }) => {
 
 test('auto-cadastro público de contato renderiza form', async ({ page }) => {
   await page.goto('/p/qualquer-slug/contact');
-  await expect(page.getByRole('heading', { name: /Auto-cadastro/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Fale com a gente/i })).toBeVisible();
   await expect(page.getByLabel(/Nome completo/i)).toBeVisible();
 });

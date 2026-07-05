@@ -13,6 +13,32 @@ Mantido em sincronia com `CLAUDE.md` e memory `MEMORY.md`.
 
 ## 🔥 Pendências de curto prazo (próximas 2 semanas)
 
+### P-43. Baseline testes tem 3 leituras diferentes por ambiente
+**Severidade:** Média (afeta reporting de QA automation). Descoberto
+pelo chip housekeeping em 2026-07-05.
+
+Medições em ambientes distintos:
+- **715** passing (P-41 — env dummy 100% consistente)
+- **709** passing (P-40 — `.env.local` paterna Fred, sem `ANTHROPIC_API_KEY` real)
+- **661** passing (housekeeping — worktree efêmera com symlink node_modules)
+
+Delta 54 entre extremos vem de Vitest **não carregar `.env.local`
+automaticamente** (responsabilidade do Next.js — Vitest lê só
+`process.env` do shell). Baseline "verde" acaba dependendo de
+como cada dev/CI carrega env.
+
+**Escopo:**
+- `vitest.setup.ts` novo (ou estender existente) carregando dotenv
+  com precedence `.env.test → .env.local → .env`
+- Documentar em CLAUDE.md §Baseline atual a matriz esperada por
+  cenário (CI sem env / dev com `.env.local` / worktree efêmera)
+- Alternativa: script `npm run test:with-env` usando `dotenv-cli`
+  como wrapper (pesa menos que alterar setup global)
+
+**Esforço:** ~2h. Não bloqueia — mas próximo chip QA automation
+vai reportar "regressão" fantasma quando não é. Candidato Sprint 16
+junto com P-37/P-38.
+
 ### P-42. 🔴 Backstop tenant-isolation quebra TODOS os `.update` de routers
 **Severidade:** 🔴 Alta (features quebradas em produção). Descoberto
 em uso real 2026-07-05 pelo Fred no Vercel prod

@@ -211,6 +211,59 @@ gap estatística.
 
 **Esforço:** ~1h. Nice-to-have.
 
+### P-62. `RBAC_GRANULAR_ENABLED` flag morta — sem consumer runtime
+**Severidade:** Média (débito arquitetural). Descoberto pelo QA
+automation pós-bloco G em 2026-07-05.
+
+Sprint 15E spec §5.4 documentou o kill-switch com passo "Ativar
+`RBAC_GRANULAR_ENABLED=true`" como parte do rollout. Grep no
+código-fonte revelou que a flag existe no schema `src/lib/env.ts:124`
+via `envBoolean(false)` mas **nenhum consumer runtime** em
+`src/lib/**` ou `src/server/**` a lê. `tests/unit/rbac-kill-switch.test.ts`
+está `describe.skip` — nunca implementado.
+
+Consequência: hoje, mesmo se admin setar
+`RBAC_GRANULAR_ENABLED=true` ou `=false` em prod, comportamento é
+idêntico. Sprint 15E backend está sempre ativo. Isso invalida a
+promessa de rollback rápido do Sprint 15E spec.
+
+**Fix:**
+- Adicionar branch em `hasPermission` (`src/server/services/permissions.service.ts`):
+  se `env.RBAC_GRANULAR_ENABLED === false`, delegar pra path legado
+  (`hasCapability` com `ACTIONS` + `ROLE_CAPABILITIES`)
+- Reativar `rbac-kill-switch.test.ts` com testes de gate ligado/desligado
+
+OU **alternativa (recomendada):** aceitar que Sprint 15E é
+one-way (sem kill-switch runtime) e remover a flag do schema. Docs
+Sprint 15E spec §5.4 são desatualizadas — rollback só via revert de
+commits + `prisma migrate reset`. Documentar isso em CLAUDE.md.
+
+**Esforço:** ~2h implementação do gate real OU ~15min limpeza doc.
+
+### P-63. Auditoria retroativa `AXIOM_LOG_QUERIES` em prod (potencial LGPD)
+**Severidade:** 🟡 Alta (potencial risco LGPD). Descoberto pelo QA
+automation pós-bloco G em 2026-07-05.
+
+Análise do bug `z.coerce.boolean("false") === true` (P-60): se em
+prod `AXIOM_LOG_QUERIES=false` estivesse setada explicitamente antes
+de 2026-07-05, estava sendo interpretada como `true` — logando
+todas as queries tRPC no dataset Axiom, incluindo payloads que podem
+conter PII (filtros por email, CNPJ, nome).
+
+**Verificação atual:** `vercel env ls production` mostrou que a
+var **não está setada** em prod. Default `.default(false)` aplicava
+`false` corretamente pré-bug. **Sem risco retroativo confirmado.**
+
+**Ação preventiva:** documentar em `docs/Metodologia_Desenvolvimento_Venzo.md`
+que kill-switches devem usar `envBoolean` (nunca `z.coerce.boolean`).
+Adicionar teste de regressão que grep proíbe `z.coerce.boolean` em
+`src/lib/env.ts`.
+
+**Se um dia a var for setada em prod:** rodar checklist do sanity
+check (spec do QA automation §8) antes do próximo deploy.
+
+**Esforço:** ~30min (docs + regressão test).
+
 ### ~~P-54. Botão Salvar sem feedback + edits não limpos + IA bloqueada indefinidamente~~ ✅ FECHADO 2026-07-05
 Chip `claude/p54-salvar-feedback` (worktree `blissful-zhukovsky-24abed`),
 commit `89f5a95` — fix cirúrgico em `src/app/pipeline/[id]/page.tsx:22-51`. As 3 mutations

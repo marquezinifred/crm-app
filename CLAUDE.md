@@ -1438,8 +1438,26 @@ foram fechados na Sprint 11.
   zero. Lint zero. Rollback trivial (reverter 3 componentes + 1 teste).
   Débito adjacente **TasksSection.updateStatus** (checkbox toggle) sem
   toast em erro — não coberto por este chip (escopo foi
-  Communication/Documents/Proposals). Registrar como P-62 se virar
+  Communication/Documents/Proposals). Registrar como P-64 se virar
   recorrente
+- **QA automation pós-bloco G** — chip QA (worktree
+  `zealous-goldberg-9f4794`) verificou main `@17af12c` contra baseline
+  `@9c49531`. Verdict: **OK seguir, zero regressão**. Baseline pós:
+  **816 passing / 0 failing / 172 skipped (988 total)** bate 1:1 com
+  modelo (+45 esperado). +6 comm-summary corrigidos + 39 fresh nos
+  4 test files novos. Type-check zero, lint zero. Coverage `envBoolean`
+  100% funcs; `billing.statusForBanner` 100% funcs/branches;
+  `assignInbound` fallback "Empresa" + fire-and-forget preservados;
+  `aiFailed` inline banner do CommunicationIntake preservado. Playwright
+  BLOCKED por infra (browsers ausentes no worktree — P-59 pré-existente).
+  **Verificação crítica das env vars prod feita: `vercel env ls production`
+  mostrou zero flags kill-switch setadas → defaults aplicados idênticos
+  pré/pós fix `z.coerce.boolean`.** Zero risco de mudança de comportamento
+  no deploy. Débitos residuais registrados: **P-62** (RBAC_GRANULAR_ENABLED
+  flag morta sem consumer runtime — invalida promessa de rollback rápido
+  do Sprint 15E spec) + **P-63** (auditoria retroativa AXIOM_LOG_QUERIES
+  LGPD — sem risco confirmado, mas documentação preventiva).
+  Recomendação: **OK seguir**, sem chip de fix
 - **P-54** Botão Salvar sem feedback + edits não limpos + IA bloqueada
   indefinidamente — bug crítico de UX descoberto em prod pelo Fred:
   ao salvar edits de estágio em `/pipeline/<id>`, tela ficava muda +

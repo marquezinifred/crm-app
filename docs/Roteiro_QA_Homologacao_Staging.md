@@ -33,7 +33,7 @@ Rodar antes de subir qualquer coisa em staging. Se um item falha, corrigir antes
   ```bash
   npm test
   ```
-  Esperado: `609 passing / 10 failed (pré-existentes: env vars ausentes em field-encryption, rate-limiter, ai-pricing, document-compare, summary-parser, communication-summary-errors) / 2 skipped`. Se subir de 10 falhas, investigar. Baseline documentado em [`QA_Automation_Report_Sprint_15E.md`](QA_Automation_Report_Sprint_15E.md).
+  Esperado (env dummy consistente — todo `xxx-dummy` no `.env.example`): `715 passing / 0 failing / 168 skipped (883 total)`. Com env vars parcialmente reais em setup de dev, ~709 é aceitável — 6 tests em `tests/unit/communication-summary-errors.test.ts` dependem de `ANTHROPIC_API_KEY` real. Se ultrapassar 10 falhas OU baixar de 709 passing, investigar antes de subir staging. Baseline atualizado em CLAUDE.md §"Baseline de testes atual (2026-07-04)"; snapshot histórico em [`QA_Automation_Report_Sprint_15E.md`](QA_Automation_Report_Sprint_15E.md) preservado como referência do Sprint 15E.
 - [ ] **Type-check zero**
   ```bash
   npx tsc --noEmit
@@ -562,7 +562,7 @@ Comportamentos esperados quando algo cai. Bom validar de vez em quando pra garan
 
 Não precisa refazer manualmente. Roda no CI.
 
-**Suite Vitest (`npm test`)** — 609 passing / 10 pré-existentes / 2 skipped.
+**Suite Vitest (`npm test`)** — 715 passing / 0 failing / 168 skipped (883 total) com env dummy consistente. Com env vars parcialmente reais, ~709 (6 tests de `communication-summary-errors` dependem de `ANTHROPIC_API_KEY`). Ver CLAUDE.md §"Baseline de testes atual (2026-07-04)".
 
 **Suite Playwright (`npm run test:e2e`):**
 - [`tests/e2e/axe-smoke.spec.ts`](../tests/e2e/axe-smoke.spec.ts) — a11y smoke (axe-core) em 5 rotas públicas + 4 autenticadas.

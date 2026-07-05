@@ -231,6 +231,14 @@ Touch targets ≥ 44×44px.
 ### 5.2. Baseline atual (2026-07-04, medido pelo QA automation report)
 - Vitest com env dummy consistente: **715 passing / 0 failing / 168 skipped**
   (883 tests total)
+- **Nota sobre variância:** com env vars parcialmente preenchidas (setup real
+  de dev — Neon/Clerk configurado mas sem chaves IA reais), ~709 é aceitável.
+  6 tests em `tests/unit/communication-summary-errors.test.ts` dependem de
+  `ANTHROPIC_API_KEY` real. 715/0/168 é o piso 100% env dummy consistente
+  (todo `xxx-dummy` no `.env.example`). Chip P-40 mediu 709, P-41 mediu 715
+  — mesma paterna, mesma execução, diferença é só sensibilidade a env. Não é
+  regressão de código. Ver [CLAUDE.md §"Baseline de testes atual"](../CLAUDE.md)
+  pra fonte da verdade
 - Sem env vars: ~11 test files falham no import (env-dependent — field-encryption,
   rate-limiter, ai-pricing, document-compare, summary-parser,
   communication-summary-errors etc). NÃO é regressão real

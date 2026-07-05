@@ -1075,13 +1075,22 @@ Medido pelo QA automation report após ciclo P-32 → P-36:
 
 - `npm test` com env dummy consistente: **715 passing / 0 failing / 168 skipped**
   (883 tests total)
+- **Nota sobre variância:** com env vars parcialmente preenchidas (setup
+  real de dev com Neon/Clerk mas sem chaves IA reais), ~709 é esperado —
+  6 tests em `tests/unit/communication-summary-errors.test.ts` dependem
+  de `ANTHROPIC_API_KEY` real. 715/0/168 é o piso 100% env dummy
+  consistente (todo `xxx-dummy` no `.env.example`). Não é regressão —
+  é sensibilidade a env. Chip P-40 mediu 709 no ambiente dele; P-41
+  mediu 715 com dummies homogêneas. Ambos são o mesmo baseline sem
+  regressão real de código
 - Sem env vars: ~11 test files falham no import (env-dependent —
   field-encryption, rate-limiter, ai-pricing, document-compare,
   summary-parser, communication-summary-errors). Não é regressão real
 - 168 skipped = ~166 estáticos + 2 conditional (RBAC + tenant-isolation
   guardados por `DATABASE_URL_TEST`)
 - `npx tsc --noEmit`: zero
-- `npm run lint`: zero na paterna (worktree pode falhar por [P-40](docs/Backlog_Pos_MVP.md))
+- `npm run lint`: zero na paterna E em worktree (pós-P-40 com
+  `root: true` em `.eslintrc.json`)
 
 Snapshots históricos por sprint estão preservados nos bullets acima
 ("Testes: X passing" em cada bloco de sprint) — não confundir com
@@ -1295,6 +1304,25 @@ foram fechados na Sprint 11.
   `/admin` e `/platform` (`/pipeline`, `/pipeline/[id]`, `/inbox`,
   `/contacts`, `/imports`, `/more`, `/reports`) ainda têm `<h1>`
   ad-hoc
+
+**Housekeeping cycle 2026-07-05** — residuais R1/R2/R3 dos chips P-39
+e P-40 fechados em um único commit docs+config (sem código de app):
+- **R1** — dummy `CLERK_ENCRYPTION_KEY` documentada no `.env.example`
+  bloco Clerk. Silencia o warn `Missing CLERK_ENCRYPTION_KEY` do SDK
+  em `next dev`. Var não passa pelo Zod schema (`src/lib/env.ts` intacto);
+  SDK Clerk lê direto. Prod continua com `openssl rand -base64 32`
+- **R2** — `docs/Roteiro_QA_Homologacao_Staging.md` §0 (linha 36) e §5
+  (linha 565) atualizados de "609 passing / 10 failed" pra "715 passing
+  / 0 failing / 168 skipped (883 total)" com nota sobre variância
+  709–715 dependendo de `ANTHROPIC_API_KEY`
+- **R3** — nota de variância adicionada em `CLAUDE.md` §Baseline e
+  `docs/Metodologia_Desenvolvimento_Venzo.md` §5.2 esclarecendo que
+  709 (env real parcial) e 715 (env dummy 100%) são o mesmo baseline
+  verde — 6 tests em `communication-summary-errors.test.ts` dependem
+  de chave IA real. Sensibilidade a env, não regressão
+- QA automation exception aplicada — docs+config only, sem código de
+  app. Baseline preservado (715 com env dummy; 709 com env parcial).
+  Type-check zero. Lint zero na paterna E worktree
 
 **Débitos zerados em 2026-07-04:**
 - P-40 Conflito `.eslintrc.json` em worktree — fix defensivo

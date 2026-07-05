@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
 import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/toast';
 
 interface Props {
   opportunityId: string;
@@ -30,6 +31,7 @@ interface EditableSummary {
 }
 
 export function CommunicationIntake({ opportunityId, stageHasDirtyChanges = false, onConfirmed }: Props) {
+  const { toast } = useToast();
   const [rawText, setRawText] = useState('');
   const [summary, setSummary] = useState<EditableSummary | null>(null);
   const [tasks, setTasks] = useState<ProposedTask[]>([]);
@@ -57,7 +59,9 @@ export function CommunicationIntake({ opportunityId, stageHasDirtyChanges = fals
           selected: true,
         })),
       );
+      toast({ kind: 'success', title: 'Resumo gerado.' });
     },
+    onError: (err) => toast({ kind: 'error', title: friendlyTrpcError(err) }),
   });
 
   const confirm = trpc.activities.confirmSummary.useMutation({
@@ -66,7 +70,9 @@ export function CommunicationIntake({ opportunityId, stageHasDirtyChanges = fals
       setSummary(null);
       setTasks([]);
       onConfirmed?.();
+      toast({ kind: 'success', title: 'Reunião salva.' });
     },
+    onError: (err) => toast({ kind: 'error', title: friendlyTrpcError(err) }),
   });
 
   if (!summary) {
@@ -97,9 +103,6 @@ export function CommunicationIntake({ opportunityId, stageHasDirtyChanges = fals
           <p className="mt-2 text-sm text-warning-text">
             Salve a reunião antes de resumir com IA.
           </p>
-        )}
-        {!blockedByDirty && summarize.error && (
-          <p className="mt-2 text-sm text-danger">{friendlyTrpcError(summarize.error)}</p>
         )}
       </div>
     );

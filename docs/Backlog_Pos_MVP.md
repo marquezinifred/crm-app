@@ -73,18 +73,45 @@ tudo antes de invocar IA.
 
 **Esforço:** ~30min se aprovar mudança.
 
-### P-58. Toast padronizado em CommunicationIntake / Documents / Proposals
-**Severidade:** Baixa (cosmético — pattern inconsistente). Registrado
-ao fechar P-54 em 2026-07-05.
+### ~~P-58. Toast padronizado em CommunicationIntake / Documents / Proposals~~ ✅ FECHADO 2026-07-05
+Chip `claude/p58-subforms-toast` (worktree `silly-chandrasekhar-6f6953`).
+Fix cirúrgico replicando padrão canônico P-54 nos 3 componentes:
 
-Auditoria do chip P-54 confirmou que `pipeline/new` e `TasksSection`
-já seguem padrão Sprint 14 (`useToast` + `friendlyTrpcError`), mas
-`CommunicationIntake`, `DocumentsSection` e `ProposalsSection` não
-têm toast em success/error de mutations.
+- **`CommunicationIntake.tsx`** — `summarize.onSuccess` (aiGenerated=true)
+  dispara toast success "Resumo gerado."; `onError` dispara toast error
+  com `friendlyTrpcError`. `confirmSummary.onSuccess` dispara toast
+  success "Reunião salva."; `onError` dispara toast error. Inline error
+  paragraph removido (redundante com toast). `aiFailed` inline banner
+  preservado (é state UX, não erro de mutation)
+- **`DocumentsSection.tsx`** — orquestração `getUploadIntent → uploadProxy
+  → create` dentro de `handleFileSelected` com try/catch: sucesso dispara
+  toast "Documento anexado."; catch dispara toast error com
+  `friendlyTrpcError` quando aplicável (fallback pra "Falha ao enviar
+  arquivo." pra erros não-TRPC). Estado local `error` removido (toast
+  substitui inline banner)
+- **`ProposalsSection.tsx`** — `create.onSuccess` dispara toast "Proposta
+  criada."; `addVersion.onSuccess` dispara toast "Nova versão da
+  proposta.". Ambos com `onError` via `friendlyTrpcError`
 
-**Fix:** aplicar mesmo pattern P-54 em cada.
+Imports novos: `useToast` de `@/components/ui/toast`,
+`friendlyTrpcError` de `@/lib/trpc/error-format` (este último só onde
+faltava).
 
-**Esforço:** ~2h (3 componentes × ~30min).
+Testes: `tests/unit/pipeline-subforms-toast.test.tsx` novo com **11
+casos** (CommunicationIntake +5, DocumentsSection +2, ProposalsSection
++4). Padrão idêntico ao `pipeline-detail-page.test.tsx` (P-54): mock
+`@/lib/trpc/client` capturando `onSuccess/onError` das mutations,
+`ToastProvider` real, dispara handlers manualmente e verifica títulos
+via `[role="status"]/[role="alert"]`.
+
+Baseline: **734 passing (+11 novos) / 10 pré-existentes por env vars em
+`field-encryption` (4) + `communication-summary-errors` (6) — confirmado
+idênticas no HEAD antes do fix / 172 skipped**. Type-check zero. Lint
+zero.
+
+**Escopo intencionalmente estreito:** nenhum código de servidor tocado;
+`pipeline/[id]/page.tsx` (fixado no P-54) preservado; padrão de copy
+mantido curto e direto (spec explicitou "mensagens curtas").
 
 ### P-59. Playwright E2E em worktree efêmera sem instância Clerk real
 **Severidade:** Baixa. Descoberto pelo QA automation pós-bloco A+B+C
@@ -332,30 +359,15 @@ IA imediatamente (usuário decide quando salvar).
 
 **Esforço:** ~15min código + decisão de produto. Não bloqueia.
 
-### P-58. Padronizar toast success em Communication/Documents/Proposals sections
-**Severidade:** Baixa (consistência UX). Descoberto no P-54 fix
-em 2026-07-05.
+### ~~P-58. Padronizar toast success em Communication/Documents/Proposals sections~~ ✅ FECHADO 2026-07-05
+Fechado no chip `claude/p58-subforms-toast`. Ver bloco P-58 acima
+(§Pendências curto prazo) pra descrição completa do fix.
 
-Auditoria do P-54 identificou 3 componentes que não seguem o
-padrão canônico `useToast + friendlyTrpcError` do TasksSection:
-- `src/components/pipeline/CommunicationIntake.tsx` — sem toast
-  em `summarize`/`confirmSummary`; feedback via state change
-  (summary aparece)
-- `src/components/pipeline/DocumentsSection.tsx` — sem toast em
-  `getUploadIntent`/`uploadProxy`/`create`; feedback via banner
-  inline + lista atualizada
-- `src/components/pipeline/ProposalsSection.tsx` — sem toast em
-  `createProposal`/`addVersion`; feedback via form fechado + lista
-  atualizada. Também tem `TasksSection.updateStatus` (checkbox
-  toggle) sem toast em erro — falha silenciosa se rollback do
-  checkbox não for possível
-
-**Fix:** aplicar padrão `TasksSection.create.onSuccess = { invalidate;
-toast success }` + `onError = { toast error com friendlyTrpcError }`
-nos 3 arquivos. Escopo mecânico ~1h.
-
-**Esforço:** ~1h. Não bloqueia — feedback visual já existe via
-state change; padronizar reduz confusão em fluxos de erro.
+Débito residual identificado durante a auditoria: `TasksSection.updateStatus`
+(checkbox toggle) segue sem toast em erro — falha silenciosa se rollback
+do checkbox não for possível. Não coberto por este chip (escopo era
+Communication/Documents/Proposals); registrar como P-62 se virar
+recorrente.
 
 ### ~~P-50. Campo "Valor estimado (R$)" sem máscara pt-BR nos forms~~ ✅ FECHADO 2026-07-05
 Chip `claude/p50-brl-input-mask` mergido no commit `9b4c831`. Fix

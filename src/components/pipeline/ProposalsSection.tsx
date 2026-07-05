@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
+import { useToast } from '@/components/ui/toast';
 import { Button } from '@/components/ui/button';
 import { brl } from '@/lib/utils/hooks';
 
@@ -14,6 +16,7 @@ const STATUS_COLORS = {
 
 export function ProposalsSection({ opportunityId }: { opportunityId: string }) {
   const utils = trpc.useUtils();
+  const { toast } = useToast();
   const { data, isLoading } = trpc.proposals.listByOpportunity.useQuery({ opportunityId });
   const [showCreate, setShowCreate] = useState(false);
   const [title, setTitle] = useState('Proposta comercial');
@@ -29,7 +32,9 @@ export function ProposalsSection({ opportunityId }: { opportunityId: string }) {
       setShowCreate(false);
       setTitle('Proposta comercial');
       utils.proposals.listByOpportunity.invalidate({ opportunityId });
+      toast({ kind: 'success', title: 'Proposta criada.' });
     },
+    onError: (err) => toast({ kind: 'error', title: friendlyTrpcError(err) }),
   });
 
   const addVersion = trpc.proposals.addVersion.useMutation({
@@ -37,7 +42,9 @@ export function ProposalsSection({ opportunityId }: { opportunityId: string }) {
       setAddingTo(null);
       setVersionForm({ totalValue: '', marginPct: '', summary: '' });
       utils.proposals.listByOpportunity.invalidate({ opportunityId });
+      toast({ kind: 'success', title: 'Nova versão da proposta.' });
     },
+    onError: (err) => toast({ kind: 'error', title: friendlyTrpcError(err) }),
   });
 
   if (isLoading) return null;

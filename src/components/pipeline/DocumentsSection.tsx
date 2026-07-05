@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
+import { useToast } from '@/components/ui/toast';
 import { FileDropzone, type FileMetadata } from '@/components/ui/file-dropzone';
 import { DocumentCategory } from '@prisma/client';
 
@@ -38,10 +40,10 @@ async function fileToBase64(file: File): Promise<string> {
 
 export function DocumentsSection({ opportunityId }: Props) {
   const utils = trpc.useUtils();
+  const { toast } = useToast();
   const { data, isLoading } = trpc.documents.listByOpportunity.useQuery({ opportunityId });
   const [category, setCategory] = useState<DocumentCategory>('PROPOSTA_TECNICA');
   const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const getUploadIntent = trpc.documents.getUploadIntent.useMutation();
   const uploadProxy = trpc.documents.uploadProxy.useMutation();
@@ -52,7 +54,6 @@ export function DocumentsSection({ opportunityId }: Props) {
   });
 
   async function handleFileSelected(meta: FileMetadata) {
-    setError(null);
     setUploading(true);
     try {
       const { storageKey } = await getUploadIntent.mutateAsync({
@@ -75,10 +76,13 @@ export function DocumentsSection({ opportunityId }: Props) {
         storageKey,
         sha256: meta.sha256,
       });
+      toast({ kind: 'success', title: 'Documento anexado.' });
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Falha ao enviar arquivo.',
-      );
+      const title =
+        err && typeof err === 'object' && 'message' in err
+          ? friendlyTrpcError(err as { message: string })
+          : 'Falha ao enviar arquivo.';
+      toast({ kind: 'error', title });
     } finally {
       setUploading(false);
     }
@@ -119,11 +123,6 @@ export function DocumentsSection({ opportunityId }: Props) {
 
           {uploading && (
             <p className="text-xs text-text-2">Enviando arquivo…</p>
-          )}
-          {error && (
-            <p role="alert" className="rounded bg-danger/10 p-2 text-xs text-danger">
-              {error}
-            </p>
           )}
         </div>
       </details>

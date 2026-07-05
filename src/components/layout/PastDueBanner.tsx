@@ -11,7 +11,7 @@ import { Banner } from '@/components/ui/banner';
  * Link direto para /admin/billing.
  */
 export function PastDueBanner() {
-  const status = trpc.billing.status.useQuery(undefined, {
+  const status = trpc.billing.statusForBanner.useQuery(undefined, {
     refetchInterval: 60_000,
     retry: false,
     staleTime: 30_000,

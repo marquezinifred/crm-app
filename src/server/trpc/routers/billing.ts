@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { router } from '@/server/trpc/trpc';
+import { router, protectedProcedure } from '@/server/trpc/trpc';
 import { adminOnlyProcedure } from '@/server/trpc/middlewares';
 import { prisma } from '@/server/db/client';
 import { runAsSystem } from '@/server/db/tenant-context';
@@ -12,6 +12,8 @@ import { collectCurrentUsage } from '@/server/services/usage.service';
 import { limitsFor, checkUsage } from '@/lib/billing/plan-limits';
 import { stripeEnabled } from '@/lib/billing/stripe-client';
 import { TenantPlan } from '@prisma/client';
+
+const TRIAL_WARNING_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const billingRouter = router({
   status: adminOnlyProcedure.query(async ({ ctx }) => {
@@ -28,6 +30,52 @@ export const billingRouter = router({
       }),
     );
     return { ...tenant, stripeConfigured: stripeEnabled() };
+  }),
+
+  /**
+   * P-56 — leitura read-only usada pelos banners globais (PastDueBanner
+   * e TrialExpiryBanner). Precisa ser acessível a todos os roles
+   * autenticados (DIRETOR_*, GESTOR, ANALISTA, PARCEIRO), enquanto
+   * `status` acima expõe detalhes financeiros e continua com
+   * `adminOnlyProcedure`.
+   *
+   * Retorna apenas o mínimo pra renderizar os banners — sem
+   * `stripeCustomerId`, `currentPeriodEnd` etc.
+   */
+  statusForBanner: protectedProcedure.query(async ({ ctx }) => {
+    const tenant = await runAsSystem(() =>
+      prisma.tenant.findUnique({
+        where: { id: ctx.tenantId },
+        select: {
+          plan: true,
+          subscriptionStatus: true,
+          trialEndsAt: true,
+        },
+      }),
+    );
+    if (!tenant) {
+      return {
+        plan: null,
+        subscriptionStatus: null,
+        trialEndsAt: null,
+        isPastDue: false,
+        isTrialExpiring: false,
+      };
+    }
+    const isPastDue =
+      tenant.subscriptionStatus === 'PAST_DUE' ||
+      tenant.subscriptionStatus === 'CANCELED';
+    const isTrialExpiring =
+      tenant.plan === TenantPlan.TRIAL &&
+      tenant.trialEndsAt !== null &&
+      tenant.trialEndsAt.getTime() - Date.now() < TRIAL_WARNING_MS;
+    return {
+      plan: tenant.plan,
+      subscriptionStatus: tenant.subscriptionStatus,
+      trialEndsAt: tenant.trialEndsAt,
+      isPastDue,
+      isTrialExpiring,
+    };
   }),
 
   startCheckout: adminOnlyProcedure

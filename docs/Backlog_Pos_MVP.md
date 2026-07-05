@@ -14,25 +14,46 @@ Mantido em sincronia com `CLAUDE.md` e memory `MEMORY.md`.
 ## 🔥 Pendências de curto prazo (próximas 2 semanas)
 
 ### P-56. `billing.status` bloqueia todo role não-ADMIN (falso 403 no AppShell)
-**Severidade:** Média (ruído no console + banner Past Due inutilizável
-para DIRETOR/GESTOR/ANALISTA/PARCEIRO). Descoberto em uso 2026-07-05
-pelo Fred logado como DIRETOR_COMERCIAL:
+**✅ FECHADO 2026-07-05** — commit `12d76f0`
+
+`billing.status` usava `withRoles('ADMIN')` legado. Banner Past Due
+e Trial Expiry no AppShell nunca apareciam pra não-ADMINs em prod
+(DIRETOR/GESTOR/ANALISTA/PARCEIRO), e o console mostrava
 `GET /api/trpc/billing.status?batch=1 → 403 (Forbidden)` em toda
 carga de página.
 
-`billing.status` usa `withRoles('ADMIN')` legado. Widget que informa
-"assinatura vencida" deveria ser visível pra qualquer role autenticado
-(read-only, não expõe billing detail). Gate excessivo faz banner Past
-Due nunca aparecer pra não-ADMINs em prod.
+**Fix aplicado (caminho A da spec — procedure separada):**
+- Nova procedure `billing.statusForBanner` em
+  `src/server/trpc/routers/billing.ts:34-77` protegida só por
+  `protectedProcedure` (autenticado basta). Retorna `{plan,
+  subscriptionStatus, trialEndsAt, isPastDue, isTrialExpiring}`
+  computados no servidor
+- `isPastDue` = `subscriptionStatus === 'PAST_DUE' || 'CANCELED'`
+- `isTrialExpiring` = `plan === TRIAL && trialEndsAt !== null &&
+  trialEndsAt - now < 7 dias`
+- `billing.status` original **preservado** com `adminOnlyProcedure`
+  — `/admin/billing` continua expondo detalhes financeiros
+  (`stripeCustomerId`, `currentPeriodEnd`) só pra ADMIN
+- `src/components/layout/PastDueBanner.tsx:14` e
+  `src/components/billing/TrialExpiryBanner.tsx:12` migrados de
+  `trpc.billing.status.useQuery` pra `trpc.billing.statusForBanner.useQuery`
 
-**Fix:** trocar `withRoles('ADMIN')` por
-`withPermission('billing:read_status')` (permission nova no catalog
-Sprint 15E, default GRANTED em todos os roles). Ou: procedure separada
-`billing.statusForBanner` que retorna só `{isPastDue: boolean}` sem
-detalhes financeiros, protegida por `protectedProcedure` (autenticado
-basta).
+**Testes:** `tests/unit/billing-status-for-banner.test.ts` novo com
+**13 casos** (PAST_DUE=true, CANCELED=true, trial<7d=true, trial>7d=false,
+plan≠TRIAL ignora trialEndsAt, ACTIVE+sem trial=ambos false, tenant
+não encontrado retorna defaults, cross-tenant filtra por ctx.tenantId,
+DIRETOR_COMERCIAL não lança FORBIDDEN, 4 roles não-ADMIN funcionam).
+Padrão: mock `@/server/db/client` capturando `tenant.findUnique`,
+`makeCaller` configurável por role/tenantId.
 
-**Esforço:** ~1h. Não bloqueia mas ruído contínuo no console.
+**Baseline:** 736 passing (+13 novos) / 10 pré-existentes por env vars
+em `field-encryption` (4) + `communication-summary-errors` (6) —
+confirmados idênticos ANTES do fix / 172 skipped. Type-check zero.
+Lint zero. Rollback trivial (reverter 3 arquivos).
+
+Escopo cirúrgico: `permissions-catalog.ts` intacto (não precisou
+`billing:read_status`); `rbac.ts` intacto; nenhum backfill de cache
+necessário. Rollout imediato sem migração.
 
 ### P-57. IA bloqueia por dirty em campos NÃO relacionados ao Receptor
 **Severidade:** Baixa (decisão de produto). Registrado ao fechar P-54

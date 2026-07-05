@@ -9,7 +9,7 @@ import Link from 'next/link';
  */
 
 export function TrialExpiryBanner() {
-  const status = trpc.billing.status.useQuery(undefined, {
+  const status = trpc.billing.statusForBanner.useQuery(undefined, {
     retry: false,
     staleTime: 5 * 60 * 1000,
   });

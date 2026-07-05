@@ -962,14 +962,24 @@ var (não relacionada à pub key) e não crasha.
 flag `NEXT_PUBLIC_CLERK_MOCK` não foi necessário — path (A) já
 resolve o caso de uso.
 
-**Débitos residuais identificados:**
+**Débitos residuais (R1/R2) fechados inline no housekeeping cycle
+2026-07-05:**
+- **R1 (CLERK_ENCRYPTION_KEY)** — dummy adicionada ao `.env.example`
+  no bloco Clerk com comentário explicando que a var não passa pelo
+  Zod schema (SDK Clerk lê direto) e silencia o warn em `next dev`.
+  Prod continua exigindo `openssl rand -base64 32`. Sem código de app
+  tocado.
+- **R2 (Roteiro baseline stale)** — `docs/Roteiro_QA_Homologacao_Staging.md`
+  §0 (linha 36) e §5 (linha 565) atualizados pra 715/0/168 (883 total)
+  com nota sobre variância 709 vs 715 dependendo de `ANTHROPIC_API_KEY`.
+
+**Débitos residuais originais mantidos como histórico:**
 - `docs/Roteiro_QA_Homologacao_Staging.md` §0 baseline de testes
-  ainda diz "609 passing / 10 failed" — desatualizado (baseline
-  atual 715/168). P-41 fechou isso em CLAUDE.md e Metodologia mas
-  não no Roteiro. Sub-débito ~15min; não bloqueia P-39.
-- Runtime warning `CLERK_ENCRYPTION_KEY` aparece com dummies —
-  não crasha, só aviso do SDK. Se virar ruído, adicionar var
-  no `.env.example` ou suprimir. Não prioritário.
+  ainda dizia "609 passing / 10 failed" — desatualizado (baseline
+  atual 715/168). ✅ Fechado no housekeeping 2026-07-05.
+- Runtime warning `CLERK_ENCRYPTION_KEY` aparecia com dummies —
+  não crashava, só aviso do SDK. ✅ Fechado no housekeeping 2026-07-05
+  via dummy documentada no `.env.example`.
 
 ### ~~P-40. Conflito .eslintrc.json em worktree~~ ✅ FECHADO
 **Resolvido em 2026-07-04** (config-only). Fix defensivo:
@@ -992,6 +1002,14 @@ communication-summary-errors por env vars — reproduzem na paterna
 antes e depois do fix).
 
 QA automation exception aplicada (config-only sem impacto runtime).
+
+**Débito residual (R3) fechado inline no housekeeping cycle 2026-07-05:**
+- **R3 (variance 715 vs 709)** — chip P-40 mediu 709 no ambiente dele;
+  P-41 mediu 715 com dummies homogêneas. Adicionada nota explícita no
+  `CLAUDE.md` §Baseline e `docs/Metodologia_Desenvolvimento_Venzo.md`
+  §5.2 esclarecendo que a diferença é sensibilidade a
+  `ANTHROPIC_API_KEY` (6 tests em `communication-summary-errors.test.ts`),
+  não regressão de código. Ambos aceitáveis como baseline verde.
 
 ### ~~P-41. Baseline de testes desatualizado no CLAUDE.md~~ ✅ FECHADO
 **Resolvido em 2026-07-04** (inline na paterna, docs-only). Baseline

@@ -14,8 +14,8 @@ Mantido em sincronia com `CLAUDE.md` e memory `MEMORY.md`.
 ## 🔥 Pendências de curto prazo (próximas 2 semanas)
 
 ### ~~P-54. Botão Salvar sem feedback + edits não limpos + IA bloqueada indefinidamente~~ ✅ FECHADO 2026-07-05
-Chip `claude/p54-salvar-feedback` (worktree `blissful-zhukovsky-24abed`)
-— fix cirúrgico em `src/app/pipeline/[id]/page.tsx:22-51`. As 3 mutations
+Chip `claude/p54-salvar-feedback` (worktree `blissful-zhukovsky-24abed`),
+commit `89f5a95` — fix cirúrgico em `src/app/pipeline/[id]/page.tsx:22-51`. As 3 mutations
 `update`/`advance`/`cancel` agora seguem o padrão canônico:
 - `update.onSuccess`: `invalidate` + `setEditStageFields({})` + `toast
   success "Alterações salvas."`

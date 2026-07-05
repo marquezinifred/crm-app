@@ -13,6 +13,39 @@ Mantido em sincronia com `CLAUDE.md` e memory `MEMORY.md`.
 
 ## 🔥 Pendências de curto prazo (próximas 2 semanas)
 
+### P-54. Botão "Salvar alterações" sem feedback visual (UX gap crítico)
+**Severidade:** Alta (UX). Descoberto em uso real 2026-07-05 pelo Fred:
+"não tem retorno de mensagem alguma na tela".
+
+Anatomia (`src/app/pipeline/[id]/page.tsx:23-34`):
+- `update`, `advance`, `cancel` mutations só chamam
+  `utils.opportunities.byId.invalidate` no `onSuccess`
+- **Sem `useToast`** — usuário clica Salvar, dados atualizam silenciosamente,
+  UI não mostra "Salvo!" nem confirmação
+- **Sem `onError`** — quando dá erro (foi o caso do 500 do P-42), só
+  aparece no console DevTools. Usuário fica sem sinal
+- Padrão já estabelecido (Sprint 14 `useToast` + P-21 `friendlyTrpcError`)
+  mas não foi aplicado aqui
+
+**Fix escopo:**
+- `src/app/pipeline/[id]/page.tsx` — 3 mutations (update/advance/cancel)
+  ganham `onSuccess` com toast success + `onError` com toast error via
+  `friendlyTrpcError`
+- Verificar `src/app/pipeline/new/page.tsx` — mesmo pattern?
+- Auditar outros forms de pipeline: TasksSection, CommunicationIntake,
+  DocumentsSection — quais têm/não têm toast?
+- Listar débitos residuais se auditar tomar tempo demais
+
+**Regressão a caçar:** ProposalsSection já tem toast? (verificar)
+Sprint 15C aplicou toasts em `/companies`, `/contacts` mas talvez
+tenha pulado pipeline.
+
+**Esforço:** ~2h (só pipeline/[id] + pipeline/new). +2h se auditoria
+completa de todas as seções. Bloqueia adoção real do CRM porque
+usuário nunca sabe se salvou.
+
+**Prioridade:** disparar após ciclo P-45+P-46+P-47 fechar.
+
 ### P-51. Playwright `smoke.spec.ts` desatualizada (Sprint 14 copy)
 **Severidade:** Baixa. Descoberto pelo QA automation pós-P-50 em
 2026-07-05.

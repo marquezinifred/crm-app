@@ -19,7 +19,7 @@ export default defineConfig({
         'src/components/ui/**',
       ],
     },
-    setupFiles: ['tests/setup.ts'],
+    setupFiles: ['tests/env-setup.ts', 'tests/setup.ts'],
   },
   resolve: {
     alias: {

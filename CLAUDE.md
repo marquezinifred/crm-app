@@ -1069,28 +1069,40 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 ---
 
-## Baseline de testes atual (2026-07-04)
+## Baseline de testes atual (2026-07-05, pós P-47)
 
-Medido pelo QA automation report após ciclo P-32 → P-36:
+Vitest carrega `.env` automaticamente com precedence
+`.env.test → .env.local → .env` (P-47 fix, `tests/env-setup.ts`).
+**Um único baseline verde**, sem depender de `source .env.local`
+manual. Matriz esperada por cenário:
 
-- `npm test` com env dummy consistente: **715 passing / 0 failing / 168 skipped**
-  (883 tests total)
-- **Nota sobre variância:** com env vars parcialmente preenchidas (setup
-  real de dev com Neon/Clerk mas sem chaves IA reais), ~709 é esperado —
-  6 tests em `tests/unit/communication-summary-errors.test.ts` dependem
-  de `ANTHROPIC_API_KEY` real. 715/0/168 é o piso 100% env dummy
-  consistente (todo `xxx-dummy` no `.env.example`). Não é regressão —
-  é sensibilidade a env. Chip P-40 mediu 709 no ambiente dele; P-41
-  mediu 715 com dummies homogêneas. Ambos são o mesmo baseline sem
-  regressão real de código
-- Sem env vars: ~11 test files falham no import (env-dependent —
-  field-encryption, rate-limiter, ai-pricing, document-compare,
-  summary-parser, communication-summary-errors). Não é regressão real
-- 168 skipped = ~166 estáticos + 2 conditional (RBAC + tenant-isolation
-  guardados por `DATABASE_URL_TEST`)
+| Cenário | Passing / Failing / Skipped | Total |
+|---------|------------------------------|-------|
+| Dev com `.env.local` OU `.env` presente na cwd (qualquer conteúdo válido no schema Zod) | **741 / 6 / 172** | 919 |
+| CI sem env file na cwd (o workflow deve injetar env vars via `env:` do GH Actions) | **693 / 10 / 172** | 875 |
+
+Notas:
+- Os 6 failings do primeiro cenário são todos de
+  `tests/unit/communication-summary-errors.test.ts` — dependem de
+  `ANTHROPIC_API_KEY` real; passam quando a chave é real (não dummy).
+  Setups históricos com key real reportavam 747 passing (mesma família
+  do baseline 741 verde)
+- Os 10 failings do cenário CI vêm de 9 test files falhando no import
+  (Zod rejeita `DATABASE_URL` ausente etc). Comportamento correto e
+  intencional — o fix carrega .env só se existir na cwd
+- 172 skipped = ~170 estáticos + 2 conditional (RBAC +
+  tenant-isolation guardados por `DATABASE_URL_TEST`)
 - `npx tsc --noEmit`: zero
-- `npm run lint`: zero na paterna E em worktree (pós-P-40 com
-  `root: true` em `.eslintrc.json`)
+- `npm run lint`: zero na paterna E em worktree
+
+**Antes do P-47** (histórico): baseline oscilava 693 / 709 / 715 /
+741 dependendo se o dev fazia `source .env.local` manual. Todos eram
+o mesmo baseline verde subjacente — só a leitura variava. Sem
+regressão de código real.
+
+Snapshots históricos por sprint estão preservados nos bullets acima
+("Testes: X passing" em cada bloco de sprint) — não confundir com
+baseline atual.
 
 Snapshots históricos por sprint estão preservados nos bullets acima
 ("Testes: X passing" em cada bloco de sprint) — não confundir com
@@ -1364,6 +1376,27 @@ foram fechados na Sprint 11.
   `communication-summary-errors.test.ts` (confirmado idêntico ANTES
   do fix via stash) / 172 skipped**. Type-check zero. Lint zero.
   Rollback trivial (reverter 2 arquivos + apagar helper)
+- **P-47 + P-43** Vitest carrega `.env` automaticamente (fecha os dois
+  de uma vez — P-43 era sintoma do P-47). `vitest.config.ts` prepende
+  `tests/env-setup.ts` novo no `setupFiles` antes do `setup.ts`
+  existente. Load com precedence `.env.test → .env.local → .env` via
+  `dotenv/config` (`override: false` preserva vars já setadas no
+  shell/CI). `dotenv@^16.6.1` promovido de transitive (via
+  `@sentry/webpack-plugin`) pra devDep explícita — instalação em
+  disco já existia, só o manifesto ficou consistente. Sem código de
+  app tocado. Validação em 3 cenários dentro da worktree (sem
+  `source` prévio, env limpo via `env -i PATH=$PATH …`): sem env file
+  → 693/10/172 (esperado, comportamento de CI); só `.env` (dummies do
+  `.env.example`) → 741/6/172 (bate 1:1 com "baseline verde" P-41);
+  só `.env.local` real → 741/6/172 (idêntico ao dummies — 6 failings
+  são `communication-summary-errors` que dependem de key IA real).
+  Antes do fix, cenários com env file SÓ davam 741 se o dev fizesse
+  `source .env.local` manual — agora carrega automático da cwd.
+  **Fecha P-43**: a variância documentada (693/709/715/726/741) era só
+  o baseline verde (741) sendo mascarado pela ausência de `source`.
+  Baseline canônico documentado em §Baseline atual acima. QA automation
+  exception aplicada (config-only, sem código de app). Type-check zero.
+  Lint zero
 - **P-50** Campo "Valor estimado (R$)" sem máscara pt-BR — descoberto
   em uso real 2026-07-05 pelo Fred em prod. Input `type="number"` cru
   mostrava `289311` sem separador. Fix: `src/lib/utils/format.ts`

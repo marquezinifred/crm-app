@@ -155,32 +155,47 @@ Entregue conforme escopo:
   `communication-summary-errors`) / 172 skipped**. Type-check zero.
   Lint zero.
 
-### P-47. Vitest sem carregamento automático de `.env.local`
-**Severidade:** Média. Descoberto pelo QA automation report pós-P-42
-em 2026-07-05. **Causa raiz do P-43** — consolide os dois quando
-implementar.
+### ~~P-47. Vitest sem carregamento automático de `.env.local`~~ ✅ FECHADO 2026-07-05
+### ~~P-43. Baseline testes tem 3 leituras diferentes por ambiente~~ ✅ FECHADO 2026-07-05 (consequência do P-47)
 
-`vitest.config.ts` não invoca `dotenv/config`, então rodar
-`npx vitest run` sem `source .env.local` primeiro faz 11 test files
-falharem no import com `Invalid environment variables` (Zod rejeita
-`DATABASE_URL` ausente etc). QA report confirmou: com dummy
-`sk-ant-xxxxxxxx…` no env, `communication-summary-errors.test.ts`
-passa (mock não bate na Anthropic real) — isso explica a variância
-709/715/726/732 documentada em P-43.
+Chip `claude/p47-vitest-dotenv` (commit desta sessão). Fix caminho A
+da spec: `tests/env-setup.ts` novo faz load com precedence
+`.env.test → .env.local → .env` (`override: false` preserva vars já
+setadas no shell/CI); `vitest.config.ts` prepende `env-setup.ts` no
+`setupFiles` antes do `setup.ts` existente. `dotenv@^16.6.1`
+promovido de transitive (via `@sentry/webpack-plugin`) pra devDep
+explícita — instalação em disco já existia, só o manifesto ficou
+consistente.
 
-**Impacto:**
-- False-positive em QA autônomo, CI, worktrees efêmeras
-- Dev novo roda `npm test` limpo e vê "regressão" fantasma
-- Baseline "verde" depende de shell pré-carregado
+Validação em 3 cenários dentro da worktree (sem `source` prévio,
+env limpo via `env -i PATH=$PATH HOME=$HOME USER=$USER`):
+- **Sem env file**: 693 passing / 10 failing / 172 skipped (875).
+  9 test files falham no import por Zod (`DATABASE_URL` ausente etc).
+  Comportamento correto — o fix carrega só se .env existe.
+- **Só `.env` (dummies do `.env.example`)**: 741 passing / 6 failing /
+  172 skipped (919). Bate 1:1 com o baseline "verde" documentado no
+  P-41 (env dummy 100% consistente).
+- **Só `.env.local` (paterna Fred, ANTHROPIC_API_KEY real)**: 741
+  passing / 6 failing / 172 skipped (919). Idêntico ao cenário
+  dummies — os 6 skipped em `communication-summary-errors` dependem
+  de mock (não de key real).
 
-**Fix sugerido:**
-- Opção A: `setupFiles: ['dotenv/config', 'tests/setup.ts']` no
-  `vitest.config.ts` com precedence `.env.test → .env.local → .env`
-- Opção B: `"test": "dotenv -e .env.local -- vitest run"` no
-  `package.json` (usa `dotenv-cli`, menor invasão)
+Antes do fix, o cenário 2 e 3 SÓ dava 741 se o dev fizesse
+`source .env.local` manual no shell antes. Agora Vitest carrega
+automático da cwd. Type-check zero. Lint zero.
 
-**Esforço:** ~2h. Não bloqueia — mas fecha P-43 ao mesmo tempo.
-Candidato Sprint 16.
+**Fecha P-43** — a variância 693/709/715/726/741 documentada no P-43
+era só o baseline "verde" (741) sendo mascarado pela ausência de
+`source` manual. Com o fix, todo dev/CI vê o mesmo número.
+
+**Regra pós-fix (documentada em `CLAUDE.md` §Baseline atual):**
+- CI sem env: 693 passing / 10 failing / 172 skipped (esperado —
+  workflow tem que injetar env vars via `env:` do GH Actions)
+- Dev com `.env.local` ou `.env` presente: 741 passing / 6 failing /
+  172 skipped (6 dependem de `ANTHROPIC_API_KEY` real; passam com
+  chave real)
+- Precedence `.env.test → .env.local → .env` respeita convenção
+  Next.js (Next carrega em ordem similar em `next dev`)
 
 ### P-48. Playwright browsers ausentes em worktree efêmera
 **Severidade:** Baixa. Descoberto pelo QA automation report pós-P-42
@@ -217,33 +232,6 @@ só roda em CI com service Postgres; local exige
 Prisma — descaracteriza os testes.
 
 **Esforço:** ~15min (só documental — decisão consciente).
-
-### P-43. Baseline testes tem 3 leituras diferentes por ambiente
-**Severidade:** Média (afeta reporting de QA automation). Descoberto
-pelo chip housekeeping em 2026-07-05.
-
-Medições em ambientes distintos:
-- **715** passing (P-41 — env dummy 100% consistente)
-- **709** passing (P-40 — `.env.local` paterna Fred, sem `ANTHROPIC_API_KEY` real)
-- **661** passing (housekeeping — worktree efêmera com symlink node_modules)
-- **726** passing (P-42 — paterna após merge, +11 testes novos)
-
-Delta entre extremos vem de Vitest **não carregar `.env.local`
-automaticamente** (responsabilidade do Next.js — Vitest lê só
-`process.env` do shell). Baseline "verde" acaba dependendo de
-como cada dev/CI carrega env.
-
-**Escopo:**
-- `vitest.setup.ts` novo (ou estender existente) carregando dotenv
-  com precedence `.env.test → .env.local → .env`
-- Documentar em CLAUDE.md §Baseline atual a matriz esperada por
-  cenário (CI sem env / dev com `.env.local` / worktree efêmera)
-- Alternativa: script `npm run test:with-env` usando `dotenv-cli`
-  como wrapper (pesa menos que alterar setup global)
-
-**Esforço:** ~2h. Não bloqueia — mas próximo chip QA automation
-vai reportar "regressão" fantasma quando não é. Candidato Sprint 16
-junto com P-37/P-38.
 
 ### P-44. Integration test de tRPC via caller (P-42 residual)
 **Severidade:** Baixa. Registrado ao fechar P-42 em 2026-07-05.

@@ -228,27 +228,40 @@ Touch targets ≥ 44×44px.
 | Visual | Playwright + screenshots | Baseline de 25 rotas × 3 viewports (P-03) |
 | Accessibility | axe-core smoke | 5 rotas públicas + 4 autenticadas (Sprint 14) |
 
-### 5.2. Baseline atual (2026-07-04, medido pelo QA automation report)
-- Vitest com env dummy consistente: **715 passing / 0 failing / 168 skipped**
-  (883 tests total)
-- **Nota sobre variância:** com env vars parcialmente preenchidas (setup real
-  de dev — Neon/Clerk configurado mas sem chaves IA reais), ~709 é aceitável.
-  6 tests em `tests/unit/communication-summary-errors.test.ts` dependem de
-  `ANTHROPIC_API_KEY` real. 715/0/168 é o piso 100% env dummy consistente
-  (todo `xxx-dummy` no `.env.example`). Chip P-40 mediu 709, P-41 mediu 715
-  — mesma paterna, mesma execução, diferença é só sensibilidade a env. Não é
-  regressão de código. Ver [CLAUDE.md §"Baseline de testes atual"](../CLAUDE.md)
-  pra fonte da verdade
-- Sem env vars: ~11 test files falham no import (env-dependent — field-encryption,
-  rate-limiter, ai-pricing, document-compare, summary-parser,
-  communication-summary-errors etc). NÃO é regressão real
-- 168 skipped inclui ~166 estáticos (features/casos ainda não cobertos) + 2
-  conditional (RBAC + tenant-isolation guardados por `DATABASE_URL_TEST`)
-- Type-check: zero
-- Lint: zero (paterna e worktrees, pós-P-40)
+### 5.2. Baseline atual (2026-07-05, pós P-47)
 
-**Novo chip não pode piorar baseline.** Se piorar, chip volta pra worktree
-com plano de correção do QA automation.
+Vitest carrega `.env` automaticamente (P-47 fix). Precedence
+`.env.test → .env.local → .env` via `tests/env-setup.ts`. Zero
+dependência de `source .env.local` manual antes de `npm test`.
+
+Baseline canônico (sem variância — mesmo número em CI, worktree,
+paterna, chip QA):
+
+| Cenário | Passing / Failing / Skipped | Total |
+|---------|------------------------------|-------|
+| Env file presente (`.env.local` OU `.env`, com schema Zod válido) | **741 / 6 / 172** | 919 |
+| Env file com `ANTHROPIC_API_KEY` real | **747 / 0 / 172** | 919 |
+| Sem env file (CI que não injetou env vars via `env:` do GH Actions) | **693 / 10 / 172** | 875 |
+
+- Os 6 failings do primeiro cenário são todos de
+  `tests/unit/communication-summary-errors.test.ts` — dependem de
+  `ANTHROPIC_API_KEY` real. Passam com chave real
+- Os 10 failings do cenário CI vêm de 9 test files falhando no
+  import por Zod ausência. Comportamento correto do fix — carrega
+  só se .env existe
+- 172 skipped inclui ~170 estáticos + 2 conditional (RBAC +
+  tenant-isolation guardados por `DATABASE_URL_TEST`)
+- Type-check: zero
+- Lint: zero (paterna e worktrees)
+
+**Histórico pré-P-47:** baseline oscilava 693/709/715/726/741
+dependendo se o dev/CI/chip fazia `source .env.local` manual antes.
+Todos eram o mesmo baseline verde subjacente — só a leitura variava.
+Sem regressão de código real. Ver [CLAUDE.md §"Baseline de testes
+atual"](../CLAUDE.md) pra fonte da verdade.
+
+**Novo chip não pode piorar baseline.** Se piorar, chip volta pra
+worktree com plano de correção do QA automation.
 
 ### 5.3. Cobertura mínima de novo procedure tRPC
 Todo procedure novo deve ter:

@@ -1381,6 +1381,32 @@ foram fechados na Sprint 11.
     de chave IA real. Sensibilidade a env, não regressão
   - QA automation exception aplicada — docs+config only, sem código de
     app. Baseline preservado. Type-check zero. Lint zero
+- **P-45** Backstop tenant-isolation itera `createMany` defensivamente
+  (residual P-42). `assertTenantWritePayload` antes retornava sem
+  checar quando `data` era array — proteção só existia via injeção da
+  extension (linha ~132-137 de `src/server/db/client.ts`). Fix
+  cirúrgico: função pura ganha branch pra `Array.isArray(payload)` que
+  itera cada row, identificando o índice em caso de bypass explícito
+  (`row 2 tenantId no payload difere do contexto`); rows `null`/não-objeto
+  são ignoradas defensivamente. Signature estendida de
+  `Record<string, unknown> | undefined` pra
+  `Record<string, unknown> | Record<string, unknown>[] | undefined`.
+  Extension `$allOperations` agora inclui `'createMany'` no set de ops
+  que disparam o backstop. Compat total: semântica de create/update/
+  upsert intacta, todos os 17 testes originais P-42 passando.
+  `createMany` com data única (não-array) segue semântica de create.
+  +8 testes novos em `tests/unit/tenant-backstop.test.ts` bloco
+  "createMany (P-45)" (array 3 rows OK / row sem tenantId / row ≠ ctx
+  / array vazio / undefined / null intercalado / op errada / data única).
+  Baseline: **701 passing** no worktree com env vars sensitive
+  (HEAD 693 + 8 novos, delta exatamente igual aos tests P-45); em env
+  dummy consistente esperado ~749 (baseline P-50 741 + 8). Zero
+  regressão nas 10 falhas pré-existentes (env vars ausentes em
+  field-encryption/rate-limiter/ai-pricing/document-compare/
+  summary-parser/communication-summary-errors, confirmadas idênticas
+  no HEAD via `git stash`). Type-check zero. Lint zero. Rollback:
+  reverter `src/server/db/client.ts`. Débitos residuais **P-44**
+  (caller tRPC) e **P-46** (map Error pra TRPCError) continuam abertos
 - **P-42** Backstop tenant-isolation quebrava `.update` sem `tenantId`
   no data — bug crítico descoberto em produção (Vercel prod) quando
   o Fred salvava campos por estágio no `/pipeline/<id>` estágio Lead

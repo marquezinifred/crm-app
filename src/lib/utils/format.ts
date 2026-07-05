@@ -78,3 +78,70 @@ export function formatCEP(value: string): string {
 export function unformatCEP(value: string): string {
   return value.replace(/\D/g, '');
 }
+
+// ─── Máscara BRL para input bidirecional (P-50) ───────────────────
+// Pareado com CNPJ/CEP: exibe pt-BR (milhar `.`, decimal `,`) e
+// devolve número puro pra persistir. Aceita `.` OU `,` como decimal
+// durante a digitação (normaliza no display). Cap 12 dígitos
+// inteiros + 2 decimais.
+
+const BRL_INPUT_INT_MAX = 12;
+
+export function formatBRLInput(raw: string): string {
+  if (!raw) return '';
+  const cleaned = raw.replace(/[^\d.,]/g, '');
+  if (!cleaned) return '';
+
+  const lastSep = Math.max(cleaned.lastIndexOf('.'), cleaned.lastIndexOf(','));
+  let integerRaw: string;
+  let decimalPart = '';
+  let showDecimalSeparator = false;
+
+  if (lastSep !== -1) {
+    const afterSep = cleaned.slice(lastSep + 1);
+    if (/^\d{0,2}$/.test(afterSep)) {
+      integerRaw = cleaned.slice(0, lastSep).replace(/[.,]/g, '');
+      decimalPart = afterSep;
+      showDecimalSeparator = true;
+    } else {
+      integerRaw = cleaned.replace(/[.,]/g, '');
+    }
+  } else {
+    integerRaw = cleaned;
+  }
+
+  integerRaw = integerRaw.slice(0, BRL_INPUT_INT_MAX).replace(/^0+(?=\d)/, '');
+  const formattedInteger = integerRaw.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
+  if (showDecimalSeparator) {
+    return `${formattedInteger},${decimalPart}`;
+  }
+  return formattedInteger;
+}
+
+export function unformatBRLInput(value: string): number {
+  if (!value) return 0;
+  const cleaned = value.replace(/[^\d.,]/g, '');
+  if (!cleaned) return 0;
+
+  const lastSep = Math.max(cleaned.lastIndexOf('.'), cleaned.lastIndexOf(','));
+  let intPart: string;
+  let decPart = '';
+
+  if (lastSep !== -1) {
+    const afterSep = cleaned.slice(lastSep + 1);
+    if (/^\d{1,2}$/.test(afterSep)) {
+      intPart = cleaned.slice(0, lastSep).replace(/[.,]/g, '');
+      decPart = afterSep;
+    } else {
+      intPart = cleaned.replace(/[.,]/g, '');
+    }
+  } else {
+    intPart = cleaned;
+  }
+
+  if (!intPart) intPart = '0';
+  const numStr = decPart ? `${intPart}.${decPart}` : intPart;
+  const num = Number(numStr);
+  return Number.isFinite(num) ? num : 0;
+}

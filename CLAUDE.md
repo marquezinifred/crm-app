@@ -1306,6 +1306,28 @@ foram fechados na Sprint 11.
   ad-hoc
 
 **Débitos zerados em 2026-07-05:**
+- **P-50** Campo "Valor estimado (R$)" sem máscara pt-BR — descoberto
+  em uso real 2026-07-05 pelo Fred em prod. Input `type="number"` cru
+  mostrava `289311` sem separador. Fix: `src/lib/utils/format.ts`
+  ganha 2 helpers `formatBRLInput`/`unformatBRLInput` seguindo padrão
+  Sprint 15C (CNPJ/CEP bidirecional). Regra: último `.` ou `,`
+  seguido de 0-2 dígitos = decimal (display); 1-2 dígitos = decimal
+  (unformat, `,` trailing sem dígitos vira integer). Cap 12 dígitos
+  inteiros + 2 decimais. Zeros à esquerda strippados. Normaliza `.`
+  decimal em `,` no display (compat calculadora). Aplicado em 2
+  pontos: `src/app/pipeline/new/page.tsx:186-193` (troca `type=number`
+  por `type=text inputMode=decimal` + `formatBRLInput` on-change +
+  `unformatBRLInput` no submit linha 76) e
+  `src/app/pipeline/[id]/page.tsx:319-325` (mesmo pattern +
+  `coerceFields` linha 417 troca `Number(v)` por `unformatBRLInput(v)`).
+  Compat com valores legados no banco preservada — número puro sem
+  escala de centavos entra/sai igual. +15 testes novos em
+  `tests/unit/format-brl-input.test.ts` (vazio, incremental, decimal
+  opcional, cap 12 dígitos, colar valor pré-formatado, round-trip,
+  ponto-como-decimal). Baseline: **741 passing (+15 novos) / 6
+  pré-existentes por env vars em `communication-summary-errors.test.ts`
+  (confirmado idêntico ANTES do fix) / 172 skipped**. Type-check zero.
+  Lint zero. Sem dependência nova (Intl + regex puro)
 - **Housekeeping cycle** — residuais R1/R2/R3 dos chips P-39 e P-40
   fechados em um único commit docs+config (sem código de app):
   - **R1** — dummy `CLERK_ENCRYPTION_KEY` documentada no `.env.example`

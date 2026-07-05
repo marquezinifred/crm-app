@@ -1318,6 +1318,44 @@ foram fechados na Sprint 11.
   ad-hoc
 
 **Débitos zerados em 2026-07-05:**
+- **P-58** Toast padronizado em CommunicationIntake / DocumentsSection /
+  ProposalsSection — débito residual do P-54. Auditoria pós-fix
+  identificou 3 subcomponentes de pipeline sem `useToast` +
+  `friendlyTrpcError`. Fix cirúrgico replica pattern P-54:
+  - **`src/components/pipeline/CommunicationIntake.tsx`**:
+    `summarize.onSuccess` (aiGenerated=true) → toast "Resumo gerado.";
+    `confirmSummary.onSuccess` → toast "Reunião salva.". Ambos com
+    `onError` via `friendlyTrpcError`. Inline error paragraph removido
+    (redundante com toast). `aiFailed` inline banner preservado (é
+    state UX, não erro de mutation)
+  - **`src/components/pipeline/DocumentsSection.tsx`**: fluxo multi-step
+    (`getUploadIntent → uploadProxy → create`) já orquestrado em
+    `handleFileSelected` com try/catch. Sucesso final → toast
+    "Documento anexado."; catch → toast error com `friendlyTrpcError`
+    (fallback pra "Falha ao enviar arquivo." em erros não-TRPC). Estado
+    local `error` + inline banner removidos
+  - **`src/components/pipeline/ProposalsSection.tsx`**:
+    `createProposal.onSuccess` → toast "Proposta criada.";
+    `addVersion.onSuccess` → toast "Nova versão da proposta.". Ambos
+    com `onError` via `friendlyTrpcError`
+  Imports novos: `useToast` de `@/components/ui/toast`,
+  `friendlyTrpcError` de `@/lib/trpc/error-format` (só onde faltava).
+  Zero dependência nova. Zero servidor tocado. Zero refactor além do
+  padrão toast+friendlyTrpcError.
+  Testes: `tests/unit/pipeline-subforms-toast.test.tsx` novo com **11
+  casos** (CommunicationIntake +5, DocumentsSection +2, ProposalsSection
+  +4). Padrão idêntico ao `pipeline-detail-page.test.tsx` do P-54: mock
+  `@/lib/trpc/client` capturando `onSuccess/onError` das mutations,
+  `ToastProvider` real, dispara handlers manualmente e verifica títulos
+  via `[role="status"]/[role="alert"]`.
+  Baseline: **734 passing (+11 novos) / 10 pré-existentes por env vars
+  em `field-encryption` (4) + `communication-summary-errors` (6) —
+  confirmado idênticas no HEAD antes do fix / 172 skipped**. Type-check
+  zero. Lint zero. Rollback trivial (reverter 3 componentes + 1 teste).
+  Débito adjacente **TasksSection.updateStatus** (checkbox toggle) sem
+  toast em erro — não coberto por este chip (escopo foi
+  Communication/Documents/Proposals). Registrar como P-62 se virar
+  recorrente
 - **P-54** Botão Salvar sem feedback + edits não limpos + IA bloqueada
   indefinidamente — bug crítico de UX descoberto em prod pelo Fred:
   ao salvar edits de estágio em `/pipeline/<id>`, tela ficava muda +

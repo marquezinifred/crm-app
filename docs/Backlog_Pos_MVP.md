@@ -21,8 +21,9 @@ Medições em ambientes distintos:
 - **715** passing (P-41 — env dummy 100% consistente)
 - **709** passing (P-40 — `.env.local` paterna Fred, sem `ANTHROPIC_API_KEY` real)
 - **661** passing (housekeeping — worktree efêmera com symlink node_modules)
+- **726** passing (P-42 — paterna após merge, +11 testes novos)
 
-Delta 54 entre extremos vem de Vitest **não carregar `.env.local`
+Delta entre extremos vem de Vitest **não carregar `.env.local`
 automaticamente** (responsabilidade do Next.js — Vitest lê só
 `process.env` do shell). Baseline "verde" acaba dependendo de
 como cada dev/CI carrega env.
@@ -39,72 +40,79 @@ como cada dev/CI carrega env.
 vai reportar "regressão" fantasma quando não é. Candidato Sprint 16
 junto com P-37/P-38.
 
-### P-42. 🔴 Backstop tenant-isolation quebra TODOS os `.update` de routers
-**Severidade:** 🔴 Alta (features quebradas em produção). Descoberto
-em uso real 2026-07-05 pelo Fred no Vercel prod
-(`crm-app-pi-eight.vercel.app/pipeline/<id>` estágio Lead → botão
-"Salvar alterações" → 500 Internal Server Error).
+### P-44. Integration test de tRPC via caller (P-42 residual)
+**Severidade:** Baixa. Registrado ao fechar P-42 em 2026-07-05.
 
-**Anatomia:**
-- `src/server/db/client.ts:122-131` (backstop) lança `Error` cru
-  quando payload de `update` não tem `tenantId` no `data` e o
-  modelo não está em `ALLOW_MISSING_TENANT_ON_WRITE`
-- Só `User.update` e `Task.update` estão na allowlist
-- Todos os outros `.update` em routers passam `data: { ...data,
-  updatedBy: ctx.user.id }` **sem `tenantId`** (Zod schemas de
-  update também não incluem tenantId)
-- Backstop dispara `Error("[tenant-isolation] <Model>.update sem
-  tenantId no payload")` → tRPC vira 500 (Error cru, não TRPCError)
+`tests/integration/opportunities-update.test.ts` do P-42 chama Prisma
+direto. Cobertura melhor viria via `appRouter.createCaller(ctx)` que
+exercita path completo Zod → RBAC → audit → Prisma. Espera infra de
+fixture de user autenticado local (relacionado com P-39 dummy Clerk).
 
-**Modelos afetados** (grep confirmado em `src/server/trpc/routers/`):
+**Esforço:** ~2h.
+
+### P-45. Auditar `createMany` no backstop (P-42 residual)
+**Severidade:** Baixa. Registrado ao fechar P-42 em 2026-07-05.
+
+`assertTenantWritePayload` atual retorna sem checar quando `data` é
+array (caso `createMany`). A Prisma extension injeta `tenantId` em
+cada row (linha ~135 de `client.ts`), então proteção existe — mas
+seria mais defensivo iterar as rows no backstop.
+
+**Esforço:** ~1h.
+
+### P-46. Mapear `Error("[tenant-isolation] ...")` pra TRPCError (P-42 residual)
+**Severidade:** Média. Registrado ao fechar P-42 em 2026-07-05.
+
+Se algum backstop remanescente disparar em prod, UI mostra "Unable
+to transform response" em vez de mensagem legível. Solução:
+`errorFormatter` em `src/server/trpc/trpc.ts` detecta prefixo
+`[tenant-isolation]` e converte pra `TRPCError(INTERNAL_SERVER_ERROR)`
+com payload estruturado. Casa bem com `friendlyTrpcError` (P-21).
+
+**Esforço:** ~1h.
+
+### ~~P-42. Backstop tenant-isolation quebra TODOS os `.update` de routers~~ ✅ FECHADO
+**Resolvido em 2026-07-05.** Refactor cirúrgico em
+`src/server/db/client.ts` extraindo a lógica do backstop em função pura
+`assertTenantWritePayload(model, op, ctxTenantId, payload)` exportada, e
+reformando a semântica: `create` continua exigindo tenantId no data
+(defesa contra bypass explícito com tenantId ≠ contexto);
+`update`/`upsert.update` deixam de exigir tenantId (WHERE injection já
+protege — row alvo é imutável cross-tenant) e só bloqueiam quando o
+payload declara um tenantId diferente do contexto (tentativa deliberada
+de mover row cross-tenant). `ALLOW_MISSING_TENANT_ON_WRITE` eliminado —
+agora que `update` genericamente aceita ausência de tenantId, a
+allowlist redundava. Fluxo do bug (Fred no estágio Lead salvando
+`meetingScheduledAt` + `meetingHappened`) agora passa limpo. Idem
+`documents.create` (transação com update embutido) e `proposals.addVersion`
+que Fred também viu quebrar em prod.
+
+**Modelos afetados** (todos passam a funcionar sem tocar nos 57 call
+sites):
 - `Opportunity.update` — opportunities.ts:202, inbound.ts:261,
-  partner-engagements.ts:113 (+ soft delete opp em partner-engagements.ts)
-- `Company.update` — companies.ts:106 (update), 128 (soft delete),
-  partners.ts:99 (partner config)
-- `Contact.update` — contacts.ts:107 (update), 129 (soft delete),
-  158 (approval status)
-- `Product.update` — products.ts:59 (update), 83 (soft delete)
+  partner-engagements.ts:113
+- `Company.update` — companies.ts:106, 128, partners.ts:99
+- `Contact.update` — contacts.ts:107, 129, 158
+- `Product.update` — products.ts:59, 83
 - `Proposal.update` — proposals.ts:103
 - `Approval.update` — proposals.ts (decide)
 - `PartnerEngagement.update` — partner-engagements.ts:113, 149
 - `InboundLeadRejected.update` — inbound.ts (discard)
+- `Document.update` — documents.ts:195 (side-effect em transação)
 
-**Por que só apareceu agora:** Fred usou pela primeira vez o botão
-"Salvar alterações" do estágio Lead (meetingScheduledAt +
-meetingHappened) em produção. Todos os outros CRUDs que ele tocou
-(criar company/contact/product via modal) fizeram `create`, não
-`update`. `create` requer tenantId legitimamente. Assim que ele
-tentar EDITAR qualquer entidade via UI em prod, mesmo bug.
+**Testes:** 17 novos em `tests/unit/tenant-backstop.test.ts` (função
+pura + 8 modelos afetados via `it.each`) + 4 novos em
+`tests/integration/opportunities-update.test.ts` (regressão do bug 500 +
+update simples + 2 defesas cross-tenant). Integration skipa por padrão
+sem `DATABASE_URL_TEST`. Baseline: 726 passing (+11 novos) / 6 failing
+pré-existentes em `communication-summary-errors.test.ts` (env vars,
+confirmado idêntico ANTES do fix via stash) / 172 skipped. Type-check
+zero. Lint zero.
 
-**Fix arquitetural proposto** (não só workaround):
-- Backstop atual é over-engineered. Comentário dele mesmo reconhece
-  que "WHERE já injeta tenantId; data não pode mover row de tenant
-  por não conter tenantId (undefined ignora)"
-- Reformar backstop pra:
-  - `create`: exigir `tenantId` no data (mantido — não há WHERE)
-  - `update`/`upsert`: **só bloquear se `tenantId` presente E ≠
-    contexto** (defesa contra tentativa de mover row cross-tenant).
-    Ausente = OK (WHERE já protege)
-- Eliminar `ALLOW_MISSING_TENANT_ON_WRITE` (fica vazio) ou usar só
-  como safeguard secundário
+**Rollback:** trivial — reverter `src/server/db/client.ts`.
 
-**Testes obrigatórios:**
-- Regressão: `tests/unit/tenant-backstop.test.ts` novo cobrindo
-  os 3 cenários (create sem tenantId → throws;
-  update sem tenantId → passa; update com tenantId ≠ ctx → throws)
-- Integration: `tests/integration/opportunities-update.test.ts`
-  chamando update via tRPC com meetingScheduledAt + meetingHappened
-  e confirmando resposta 200 (não 500)
-- Smoke UI: cenário no Roteiro §2 pra estágio Lead salvar meeting
-
-**Escopo:** ~3-4h. Escopo cirúrgico (client.ts + 1 teste unit + 1
-integration). Não toca nos 13 call sites de update (fica mais limpo).
-
-**Rollback:** trivial — reverter mudança em client.ts.
-
-**Bloqueia:** validação P-08 a P-12 (Task #22 Fred) porque qualquer
-edit vai falhar; rollout Sprint 15F (P-25) porque IA update em
-opportunities.
+**Débitos residuais registrados:** P-44 (caller tRPC), P-45 (audit
+`createMany`), P-46 (mapear Error pra TRPCError com friendlyTrpcError).
 
 ### ~~P-01. Fix `/companies` + `/contacts` CRUD 404~~ ✅ FECHADO
 **Resolvido em 2026-06-30 pelo commit `54dab90`.** Modal inline

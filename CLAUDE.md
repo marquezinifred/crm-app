@@ -1305,24 +1305,56 @@ foram fechados na Sprint 11.
   `/contacts`, `/imports`, `/more`, `/reports`) ainda têm `<h1>`
   ad-hoc
 
-**Housekeeping cycle 2026-07-05** — residuais R1/R2/R3 dos chips P-39
-e P-40 fechados em um único commit docs+config (sem código de app):
-- **R1** — dummy `CLERK_ENCRYPTION_KEY` documentada no `.env.example`
-  bloco Clerk. Silencia o warn `Missing CLERK_ENCRYPTION_KEY` do SDK
-  em `next dev`. Var não passa pelo Zod schema (`src/lib/env.ts` intacto);
-  SDK Clerk lê direto. Prod continua com `openssl rand -base64 32`
-- **R2** — `docs/Roteiro_QA_Homologacao_Staging.md` §0 (linha 36) e §5
-  (linha 565) atualizados de "609 passing / 10 failed" pra "715 passing
-  / 0 failing / 168 skipped (883 total)" com nota sobre variância
-  709–715 dependendo de `ANTHROPIC_API_KEY`
-- **R3** — nota de variância adicionada em `CLAUDE.md` §Baseline e
-  `docs/Metodologia_Desenvolvimento_Venzo.md` §5.2 esclarecendo que
-  709 (env real parcial) e 715 (env dummy 100%) são o mesmo baseline
-  verde — 6 tests em `communication-summary-errors.test.ts` dependem
-  de chave IA real. Sensibilidade a env, não regressão
-- QA automation exception aplicada — docs+config only, sem código de
-  app. Baseline preservado (715 com env dummy; 709 com env parcial).
-  Type-check zero. Lint zero na paterna E worktree
+**Débitos zerados em 2026-07-05:**
+- **Housekeeping cycle** — residuais R1/R2/R3 dos chips P-39 e P-40
+  fechados em um único commit docs+config (sem código de app):
+  - **R1** — dummy `CLERK_ENCRYPTION_KEY` documentada no `.env.example`
+    bloco Clerk. Silencia o warn `Missing CLERK_ENCRYPTION_KEY` do SDK
+    em `next dev`. Var não passa pelo Zod schema (`src/lib/env.ts`
+    intacto); SDK Clerk lê direto. Prod continua com
+    `openssl rand -base64 32`
+  - **R2** — `docs/Roteiro_QA_Homologacao_Staging.md` §0 (linha 36) e §5
+    (linha 565) atualizados de "609 passing / 10 failed" pra "715 passing
+    / 0 failing / 168 skipped (883 total)" com nota sobre variância
+    709–715 dependendo de `ANTHROPIC_API_KEY`
+  - **R3** — nota de variância adicionada em `CLAUDE.md` §Baseline e
+    `docs/Metodologia_Desenvolvimento_Venzo.md` §5.2 esclarecendo que
+    709 (env real parcial) e 715 (env dummy 100%) são o mesmo baseline
+    verde — 6 tests em `communication-summary-errors.test.ts` dependem
+    de chave IA real. Sensibilidade a env, não regressão
+  - QA automation exception aplicada — docs+config only, sem código de
+    app. Baseline preservado. Type-check zero. Lint zero
+- **P-42** Backstop tenant-isolation quebrava `.update` sem `tenantId`
+  no data — bug crítico descoberto em produção (Vercel prod) quando
+  o Fred salvava campos por estágio no `/pipeline/<id>` estágio Lead
+  (`meetingScheduledAt` + `meetingHappened`). `src/server/db/client.ts`
+  linha 122-131 lançava `Error("[tenant-isolation] <Model>.<op> sem
+  tenantId no payload")` cru pra QUALQUER `.update`/`.upsert` que não
+  passasse tenantId no data. Só `User.update` e `Task.update` estavam
+  em `ALLOW_MISSING_TENANT_ON_WRITE`, deixando 8+ modelos afetados
+  (Opportunity, Company, Contact, Product, Proposal, Approval,
+  PartnerEngagement, InboundLeadRejected + Document via side-effect
+  em transação `documents.create`). Fix: extraída função pura
+  `assertTenantWritePayload(model, op, ctxTenantId, payload)`
+  exportada com semântica reformada: `create` continua exigindo
+  tenantId (defesa contra bypass explícito com tenantId ≠ ctx);
+  `update`/`upsert.update` NÃO exigem mais (WHERE injection já
+  bloqueia cross-tenant — row alvo é imutável); só bloqueiam se
+  payload declara tenantId ≠ ctx (tentativa deliberada de mover row).
+  `ALLOW_MISSING_TENANT_ON_WRITE` eliminado. +17 unit em
+  `tests/unit/tenant-backstop.test.ts` (função pura + `it.each` pros
+  8 modelos afetados) + 4 integration em
+  `tests/integration/opportunities-update.test.ts` (regressão bug
+  500 + update simples + 2 defesas cross-tenant, skipa sem
+  `DATABASE_URL_TEST`). Baseline: 726 passing (baseline 715 + 11
+  novos) / 6 pré-existentes por env vars em
+  `communication-summary-errors.test.ts` (confirmado idêntico ANTES
+  do fix via stash) / 172 skipped. Type-check zero. Lint zero.
+  Rollback: reverter `src/server/db/client.ts`. Débitos residuais
+  registrados: **P-44** (caller tRPC), **P-45** (audit createMany),
+  **P-46** (map Error pra TRPCError com friendlyTrpcError). QA
+  automation report deve rodar após merge (Metodologia §9.4 — core
+  layer tocado)
 
 **Débitos zerados em 2026-07-04:**
 - P-40 Conflito `.eslintrc.json` em worktree — fix defensivo

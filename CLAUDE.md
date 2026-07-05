@@ -1069,7 +1069,7 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 ---
 
-## Baseline de testes atual (2026-07-05, pós P-47)
+## Baseline de testes atual (2026-07-05, pós P-60)
 
 Vitest carrega `.env` automaticamente com precedence
 `.env.test → .env.local → .env` (P-47 fix, `tests/env-setup.ts`).
@@ -1078,16 +1078,18 @@ manual. Matriz esperada por cenário:
 
 | Cenário | Passing / Failing / Skipped | Total |
 |---------|------------------------------|-------|
-| Dev com `.env.local` OU `.env` presente na cwd (qualquer conteúdo válido no schema Zod) | **741 / 6 / 172** | 919 |
-| CI sem env file na cwd (o workflow deve injetar env vars via `env:` do GH Actions) | **693 / 10 / 172** | 875 |
+| Dev com `.env.local` OU `.env` presente na cwd (qualquer conteúdo válido no schema Zod) | **739 / 4 / 172** | 915 |
+| CI sem env file na cwd (o workflow deve injetar env vars via `env:` do GH Actions) | **~691 / 8 / 172** | ~871 |
 
 Notas:
-- Os 6 failings do primeiro cenário são todos de
-  `tests/unit/communication-summary-errors.test.ts` — dependem de
-  `ANTHROPIC_API_KEY` real; passam quando a chave é real (não dummy).
-  Setups históricos com key real reportavam 747 passing (mesma família
-  do baseline 741 verde)
-- Os 10 failings do cenário CI vêm de 9 test files falhando no import
+- Os 4 failings do primeiro cenário são todos de
+  `tests/unit/field-encryption.test.ts` — dependem de
+  `TENANT_FIELD_ENCRYPTION_KEY` válida ≥32 chars; passam quando setada
+  (mesmo dummy). **Antes do P-60 eram 6 falhas de
+  `communication-summary-errors.test.ts` (que também aparecia)** —
+  fechadas em 2026-07-05. O baseline "741 / 6 / 172" (pré-P-60) era
+  o mesmo baseline verde subjacente, só refletia o débito antes do fix
+- Os failings do cenário CI vêm de test files falhando no import
   (Zod rejeita `DATABASE_URL` ausente etc). Comportamento correto e
   intencional — o fix carrega .env só se existir na cwd
 - 172 skipped = ~170 estáticos + 2 conditional (RBAC +
@@ -1318,6 +1320,39 @@ foram fechados na Sprint 11.
   ad-hoc
 
 **Débitos zerados em 2026-07-05:**
+- **P-60** `communication-summary-errors.test.ts` 6 falhas — bisect
+  identificou commit culpado `9aef608` (Sprint 15F, 2026-06-30) que
+  trocou `callAiFeature` (mockável) por `dispatchChat` (roteador
+  `MULTI_AI_ENABLED`). Testes continuavam mockando `callAiFeature`
+  mas com flag `true` (paterna) o path novo (`callAiWithFallback` +
+  `resolveAiConfig` via Prisma) bypassava o mock, gerando erro genérico
+  não-mapeado + `aiGenerated:false` em vez de propagar
+  `FeatureNotAvailableError` / `AiLimitExceededError` / `TRPCError`
+  Anthropic. **Hipótese vencedora: B (teste velho).** Contrato do
+  service (`summarizeCommunication`) estava correto todo esse tempo
+  — só o mock estava em nível errado. Fix em 2 partes:
+  - **`tests/unit/communication-summary-errors.test.ts`**: substitui
+    `vi.mock('@/lib/ai/feature-gate')` por
+    `vi.mock('@/lib/ai/dispatch')`; cada teste chama
+    `vi.mocked(dispatchChat).mockImplementation(...)`. As 8 assertions
+    cobrem contrato completo: gate errors rethrow; `Anthropic.APIError`
+    400/401/429 → `mapAnthropicError` → `TRPCError`; erro genérico ou
+    500 → `aiGenerated:false` gracioso. Independente da flag.
+  - **`src/lib/env.ts`**: bug arquitetural descoberto no caminho —
+    `z.coerce.boolean("false") === true` (JS `Boolean(non-empty)`).
+    Isso silenciosamente LIGAVA flags escritas como `MULTI_AI_ENABLED=false`
+    (mesmo pattern em `AXIOM_LOG_QUERIES` e `RBAC_GRANULAR_ENABLED`).
+    Novo helper `envBoolean(default)` interpreta strings literalmente
+    (`"true|1|yes|on"` → true; `"false|0|no|off|""` → false;
+    desconhecido → default). Aplicado nas 3 flags.
+  - Testes: +10 novos em `tests/unit/env-boolean-parsing.test.ts`
+    (undefined, boolean direto, cada string comum, case-insensitive,
+    string vazia, valor desconhecido→default). +6 comm-summary
+    corrigidos. Baseline: **739 passing / 4 failing (só
+    field-encryption pré-existentes, confirmadas idênticas no HEAD
+    via `git stash`) / 172 skipped**. Type-check zero. Lint zero.
+  - Memory `env-boolean-parsing.md` nova documenta a lição: nunca
+    usar `z.coerce.boolean()` pra env — usar `envBoolean()`
 - **P-54** Botão Salvar sem feedback + edits não limpos + IA bloqueada
   indefinidamente — bug crítico de UX descoberto em prod pelo Fred:
   ao salvar edits de estágio em `/pipeline/<id>`, tela ficava muda +

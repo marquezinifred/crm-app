@@ -1,5 +1,24 @@
 import { z } from 'zod';
 
+// P-60 — z.coerce.boolean() usa Boolean(value), que trata qualquer string
+// não-vazia como `true` (`Boolean("false") === true`). Isso silenciosamente
+// LIGAVA flags como `MULTI_AI_ENABLED=false` no .env em vez de desligar.
+// Este helper interpreta o texto literalmente: "true|1|yes|on" → true;
+// "false|0|no|off|"" → false; ausente → default.
+const envBoolean = (defaultValue = false) =>
+  z
+    .union([z.boolean(), z.string()])
+    .optional()
+    .transform((v) => {
+      if (typeof v === 'boolean') return v;
+      if (v === undefined || v === null) return defaultValue;
+      const s = v.trim().toLowerCase();
+      if (s === '' || s === 'false' || s === '0' || s === 'no' || s === 'off')
+        return false;
+      if (s === 'true' || s === '1' || s === 'yes' || s === 'on') return true;
+      return defaultValue;
+    });
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 
@@ -71,7 +90,7 @@ const envSchema = z.object({
   AXIOM_DATASET: z.string().optional(),
   // Trace inclusion — quando false (default), só mutations tRPC são
   // logadas; queries só quando falham. `true` loga todas as procedures.
-  AXIOM_LOG_QUERIES: z.coerce.boolean().default(false),
+  AXIOM_LOG_QUERIES: envBoolean(false),
 
   // App
   NEXT_PUBLIC_APP_URL: z.string().url().default('http://localhost:3000'),
@@ -93,7 +112,7 @@ const envSchema = z.object({
   // false (default): 5 services usam getAnthropicForTenant() (path legado).
   // true: consumidores usam callAiWithFallback() (path novo).
   // Ver docs/Sprint_15F_IA_Multi_Provider.md.
-  MULTI_AI_ENABLED: z.coerce.boolean().default(false),
+  MULTI_AI_ENABLED: envBoolean(false),
 
   // Sprint 15E — Feature flag do RBAC granular (permissions individuais).
   // false (default): procedures antigas seguem usando `withCapability`
@@ -102,7 +121,7 @@ const envSchema = z.object({
   // true: procedures novas com `withPermission` respeitam grants/revokes
   // individuais; UI de permissions granulares acessível ao Admin.
   // Ver docs/Sprint_15E_RBAC_Granular.md — §5.4 rollout ordenado.
-  RBAC_GRANULAR_ENABLED: z.coerce.boolean().default(false),
+  RBAC_GRANULAR_ENABLED: envBoolean(false),
 });
 
 const parsed = envSchema.safeParse(process.env);

@@ -13,7 +13,45 @@ Mantido em sincronia com `CLAUDE.md` e memory `MEMORY.md`.
 
 ## 🔥 Pendências de curto prazo (próximas 2 semanas)
 
-### P-42. 🔴 Backstop tenant-isolation quebra TODOS os `.update` de routers
+### ~~P-42. Backstop tenant-isolation quebra TODOS os `.update` de routers~~ ✅ FECHADO
+**Resolvido em 2026-07-05.** Refactor cirúrgico em
+`src/server/db/client.ts` extraindo a lógica do backstop em função pura
+`assertTenantWritePayload(model, op, ctxTenantId, payload)` exportada, e
+reformando a semântica: `create` continua exigindo tenantId no data
+(defesa contra bypass explícito com tenantId ≠ contexto);
+`update`/`upsert.update` deixam de exigir tenantId (WHERE injection já
+protege — row alvo é imutável cross-tenant) e só bloqueiam quando o
+payload declara um tenantId diferente do contexto (tentativa deliberada
+de mover row cross-tenant). `ALLOW_MISSING_TENANT_ON_WRITE` eliminado —
+agora que `update` genericamente aceita ausência de tenantId, a
+allowlist redundava. Fluxo do bug (Fred no estágio Lead salvando
+`meetingScheduledAt` + `meetingHappened`) agora passa limpo.
+
+**Testes:** 17 novos em `tests/unit/tenant-backstop.test.ts` (função
+pura + 8 modelos afetados via `it.each`) + 4 novos em
+`tests/integration/opportunities-update.test.ts` (regressão do bug 500 +
+update simples + 2 defesas cross-tenant). Integration skipa por padrão
+sem `DATABASE_URL_TEST`. Baseline preservado: 726 passing (baseline
++11 novos passando) / 6 failing pré-existentes em
+`communication-summary-errors.test.ts` (env vars ausentes, confirmado
+idêntico ANTES do fix via stash) / 172 skipped. Type-check zero. Lint
+zero.
+
+**Débitos residuais identificados:**
+- Ampliar teste de integração pra chamar via caller tRPC
+  (`appRouter.createCaller(ctx)`) em vez de Prisma direto — dá mais
+  cobertura do path completo (Zod → RBAC → audit → Prisma). Espera
+  infra de fixture de user autenticado local. Candidato P-43.
+- Auditar `createMany` — no assert atual, arrays retornam null sem
+  checagem por-row. A extension injeta em cada row (linha ~135), então
+  a proteção existe; mas seria mais defensivo iterar. Candidato P-44.
+- Considerar mapear `Error("[tenant-isolation] ...")` pra `TRPCError`
+  com code `INTERNAL_SERVER_ERROR` + payload legível no
+  `errorFormatter` de `src/server/trpc/trpc.ts`. Hoje o backstop dispara
+  Error cru que a UI mostra como "Unable to transform response".
+  Candidato P-45.
+
+### ~~P-42 histórico do bug~~
 **Severidade:** 🔴 Alta (features quebradas em produção). Descoberto
 em uso real 2026-07-05 pelo Fred no Vercel prod
 (`crm-app-pi-eight.vercel.app/pipeline/<id>` estágio Lead → botão

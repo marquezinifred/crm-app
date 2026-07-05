@@ -1296,6 +1296,36 @@ foram fechados na Sprint 11.
   `/contacts`, `/imports`, `/more`, `/reports`) ainda têm `<h1>`
   ad-hoc
 
+**Débitos zerados em 2026-07-05:**
+- P-42 Backstop tenant-isolation quebrava `.update` sem `tenantId`
+  no data — bug crítico descoberto em produção (Vercel prod) quando
+  o Fred salvava campos por estágio no `/pipeline/<id>` estágio Lead
+  (`meetingScheduledAt` + `meetingHappened`). `src/server/db/client.ts`
+  linha 122-131 lançava `Error("[tenant-isolation] <Model>.<op> sem
+  tenantId no payload")` cru pra QUALQUER `.update`/`.upsert` que não
+  passasse tenantId no data. Só `User.update` e `Task.update` estavam
+  em `ALLOW_MISSING_TENANT_ON_WRITE`, deixando 8+ modelos afetados
+  (Opportunity, Company, Contact, Product, Proposal, Approval,
+  PartnerEngagement, InboundLeadRejected). Fix: extraída função pura
+  `assertTenantWritePayload(model, op, ctxTenantId, payload)`
+  exportada com semântica reformada: `create` continua exigindo
+  tenantId (defesa contra bypass explícito com tenantId ≠ ctx);
+  `update`/`upsert.update` NÃO exigem mais (WHERE injection já
+  bloqueia cross-tenant — row alvo é imutável); só bloqueiam se
+  payload declara tenantId ≠ ctx (tentativa deliberada de mover row).
+  `ALLOW_MISSING_TENANT_ON_WRITE` eliminado. +17 unit em
+  `tests/unit/tenant-backstop.test.ts` (função pura + `it.each` pros
+  8 modelos afetados) + 4 integration em
+  `tests/integration/opportunities-update.test.ts` (regressão bug
+  500 + update simples + 2 defesas cross-tenant, skipa sem
+  `DATABASE_URL_TEST`). Baseline: 726 passing (baseline 715 + 11
+  novos) / 6 pré-existentes por env vars em
+  `communication-summary-errors.test.ts` (confirmado idêntico ANTES
+  do fix via stash) / 172 skipped. Type-check zero. Lint zero.
+  Rollback: reverter `src/server/db/client.ts`. Débitos residuais
+  registrados: P-43 (caller tRPC), P-44 (audit createMany), P-45
+  (map Error pra TRPCError com friendlyTrpcError)
+
 **Débitos zerados em 2026-07-04:**
 - P-40 Conflito `.eslintrc.json` em worktree — fix defensivo
   adicionando `"root": true` no topo de `.eslintrc.json` do repo.

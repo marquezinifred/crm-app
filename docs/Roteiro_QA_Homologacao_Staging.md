@@ -151,7 +151,15 @@ Cria uma opp end-to-end e move pelos 7 estágios respeitando validações.
 3. **Criar Opportunity**
    - `/pipeline/new` → selecionar Company "QA Test SA" (autocomplete deve mostrar), título "Deal QA #1", valor R$ 10.000, data prevista +30d → salvar.
      - **Passa se:** redireciona pra `/pipeline/<id>` com header "Deal QA #1" + badge "LEAD" + valor destacado.
-4. **Avançar pelos 7 estágios**
+4. **Salvar campos por estágio (regressão P-42 fechada 2026-07-05)**
+   - Ainda no estágio LEAD do `/pipeline/<id>`, preencher os campos do estágio:
+     - `meetingScheduledAt` = data/hora futura qualquer
+     - `meetingHappened` = false (ou o checkbox correspondente)
+   - Clicar "Salvar alterações" (ou o botão que persiste os campos por estágio).
+     - **Passa se:** toast Venzo verde de sucesso + campos persistem após F5 (`meetingScheduledAt` aparece preenchido). Network tab mostra `POST /api/trpc/opportunities.update?batch=1` com HTTP **200**.
+     - **Falha se:** modal/toast danger com "Unable to transform response from server" OU Network tab mostra **500** com body `Error: [tenant-isolation] Opportunity.update sem tenantId no payload`. Nesse caso, P-42 regrediu — reverter e reabrir o débito.
+   - Repetir o mesmo padrão em OPORTUNIDADE (campo `briefing`) e PROPOSTA (`proposalPresentedAt` + `decisionExpectedAt`) — todo `.update` de opp deve responder 200. Vale ampliar spot-checks em `/companies/<id>` "Editar", `/contacts/<id>` "Editar", `/admin/products` edição e `/admin/alerts` update de config: todos passam pelo mesmo backstop reformado, o padrão de falha é idêntico.
+5. **Avançar pelos 7 estágios**
    Para cada transição, clicar botão "Avançar →" na `/pipeline/<id>`:
    - **LEAD → OPORTUNIDADE:** pede briefing preenchido.
      - **Passa se:** botão fica desabilitado até você preencher o campo `Briefing`.
@@ -165,7 +173,7 @@ Cria uma opp end-to-end e move pelos 7 estágios respeitando validações.
      - Seção Documentos → "+ Anexar documento" → upload real de arquivo (não digita SHA-256 à mão — bug P-19 fechado, regressão bloqueia).
      - Após upload, definir categoria = "Aceite do cliente".
      - **Passa se:** avança pra CONTRATO com toast + contract handoff email disparado (checar `/admin/contracts` — contrato aparece).
-5. **Cancelar opp** (fluxo alternativo — criar uma opp descartável pra isso).
+6. **Cancelar opp** (fluxo alternativo — criar uma opp descartável pra isso).
    - Clicar "Cancelar" → modal pede motivo (lossReason).
    - **Passa se:** salva com status LOST, opp some do kanban.
 

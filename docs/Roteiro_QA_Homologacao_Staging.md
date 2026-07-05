@@ -578,7 +578,7 @@ Não precisa refazer manualmente. Roda no CI.
 **Suite Vitest (`npm test`)** — 715 passing / 0 failing / 168 skipped (883 total) com env dummy consistente. Com env vars parcialmente reais, ~709 (6 tests de `communication-summary-errors` dependem de `ANTHROPIC_API_KEY`). Ver CLAUDE.md §"Baseline de testes atual (2026-07-04)".
 
 **Suite Playwright (`npm run test:e2e`):**
-- [`tests/e2e/axe-smoke.spec.ts`](../tests/e2e/axe-smoke.spec.ts) — a11y smoke (axe-core) em 5 rotas públicas + 4 autenticadas.
+- [`tests/e2e/axe-smoke.spec.ts`](../tests/e2e/axe-smoke.spec.ts) — a11y smoke (axe-core) em 5 rotas públicas + 4 autenticadas. Excluí `iframe` das AxeBuilder chains (P-52 2026-07-05) porque axe reportava `html-has-lang` contra subframe injetado pelo Clerk. Se em staging aparecer nova violação `html-has-lang` em iframe próprio (nosso, não terceiro), reverter o exclude e adicionar `lang` no iframe local.
 - [`tests/e2e/rbac-permissions-ui.spec.ts`](../tests/e2e/rbac-permissions-ui.spec.ts) — 10 tests UI RBAC (Sprint 15E, AC-20).
 - [`tests/e2e/pipeline-7-stages.spec.ts`](../tests/e2e/pipeline-7-stages.spec.ts) — pipeline end-to-end (skip condicional se `E2E_TEST_TENANT_ID` ausente).
 - [`tests/e2e/smoke.spec.ts`](../tests/e2e/smoke.spec.ts) — home + health endpoint + form público.

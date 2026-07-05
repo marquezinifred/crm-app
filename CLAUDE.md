@@ -1308,17 +1308,26 @@ foram fechados na Sprint 11.
 **Débitos zerados em 2026-07-05:**
 - **P-51** Playwright `smoke.spec.ts` desatualizada (Sprint 14 copy) —
   2 asserts falhavam desde Sprint 14 (nunca eram rodados em CI por
-  falta de env vars E2E). `page.getByRole('heading', { name: /CRM B2B/i })`
-  não batia porque landing virou "Feche mais. Vença sempre." em
-  `src/app/page.tsx:10`; `/Auto-cadastro/i` também não batia porque
-  `/p/[tenantSlug]/contact` virou "Fale com a gente" em
-  `src/app/p/[tenantSlug]/contact/page.tsx:43`. Fix cirúrgico: 2 edits
-  em `tests/e2e/smoke.spec.ts` linhas 10 e 23 trocando os regex pra
+  falta de env vars E2E). Fix cirúrgico: 2 edits em
+  `tests/e2e/smoke.spec.ts` linhas 10 e 23 trocando os regex pra
   `/Feche mais/i` e `/Fale com a gente/i`. Sem código de app tocado.
   Validação local: `npx playwright test tests/e2e/smoke.spec.ts
-  --project=chromium-desktop` = **3/3 passing (7.7s)** (com `.env.local`
-  symlinkado da paterna). Type-check zero. Lint zero. QA automation
-  exception aplicada (fixture E2E, sem código de app)
+  --project=chromium-desktop` = **3/3 passing (7.7s)**. Type-check
+  zero. Lint zero. QA automation exception aplicada
+- **P-52** Fixture E2E `axe-smoke.spec.ts` reportava violação
+  `html-has-lang` — descoberto pelo QA automation pós-P-50. Fix
+  defensivo em `tests/e2e/axe-smoke.spec.ts` adicionando
+  `.exclude('iframe')` nas duas `AxeBuilder` chains. Contexto:
+  `ClerkProvider` injeta iframe oculto pra session management, e
+  axe reportava contra o `<html>` interno desse subframe que não
+  controlamos. `<html lang="pt-BR">` do app segue intacto em
+  `src/app/layout.tsx:59`. Validação: Playwright rodado
+  (chromium-desktop + mobile-safari); contagem de violations idêntica
+  ANTES/DEPOIS (42 `color-contrast` em ambos — zero regressão).
+  Débito residual **P-55** registrado pra `color-contrast` da
+  CookieBanner (`.text-brand` sobre bg dark = 2.97:1 vs 4.5:1
+  requerido — renumerado, P-54 já é toast Salvar). Type-check zero.
+  Lint zero. QA automation exception aplicada
 - **P-50** Campo "Valor estimado (R$)" sem máscara pt-BR — descoberto
   em uso real 2026-07-05 pelo Fred em prod. Input `type="number"` cru
   mostrava `289311` sem separador. Fix: `src/lib/utils/format.ts`

@@ -13,6 +13,129 @@ Mantido em sincronia com `CLAUDE.md` e memory `MEMORY.md`.
 
 ## 🔥 Pendências de curto prazo (próximas 2 semanas)
 
+### P-65. `estimatedValue` da oportunidade não sincroniza com valor da proposta
+**Severidade:** 🟡 Média (UX crítico — desalinha forecast + relatórios).
+Descoberto em uso 2026-07-05 pelo Fred:
+"valor da oportunidade nao atualiza quando colocarmos o valor da
+proposta, deveria atualizar".
+
+**Anatomia esperada:**
+- `ProposalVersion.totalValue` (Sprint 8) é o valor real negociado
+- `Opportunity.estimatedValue` é preenchido no create do lead, raramente
+  atualizado
+- Hoje NÃO existe sync automático entre os dois
+- Forecast (`reports.revenueProjection`), Kanban (soma por coluna) e
+  relatórios usam `Opportunity.estimatedValue` — desalinhado
+
+**Fix escopo:**
+- Quando `proposals.addVersion` cria nova `ProposalVersion`, atualizar
+  `opportunity.estimatedValue = latestVersion.totalValue` na mesma
+  transação
+- Considerar preservar `estimatedValue` original em novo campo
+  `Opportunity.initialEstimatedValue` pra métrica "quanto mudou do
+  lead até proposta" (nice-to-have; escopo P-65 base pode pular)
+- Testes:
+  - `addVersion` atualiza `estimatedValue` corretamente
+  - Cross-tenant: version de Tenant A não afeta opp Tenant B
+  - Se `totalValue = null` na version, `estimatedValue` fica intacto
+- Verificação visual: adicionar version com `totalValue=500000` →
+  Kanban da coluna PROPOSTA mostra R$ 500.000 imediatamente
+
+**Onde tocar:**
+- `src/server/trpc/routers/proposals.ts` — procedure `addVersion` (~linha 100)
+- Testes em `tests/unit/proposals-router.test.ts` (se existir) ou novo
+- Kanban `src/app/pipeline/page.tsx` — validar via query se `estimatedValue`
+  reflete
+
+**Esforço:** ~2h.
+
+### P-66. Transição PROPOSTA→NEGOCIACAO deve exigir valor + margem + documento
+**Severidade:** 🟡 Média (business rule crítica — Sprint 8 P-01 gate
+incompleto). Descoberto em uso 2026-07-05 pelo Fred:
+"para evoluir para o estagio de negociação deve ser obrigatório
+ainda no estagio de proposta ter preenchido um valor de proposta
+atualizado e a margem, e anexar o documento de proposta".
+
+**Estado atual** (`src/server/services/opportunity-stage.service.ts`
+STAGE_EXIT_REQUIREMENTS):
+- `PROPOSTA` → exige `proposalPresentedAt`
+- Também Sprint 8 P-01 exige ≥ 1 `ProposalVersion` (validador Zod
+  em `advanceStage`)
+- **Falta**: exigir `latestVersion.totalValue` não-nulo E
+  `latestVersion.marginPct` não-nulo E ≥1 `Document category=PROPOSTA_TECNICA`
+  ou `PROPOSTA_COMERCIAL` vinculado à opp
+
+**Fix escopo:**
+- Estender `STAGE_EXIT_REQUIREMENTS['PROPOSTA']` OU criar novo helper
+  async `validateProposalExit(opportunityId)` que verifica:
+  - `latestVersion.totalValue !== null`
+  - `latestVersion.marginPct !== null`
+  - Existe pelo menos 1 Document com category em `['PROPOSTA_TECNICA',
+    'PROPOSTA_COMERCIAL']` (definir quais aceitos com PO) vinculado
+- Erro claro no `StageTransitionError`: "Preencha valor e margem
+  da proposta e anexe o documento antes de avançar."
+- UI reflete mensagem via `friendlyTrpcError`
+
+**Testes:**
+- Advance PROPOSTA→NEGOCIACAO sem valor → PRECONDITION_FAILED
+- Sem margem → mesmo erro
+- Sem documento categoria proposta → mesmo erro
+- Com todos → sucesso
+
+**Onde tocar:**
+- `src/server/services/opportunity-stage.service.ts` — helper novo
+- `src/server/trpc/routers/opportunities.ts` — chamar helper no
+  `advanceStage` quando `from=PROPOSTA`
+- Testes em `tests/unit/stage-transition.test.ts` (Sprint 2 baseline)
+
+**Esforço:** ~2h.
+
+### P-67. Tela `/approvals` não mostra oportunidades pendentes de DIRETOR_COMERCIAL / DIRETOR_FINANCEIRO
+**Severidade:** 🔴 Alta (feature quebrada — aprovadores não veem o que
+precisam aprovar). Descoberto em uso 2026-07-05 pelo Fred logado como
+DIRETOR_COMERCIAL:
+"Nao estou conseguindo visualizar na tela de aprovação, as
+oportunidades que precisam ser aprovados por estarem dentro das
+regras de aprovação pelo diretor comercial e diretor financeiro".
+
+**Hipóteses de investigação:**
+1. **Approval engine não está criando `Approval` rows** ao gerar
+   nova `ProposalVersion` — verificar
+   `src/server/services/approval-engine.service.ts`
+   `createApprovalsForProposalVersion` está sendo chamado?
+2. **RBAC filtro errado em `approvals.myPending`** — retorna
+   `Approval.approverId = ctx.user.id`. Mas com Sprint 15E, engine
+   pode estar usando `approver_permission` em vez de `approver_roles`
+   — buscar rows onde `approverRole in ctx.user.role` OU
+   `approverPermission in ctx.user.cachedPermissions`
+3. **Regras de aprovação não configuradas** — `/admin/approval-rules`
+   está vazio ou desativado
+4. **Fred não é o aprovador designado** — Sprint 8 config espera
+   role no approval_rule, mas talvez matriz de aprovação atual não
+   tem regra ativa pra DIRETOR_COMERCIAL/FINANCEIRO
+
+**Fix escopo:**
+- Investigação primeiro: rodar SQL no Neon prod
+  ```sql
+  SELECT ap.id, ap.status, ap.approver_role, ap.approver_id, o.title
+  FROM approvals ap JOIN opportunities o ON o.id = ap.opportunity_id
+  WHERE ap.tenant_id = '<marquezini-tenant-id>' AND ap.status = 'PENDING'
+  ORDER BY ap.created_at DESC LIMIT 20;
+  ```
+- Verificar quantas approvals existem, com qual role, e se Fred
+  bate no filtro
+- Se 0 approvals: bug do engine — corrigir criação
+- Se >0 approvals com role DIRETOR_COMERCIAL: bug do filtro na
+  procedure — corrigir query
+- Se approvals têm outro role: config de aprovação errada — chamar PO
+
+**Onde tocar** (depende do diagnóstico):
+- `src/server/trpc/routers/approvals.ts` procedure `myPending`
+- `src/server/services/approval-engine.service.ts` criação
+- `src/app/approvals/page.tsx` UI (se filtro cliente errado)
+
+**Esforço:** ~1-3h (investigação + fix).
+
 ### P-56. `billing.status` bloqueia todo role não-ADMIN (falso 403 no AppShell)
 **✅ FECHADO 2026-07-05** — commit `61a572b`
 

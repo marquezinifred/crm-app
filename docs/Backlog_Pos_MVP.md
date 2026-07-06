@@ -540,15 +540,58 @@ Prisma — descaracteriza os testes.
 
 **Esforço:** ~15min (só documental — decisão consciente).
 
-### P-44. Integration test de tRPC via caller (P-42 residual)
-**Severidade:** Baixa. Registrado ao fechar P-42 em 2026-07-05.
+### ~~P-44. Integration test de tRPC via caller (P-42 residual)~~ ✅ FECHADO 2026-07-05
+Chip `claude/p44-caller-integration`. Fixture
+`tests/integration/fixtures/authed-caller.ts` nova encapsula
+`buildAuthedCaller({tenantId, role})` — cria user real no DB, popula
+cache de permissions via `computeAndCacheUserPermissions`, monta
+`Context` compatível com `appRouter.createCaller` e devolve helper
+`run(fn)` que wrappa a call em `runWithTenant`. Isso exercita o path
+completo Zod → RBAC (`withPermission` → `hasPermission` async) →
+audit (`tenantIdOverride`) → Prisma extension → RLS, cobrindo o
+mesmo caminho que UI/API chamam em prod.
 
-`tests/integration/opportunities-update.test.ts` do P-42 chama Prisma
-direto. Cobertura melhor viria via `appRouter.createCaller(ctx)` que
-exercita path completo Zod → RBAC → audit → Prisma. Espera infra de
-fixture de user autenticado local (relacionado com P-39 dummy Clerk).
+**Refactor de `tests/integration/opportunities-update.test.ts`:**
+4 casos originais P-42 (Prisma direto) migrados pra caller. O caso
+"data.tenantId ≠ ctx dispara backstop" tornou-se "Zod strip protege
+contra tenantId no payload" — via caller, Zod default-strip descarta
+o campo extra ANTES de chegar ao backstop, então a defesa primária
+é anterior. Backstop segue coberto por
+`tests/unit/tenant-backstop.test.ts` (P-42 unit + P-45 array).
 
-**Esforço:** ~2h.
+**Novos casos (7):**
+1. `caller.opportunities.create` injeta tenantId do contexto
+   automaticamente + escreve `opportunityStageHistory` inicial
+2. `ANALISTA` sem `opportunity:read_others` só enxerga próprias
+   opps em `caller.opportunities.list` (regressão spec §6.4)
+3. `caller.opportunities.byId` cross-tenant retorna `NOT_FOUND`
+   legível (não 500 cru)
+4. `caller.opportunities.update` grava `audit_log` com
+   `tenantId=ctx.tenantId` via `tenantIdOverride` (regressão bug
+   `audit-trpc-context-loss`)
+5. `DIRETOR_FINANCEIRO` sem `opportunity:update` recebe `FORBIDDEN`
+   do `withPermission`
+6. `DIRETOR_FINANCEIRO` com `opportunity:read` consegue `byId`
+   (sanity — FORBIDDEN é procedure-específico, não vaza)
+7. TRPCError propaga como instância real (não Error genérico)
+
+**Roles cobertos:** ADMIN (60 permissions), ANALISTA (23 permissions,
+sem `opportunity:read_others`), DIRETOR_FINANCEIRO (18 permissions,
+sem `opportunity:update`).
+
+**Testes:** 11 novos gated por `DATABASE_URL_TEST` (padrão do repo
+desde Sprint 11). Sem a var, skipam. Baseline: **768 passing / 4
+pré-existentes por env vars em `field-encryption` (idênticas
+antes/depois via stash) / 179 skipped (172 baseline + 7 do
+delta)**. Type-check zero. Lint zero.
+
+**NÃO regride:** guard `describeIfDb = TEST_DB ? describe :
+describe.skip` mantido — CI segue sem tocar. Rollback trivial
+(reverter fixture + reverter test file). `src/` intacto.
+
+**Débitos residuais:** ampliar cobertura pra outros routers (users,
+companies, contacts, proposals) — registrar como P-65+ quando virar
+prioridade. Fixture é reusável.
 
 ### ~~P-45. Auditar `createMany` no backstop (P-42 residual)~~ ✅ FECHADO
 **Resolvido em 2026-07-05.** Refactor cirúrgico em

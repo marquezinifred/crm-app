@@ -5,11 +5,20 @@ import {
 } from '@/lib/auth/rbac';
 import type { Permission } from '@/lib/auth/permissions-catalog';
 import { runAsSystem } from '@/server/db/tenant-context';
+import { env } from '@/lib/env';
 
 /**
  * Sprint 15E — resolução async de permission efetiva.
  *
- * Fluxo:
+ * P-62 (kill-switch runtime):
+ *   - `env.RBAC_GRANULAR_ENABLED=true` (default) → path granular:
+ *      role default + overrides individuais + cache.
+ *   - `env.RBAC_GRANULAR_ENABLED=false` → rollback runtime: ignora
+ *      overrides e cache; usa só `ROLE_DEFAULT_PERMISSIONS[role]`.
+ *      Users com grants individuais perdem acesso até flag religar.
+ *      Não deleta dados — rollback é reversível apenas religando a flag.
+ *
+ * Fluxo (granular):
  *   1. Load do user (role, platformRole, cachedPermissions, cachedPermissionsAt, deletedAt, active)
  *   2. Platform Owner → bypass total (true pra qualquer permission)
  *   3. Cache hit (`cachedPermissionsAt !== null`) → checa array in-memory
@@ -25,6 +34,25 @@ export async function hasPermission(
   userId: string,
   permission: Permission,
 ): Promise<boolean> {
+  // Kill-switch OFF: path legado — só role default, sem overrides nem cache.
+  // Query enxuta (sem cachedPermissions/permissionOverrides) — rollback é
+  // reversível sem migração de dados.
+  if (!env.RBAC_GRANULAR_ENABLED) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        role: true,
+        platformRole: true,
+        deletedAt: true,
+        active: true,
+      },
+    });
+    if (!user || user.deletedAt || !user.active) return false;
+    if (user.platformRole === 'PLATFORM_OWNER') return true;
+    const defaults = ROLE_DEFAULT_PERMISSIONS[user.role];
+    return defaults ? defaults.has(permission) : false;
+  }
+
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {

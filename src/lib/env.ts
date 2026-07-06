@@ -114,14 +114,19 @@ const envSchema = z.object({
   // Ver docs/Sprint_15F_IA_Multi_Provider.md.
   MULTI_AI_ENABLED: envBoolean(false),
 
-  // Sprint 15E — Feature flag do RBAC granular (permissions individuais).
-  // false (default): procedures antigas seguem usando `withCapability`
-  // legado (ROLE_CAPABILITIES). Novas UIs de admin (/admin/users/[id]/
-  // permissions) ficam desabilitadas.
-  // true: procedures novas com `withPermission` respeitam grants/revokes
-  // individuais; UI de permissions granulares acessível ao Admin.
-  // Ver docs/Sprint_15E_RBAC_Granular.md — §5.4 rollout ordenado.
-  RBAC_GRANULAR_ENABLED: envBoolean(false),
+  // Sprint 15E — Kill-switch do RBAC granular (permissions individuais).
+  // true (default; P-62): `hasPermission` async respeita role default +
+  // overrides individuais + cache (Sprint 15E completo).
+  // false: rollback runtime — `hasPermission` volta ao role default puro
+  // (ROLE_DEFAULT_PERMISSIONS[role]), ignorando overrides e cache. Users
+  // que tinham grants individuais perdem acesso temporariamente até a
+  // flag ser religada. Ver docs/Sprint_15E_RBAC_Granular.md §5.4.
+  //
+  // NOTA histórica: default era `false` até P-62. Mudou pra `true` pra
+  // preservar comportamento runtime (Sprint 15E já rodava sempre por
+  // não ter consumer). Docs de rollout antigas que dizem "deploy com
+  // false" ficam obsoletas.
+  RBAC_GRANULAR_ENABLED: envBoolean(true),
 });
 
 const parsed = envSchema.safeParse(process.env);

@@ -1386,6 +1386,61 @@ foram fechados na Sprint 11.
   worktree) — confirmado idêntico ANTES do fix via `git stash` (768
   → 777, delta exatamente igual aos 9 novos) / 172 skipped**.
   Type-check zero. Lint zero. Rollback trivial (reverter 3 arquivos).
+- **P-62** `RBAC_GRANULAR_ENABLED` kill-switch runtime real — débito
+  arquitetural descoberto pelo QA automation pós-bloco G. Flag existia
+  no schema `env.ts` desde Sprint 15E mas nenhum consumer runtime a
+  lia; comportamento era sempre granular, invalidando promessa de
+  rollback rápido do spec §5.4. Fix cirúrgico (Caminho A da task):
+  - **`src/server/services/permissions.service.ts`**: `hasPermission()`
+    ganha branch no topo — quando `env.RBAC_GRANULAR_ENABLED=false`,
+    query enxuta sem `cachedPermissions`/`permissionOverrides` +
+    retorno via `ROLE_DEFAULT_PERMISSIONS[role].has(permission)`.
+    Path granular original preservado quando flag=true. Platform Owner
+    bypass, checks `deletedAt`/`active` e semântica de invalidação
+    preservados em ambos os paths.
+  - **`src/lib/env.ts`**: default de `RBAC_GRANULAR_ENABLED` alterado
+    de `envBoolean(false)` para `envBoolean(true)`. Runtime pré-P-62
+    já rodava granular sempre; deixar default `false` teria flipado
+    prod pra legado silenciosamente no próximo deploy quando o
+    consumer entra em ação. Docs históricas (Sprint 15E spec §5.4,
+    Roteiro QA §Anexo, DEPLOY_Railway_Worker.md, CLAUDE.md §Sprint 15E
+    bullet linha 47) que dizem "default false" ficam obsoletas — a
+    realidade era e continua sendo "granular por default".
+  - **Decisão de design — fallback usa `ROLE_DEFAULT_PERMISSIONS` (não
+    `hasCapability`/`ROLE_CAPABILITIES` legado)**: task original sugeria
+    `const [resource, action] = permission.split(':'); return hasCapability(...)`,
+    mas `ROLE_CAPABILITIES` do `rbac.ts` não cobre 7 semantic splits
+    do 15E (`task:*`, `document:*`, `reports:*`, `import:*`,
+    `opportunity:read_others`, `partner:approve_engagement` novo,
+    `inbound:assign_prospects` novo). Usar legacy quebraria ADMIN
+    default — ADMIN perderia `task:create`, `document:upload`, etc. no
+    rollback. `ROLE_DEFAULT_PERMISSIONS` é o mesmo catálogo 15E e
+    preserva breaking changes intencionais (ANALISTA sem
+    `opportunity:read_others`; GESTOR sem `partner:approve_engagement`).
+    Semanticamente, kill-switch = "removo overrides + cache, mantenho
+    catálogo novo" > "reverto tudo pro pré-15E".
+  - **Testes:** `tests/unit/rbac-kill-switch.test.ts` reescrito
+    (removeu `describe.skip`), 15 casos cobrindo:
+    * flag=true (Sprint 15E completo): cache hit granted, cache hit
+      revoked, Platform Owner bypass, deletedAt/inactive → false
+    * flag=false (rollback): ADMIN default preservado (opportunity:update),
+      ANALISTA com override `inbound:view_queue` perde acesso, ANALISTA
+      mantém `opportunity:read` (default), ANALISTA continua sem
+      `opportunity:read_others` (breaking 15E preservado), Platform
+      Owner bypass, deletedAt/active/missing user, PARCEIRO com 5
+      permissions default
+    * rollback reversível: flag=true→false→true no mesmo user
+      preserva default no meio e recupera override no fim
+  - **Rollback reversível confirmado por teste** — cache DB e
+    overrides persistidos ficam intactos com flag=false; só o read
+    runtime pula essas colunas. Religar flag restaura comportamento
+    imediatamente (não precisa re-rodar `rbac:backfill-cache`).
+  - Baseline: **831 passing (+15 novos)** / 0 failing / **167 skipped
+    (-5 do `describe.skip` antigo)** / 998 total. Type-check zero.
+    Lint zero. Rollback trivial (reverter 2 arquivos + 1 test)
+  - Memory nova `rbac-kill-switch-runtime.md` documenta lições:
+    default flip pra preservar runtime, fallback via defaults vs
+    legacy, rollback é reversível sem migração
 - **P-60** `communication-summary-errors.test.ts` 6 falhas — bisect
   identificou commit culpado `9aef608` (Sprint 15F, 2026-06-30) que
   trocou `callAiFeature` (mockável) por `dispatchChat` (roteador

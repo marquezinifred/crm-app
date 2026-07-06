@@ -212,33 +212,46 @@ gap estatística.
 **Esforço:** ~1h. Nice-to-have.
 
 ### P-62. `RBAC_GRANULAR_ENABLED` flag morta — sem consumer runtime
-**Severidade:** Média (débito arquitetural). Descoberto pelo QA
-automation pós-bloco G em 2026-07-05.
+✅ **FECHADO 2026-07-05.** Caminho A (kill-switch runtime real).
 
-Sprint 15E spec §5.4 documentou o kill-switch com passo "Ativar
-`RBAC_GRANULAR_ENABLED=true`" como parte do rollout. Grep no
-código-fonte revelou que a flag existe no schema `src/lib/env.ts:124`
-via `envBoolean(false)` mas **nenhum consumer runtime** em
-`src/lib/**` ou `src/server/**` a lê. `tests/unit/rbac-kill-switch.test.ts`
-está `describe.skip` — nunca implementado.
+Kill-switch consumido em `src/server/services/permissions.service.ts`
+`hasPermission()`:
+- `env.RBAC_GRANULAR_ENABLED=true` (default P-62) → path granular
+  Sprint 15E completo: role default + overrides individuais + cache.
+- `env.RBAC_GRANULAR_ENABLED=false` → rollback runtime: query enxuta
+  (sem `cachedPermissions`/`permissionOverrides`), retorna só
+  `ROLE_DEFAULT_PERMISSIONS[role].has(permission)`. Overrides
+  granted/revoked são ignorados até a flag religar. Reversível — não
+  destrói cache DB nem overrides persistidos.
 
-Consequência: hoje, mesmo se admin setar
-`RBAC_GRANULAR_ENABLED=true` ou `=false` em prod, comportamento é
-idêntico. Sprint 15E backend está sempre ativo. Isso invalida a
-promessa de rollback rápido do Sprint 15E spec.
+**Decisões de projeto:**
+- Fallback usa `ROLE_DEFAULT_PERMISSIONS` (catálogo 15E) em vez de
+  `hasCapability`/`ROLE_CAPABILITIES` legado. Motivo: `ROLE_CAPABILITIES`
+  não cobre 7 semantic splits do 15E (`task:*`, `document:*`,
+  `reports:*`, `import:*`, `opportunity:read_others`, etc.), e usar
+  legacy quebraria ADMIN default. `ROLE_DEFAULT_PERMISSIONS` respeita
+  os breaking changes intencionais do 15E (ANALISTA sem
+  `opportunity:read_others`, GESTOR sem `partner:approve_engagement`).
+- Default do `env` alterado de `envBoolean(false)` para `envBoolean(true)`.
+  Runtime pré-P-62 já rodava granular sempre (sem gate); manter o
+  default `false` teria flipado prod pra legado silenciosamente no
+  próximo deploy. Docs de rollout antigas (Sprint 15E §5.4, Roteiro
+  QA §Anexo) que dizem "default false" ficam obsoletas —
+  documentado em CLAUDE.md §Débitos zerados 2026-07-05.
+- Preservado Platform Owner bypass, checks `deletedAt`/`active`, e
+  mensagem de rollback reversível.
 
-**Fix:**
-- Adicionar branch em `hasPermission` (`src/server/services/permissions.service.ts`):
-  se `env.RBAC_GRANULAR_ENABLED === false`, delegar pra path legado
-  (`hasCapability` com `ACTIONS` + `ROLE_CAPABILITIES`)
-- Reativar `rbac-kill-switch.test.ts` com testes de gate ligado/desligado
+**Testes:** `tests/unit/rbac-kill-switch.test.ts` reescrito (removeu
+`describe.skip`), 15 casos cobrindo:
+- flag=true: cache hit granted/revoked, Platform Owner bypass,
+  deletedAt/inactive
+- flag=false: ADMIN default preservado, ANALISTA com grant perde,
+  breaking changes 15E preservados, Platform Owner, deletedAt/active/
+  missing user, PARCEIRO 5 permissions
+- rollback reversível (flag flip mid-runtime)
 
-OU **alternativa (recomendada):** aceitar que Sprint 15E é
-one-way (sem kill-switch runtime) e remover a flag do schema. Docs
-Sprint 15E spec §5.4 são desatualizadas — rollback só via revert de
-commits + `prisma migrate reset`. Documentar isso em CLAUDE.md.
-
-**Esforço:** ~2h implementação do gate real OU ~15min limpeza doc.
+Baseline: **831 passing (+15) / 0 failing / 167 skipped (-5 do
+`describe.skip` antigo) / 998 total**. Type-check zero. Lint zero.
 
 ### ~~P-63. Auditoria retroativa `AXIOM_LOG_QUERIES` em prod (potencial LGPD)~~ ✅ FECHADO 2026-07-05
 Chip `claude/p63-envboolean-doc` — sem risco retroativo confirmado

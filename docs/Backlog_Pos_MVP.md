@@ -351,23 +351,77 @@ Validação:
 
 **QA automation exception:** fixture E2E, sem código de app.
 
-### P-55. Contraste `.text-brand` na CookieBanner falha WCAG AA
-**Severidade:** Baixa. Descoberto pelo chip P-52 em 2026-07-05.
+### ~~P-55. Contraste `.text-brand` na CookieBanner falha WCAG AA~~ ✅ FECHADO 2026-07-05
+Descoberto pelo chip P-52; fechado no chip `claude/p55-cookiebanner-contrast`
+(commit `eb38597` (pré-merge; final SHA muda no merge)).
 
-`axe-smoke` reporta `color-contrast` em `<a class="underline text-brand"
-href="/privacy">` dentro da `CookieBanner`. Combinação atual:
-foreground `#7c3bed` (brand-primary) sobre background `#1f1a2d` (dark
-mode) = **2.97:1**. WCAG AA exige 4.5:1 pra texto normal. 10 test
-failures nas 5 rotas públicas × 2 projects (chromium-desktop +
-mobile-safari).
+**Fix aplicado (caminho A da spec — trocar token no link):**
+- `src/components/legal/CookieBanner.tsx:97` — token `text-brand`
+  substituído por `text-brand-primary-light` no `<a>` da Política de
+  Privacidade
+- Estética violet preservada (light violet #c585fa em vez do
+  primary #7c3aee)
+- Tailwind já expõe `text-brand-primary-light` (via config em
+  `brand.primary-light` HSL 273/92/75); mesmo token idiomático usado
+  em `src/app/privacy/page.tsx`, `src/app/privacy-request/page.tsx` e
+  `src/app/page.tsx` — sem utility legada nova em `globals.css`
 
-**Fix sugerido:** trocar o token `text-brand` na CookieBanner por uma
-das variantes claras (`text-brand-light`, `text-brand-accent`) OU
-ajustar `--brand-primary` no dark theme. Alternativa: sublinhar +
-peso `font-semibold` sobe contraste efetivo (semi-workaround).
+**Cálculo do contraste (algoritmo `computeContrast` do
+`wcag-validator.service.ts`):**
+- ANTES: `#7c3aee` (brand-primary) sobre `#1f1a2d` (bg-card dark) =
+  **2.97:1** ❌ FAIL WCAG AA
+- DEPOIS: `#c585fa` (brand-primary-light) sobre `#1f1a2d` =
+  **6.52:1** ✅ PASS WCAG AA (folga 45% acima do 4.5:1 requerido)
 
-**Esforço:** ~30min UI + verificação axe. Não bloqueia deploy —
-`axe-smoke` já falha no CI por outros motivos (não é gate hoje).
+Rejeitados no processo:
+- `text-brand-accent` (`#f5a124`, contraste 8.04:1 ✅): passaria mas
+  quebra estética violet — vira link laranja
+- Ajustar `--brand-primary` no dark theme: bagunçaria botão "Aceitar
+  todos" e outros consumidores primary — escopo cirúrgico preferido
+- Font-semibold como workaround: ❌ não conta pra WCAG AA em texto
+  normal < 18px (per spec do chip)
+
+**Testes:** sem test file novo — QA automation exception UI a11y minor
+(config-only visual). Verificação manual do ratio via script
+`scratchpad/contrast-check.mjs` reusando `hexToRgb`, `srgbToLinear`,
+`relativeLuminance`, `computeContrast` do
+`src/server/services/wcag-validator.service.ts`. Playwright axe-smoke
+BLOCKED por infra P-59.
+
+**Baseline:** 768 passing / 4 falhas + 172 skipped (baseline dev
+preservado, delta zero — apenas mudança de token Tailwind num único
+componente). Type-check zero. Lint zero. Rollback trivial (reverter
+1 linha).
+
+**Débito adjacente registrado como P-64** (renumerado — próxima linha):
+outras 3 ocorrências de `.text-brand` residuais no code base
+(`admin/branding/page.tsx:97` — tab indicator; `PolicyAcceptGate.tsx:60`
+e `:67` — dois `<a>` de link em modal LGPD). Escopo P-55 foi
+CookieBanner só; se axe-smoke rodar contra
+`/privacy-request` (que renderiza `PolicyAcceptGate`) ou
+`/admin/branding` deve reportar mesmas violations. Registrar como
+sub-débito adjacente pra próximo chip a11y.
+
+### P-64. Ocorrências residuais de `.text-brand` fora da CookieBanner
+**Severidade:** Baixa. Registrado ao fechar P-55 em 2026-07-05.
+
+Auditoria pós-P-55 identificou 3 usos remanescentes de `.text-brand`
+com mesmo padrão do bug fixado:
+
+- `src/app/admin/branding/page.tsx:97` — tab indicator ativa
+  (border-brand + text-brand). Renderiza dentro do AppShell dark
+  (bg-card `#1f1a2d`). Mesma combinação 2.97:1
+- `src/components/legal/PolicyAcceptGate.tsx:60` — `<a>` "Política
+  de Privacidade" em modal LGPD
+- `src/components/legal/PolicyAcceptGate.tsx:67` — `<a>` "Termos"
+  no mesmo modal
+
+**Fix sugerido:** replicar pattern do P-55 — trocar `text-brand` por
+`text-brand-primary-light` em cada um. Preserva estética violet e
+resolve 3 violations WCAG AA de uma vez.
+
+**Esforço:** ~10min UI + verificação axe. Escopo cirúrgico
+(3 edits mecânicos, sem lógica). Não bloqueia deploy.
 
 ### P-53. Pipeline pages `.tsx` sem coverage — falta harness React
 **Severidade:** Média (débito arquitetural). Descoberto pelo QA

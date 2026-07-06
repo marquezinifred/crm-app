@@ -1545,6 +1545,43 @@ foram fechados na Sprint 11.
     idêntico ANTES do fix via `git stash`) / 172 skipped. Type-check
     zero. Lint zero. Rollback trivial (reverter `vitest.config.ts`,
     `tests/setup.ts`, `tests/component/`, `package.json`)
+- **P-37** Cobertura hooks P-35 nos services (dispatch + ai-usage) —
+  débito de média severidade descoberto por QA automation em 2026-07-04
+  fechado. Baseline pré: `src/lib/ai/dispatch.ts` 21% / `src/server/services/ai-usage.service.ts`
+  10% (reproduzido: 6.01% combinado). Alvo era 60%; entregue **100%
+  stmts / branches / funcs / lines em ambos**. Zero código de app tocado
+  — só testes puros + mocks. Fix em 2 arquivos:
+  - **`tests/unit/dispatch-chat.test.ts`** novo com **14 casos**:
+    path novo (MULTI_AI_ENABLED=true, 5 casos) e legado
+    (MULTI_AI_ENABLED=false, 5 casos) do `dispatchChat` + `dispatchEmbed`
+    (4 casos). Cobre shape retornado (text/inputTokens/outputTokens/
+    usedProvider/configuredProvider/usedFallback/model), breadcrumb
+    Sentry com `multiEnabled`, filtro de mensagens `role='system'` no
+    path legado, concatenação de blocos `text` (ignora `tool_use`),
+    precedência `input.chat.model` sobre model do gate, erro quando
+    adapter não implementa `embed`, propagação de erros sem cair no
+    path errado
+  - **`tests/unit/ai-usage-service.test.ts`** novo com **16 casos**:
+    cobre `AI_PRICING` (4 modelos verificados), `calculateCost`
+    (linear em prompt+completion, modelo desconhecido → 0, zero
+    tokens), `logAiUsage` (defaults corretos, respeita overrides,
+    Axiom `costBrl = costUsd × env.USD_BRL_RATE`, Prisma falha ainda
+    publica no Axiom), `getMonthlyUsage` (vazio, filtro `tenantId +
+    success + createdAt >= dia 1 do mês`, agrupa `(provider, model,
+    usedFallback)` e pivota primary vs fallback, ordena por
+    `(cost + fallbackCost)` desc, `_sum null` como zero, primary-only
+    não polui fallback stats)
+  - Mocks (pattern `claude-per-tenant.test.ts` do P-14): `@/lib/env`
+    via Proxy pra flipar `MULTI_AI_ENABLED` entre testes; `@/lib/ai/call`
+    (callAiWithFallback), `@/lib/ai/feature-gate` (callAiFeature),
+    `@/lib/ai/claude` (getAnthropicForTenant), `@/lib/monitoring/sentry`
+    (addBreadcrumb) pro dispatch; `@/server/db/client` (aIUsageLog.create
+    + groupBy) e `@/lib/monitoring/axiom` (logAiUsage) pro ai-usage
+  - Baseline: **846 passing (+30 novos)** / 172 skipped / 1018 total
+    (baseline pré-P-37 = 816 + 30). Type-check zero. Lint zero. QA
+    automation exception aplicada (só testes novos, sem código app
+    tocado — dispatch.ts e ai-usage.service.ts idênticos ao HEAD).
+    Rollback trivial (reverter 2 arquivos de teste + 2 blocos docs)
 - **P-60** `communication-summary-errors.test.ts` 6 falhas — bisect
   identificou commit culpado `9aef608` (Sprint 15F, 2026-06-30) que
   trocou `callAiFeature` (mockável) por `dispatchChat` (roteador

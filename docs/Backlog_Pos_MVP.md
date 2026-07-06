@@ -83,6 +83,50 @@ simulado).
 
 **Esforço:** ~3h.
 
+### P-77. Approvals órfãs quando role/rule/estrutura muda
+**Severidade:** 🟡 Média (bug arquitetural — descompasso RBAC dinâmico ×
+Approvals snapshot). Descoberto durante diagnóstico P-67 em 2026-07-06.
+
+**Anatomia:**
+- `approval-engine.service.ts:159-170` (legado com `approver_roles`)
+  faz `findFirst({ where: { tenantId, role, active } })` → escolhe 1
+  user por role e persiste `approverId` fixo no momento da criação.
+- `approval-engine.service.ts:142-157` (novo com `approver_permission`)
+  faz `findMany({ cached_permissions has 'X' })` → snapshot do cache
+  daquele momento.
+- **Nenhum dos dois re-avalia** quando (a) role do approver muda,
+  (b) rule é editada, (c) user é desativado, (d) **Sprint 15G** — user
+  é movido de unidade organizacional.
+
+**Sintoma real (P-67):** tenant `acme-tech` tem 4 approvals PENDING
+apontando pra della.block36 (ANALISTA) e marquise_ritchie68 (GESTOR),
+mas as 2 rules ativas apontam pra `{DIRETOR_COMERCIAL, DIRETOR_FINANCEIRO}`
+e `{DIRETOR_COMERCIAL}`. `/approvals` do Fred hotmail (DIRETOR_COMERCIAL)
+mostra vazio porque nenhuma approval aponta pra ele.
+
+**Cenário confirmado:** audit log de `approval_rules` vazio — rules
+nunca foram editadas via UI. Provável: seed antigo criou approvals
+com roles diferentes das rules atuais (histórico de merges/reseeds).
+
+**Fix arquitetural — 2 caminhos possíveis (decidir na spec):**
+1. **Worker daily reconcile**: pra cada Approval PENDING, checa se
+   `approver.role` ainda satisfaz a rule original. Se não, marca
+   `Approval.status = ORPHANED` + notifica admin + tenta re-atribuir
+   pelo engine com a rule + roles atuais.
+2. **Approval passa a persistir `applicable_rule_id`** + `matched_criteria`
+   → quando `approval_rule.update` é chamado, worker re-executa
+   `createApprovalsForProposalVersion` só pras PENDING afetadas.
+
+**Fix imediato pro caso do acme-tech:** rejeitar as 4 fósseis via UI
+logando como della.block36 e marquise_ritchie68 (mantém audit trail).
+Fred confirmou preferência por esse caminho em 2026-07-06.
+
+**Interseção com Sprint 15G:** quando 15G entrar, structure moves vão
+gerar exatamente o mesmo problema. Spec 15G Amendment A6 documenta
+isso e sugere Sprint 15H absorver P-77.
+
+**Esforço:** ~2-3 dias (spec + implementação + testes).
+
 ### P-65. `estimatedValue` da oportunidade não sincroniza com valor da proposta
 **Severidade:** 🟡 Média (UX crítico — desalinha forecast + relatórios).
 Descoberto em uso 2026-07-05 pelo Fred:
@@ -707,42 +751,30 @@ disparo direto de `onSuccess/onError`). Débitos residuais
 registrados abaixo pra expansão do padrão.
 
 **Débitos residuais (candidatos Sprint 16+):**
-- **P-65:** `/companies` (form novo + edit) — CompanyForm com
+- **P-73:** `/companies` (form novo + edit) — CompanyForm com
   CNPJ auto-fill (BrasilAPI) e endereço via CEP. ~3h.
-- **P-66:** `/contacts` (form novo + edit) — ContactForm com
+- **P-74:** `/contacts` (form novo + edit) — ContactForm com
   QuickCreate de Empresa aninhado. ~2h.
-- **P-67:** `/admin/users` (convite + edição) — role picker
+- **P-75:** `/admin/users` (convite + edição) — role picker
   com guard anti-escalada (SUPER_ADMIN). ~2h.
-- **P-68:** `/pipeline/[id]` — migrar
+- **P-76:** `/pipeline/[id]` — migrar
   `tests/unit/pipeline-detail-page.test.tsx` (padrão
   createRoot manual) pra Testing Library, cobrindo agora
   também interações de digitação nos campos de estágio (não
   só handlers de mutation). ~4h. Opcional — padrão atual
   segue estável.
 
+**Renumeração 2026-07-06:** IDs originais P-65/66/67/68 deste
+bloco eram colisão com débitos novos do topo do backlog
+(estimatedValue sync, PROPOSTA→NEGOCIACAO gate, /approvals
+invisível, WCAG AA header). Renomeado pra P-73+ pra manter
+IDs únicos.
+
 **Update 2026-07-05 (P-54 fix, histórico)**: chip P-54 escreveu
 `tests/unit/pipeline-detail-page.test.tsx` com 7 casos mockando
 `@/lib/trpc/client` no padrão do `admin-ai-page.test.tsx` — sem
 Testing Library, apenas `createRoot` + `act` + `ToastProvider`.
 Padrão validado e mantido em paralelo ao Testing Library.
-
-### P-57. IA bloqueia por dirty em campos NÃO relacionados ao Receptor
-**Severidade:** Baixa (decisão de produto). Descoberto no P-54 fix
-em 2026-07-05.
-
-`CommunicationIntake:73,90-91` bloqueia botão "Resumir com IA"
-sempre que `stageHasDirtyChanges=true`, ou seja, qualquer edit em
-qualquer campo do estágio (briefing, valor estimado, data prevista,
-data de reunião, etc). Mas o Receptor de IA só consome o texto colado
-pelo usuário — não deveria depender de edits em outros campos.
-
-**Fix sugerido:** remover o gate ou trocar por gate contextual —
-só bloquear se o edit for em campo que impacta o prompt IA
-(hoje: nenhum). Discutir com produto: manter bloqueio como
-"lembrete de salvar antes de gerar resumo" (defensivo) OU liberar
-IA imediatamente (usuário decide quando salvar).
-
-**Esforço:** ~15min código + decisão de produto. Não bloqueia.
 
 ### ~~P-58. Padronizar toast success em Communication/Documents/Proposals sections~~ ✅ FECHADO 2026-07-05
 Fechado no chip `claude/p58-subforms-toast`. Ver bloco P-58 acima
@@ -751,7 +783,7 @@ Fechado no chip `claude/p58-subforms-toast`. Ver bloco P-58 acima
 Débito residual identificado durante a auditoria: `TasksSection.updateStatus`
 (checkbox toggle) segue sem toast em erro — falha silenciosa se rollback
 do checkbox não for possível. Não coberto por este chip (escopo era
-Communication/Documents/Proposals); registrar como P-62 se virar
+Communication/Documents/Proposals); registrar como P-77 se virar
 recorrente.
 
 ### ~~P-50. Campo "Valor estimado (R$)" sem máscara pt-BR nos forms~~ ✅ FECHADO 2026-07-05
@@ -922,7 +954,7 @@ describe.skip` mantido — CI segue sem tocar. Rollback trivial
 (reverter fixture + reverter test file). `src/` intacto.
 
 **Débitos residuais:** ampliar cobertura pra outros routers (users,
-companies, contacts, proposals) — registrar como P-65+ quando virar
+companies, contacts, proposals) — registrar como P-73+ quando virar
 prioridade. Fixture é reusável.
 
 ### ~~P-45. Auditar `createMany` no backstop (P-42 residual)~~ ✅ FECHADO

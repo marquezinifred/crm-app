@@ -70,6 +70,13 @@ export async function checkRate(
 export const LOGIN_LIMIT = { limit: 5, windowSeconds: 15 * 60 };
 export const PUBLIC_FORM_LIMIT = { limit: 10, windowSeconds: 60 };
 export const API_LIMIT_PER_TENANT = { limit: 1000, windowSeconds: 60 };
+/**
+ * P-29 — Sprint 15D residual. Rate limit por sender email (mesmo endereço
+ * enviando leads). Complementa PUBLIC_FORM_LIMIT (por IP) porque Zapier/
+ * integradores enviam de IPs rotativos: mesmo email conseguia burlar o cap.
+ * 10 leads/hora por email é generoso pra fluxo humano e trava spam automatizado.
+ */
+export const SENDER_INBOUND_LIMIT = { limit: 10, windowSeconds: 60 * 60 };
 
 export function loginKey(ip: string): string {
   return `login:${ip}`;
@@ -79,4 +86,7 @@ export function publicFormKey(ip: string, form: string): string {
 }
 export function tenantApiKey(tenantId: string): string {
   return `tenantapi:${tenantId}`;
+}
+export function senderInboundKey(tenantId: string, email: string): string {
+  return `inbound:sender:${tenantId}:${email.toLowerCase()}`;
 }

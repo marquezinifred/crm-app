@@ -1320,6 +1320,44 @@ foram fechados na Sprint 11.
   ad-hoc
 
 **Débitos zerados em 2026-07-05:**
+- **P-29** Rate limit por sender email em lead inbound — débito residual
+  do Sprint 15D (spec §5.3). `PUBLIC_FORM_LIMIT` do endpoint público
+  já capa por IP (Sprint 11), mas Zapier/integradores rotacionam IP —
+  mesmo email conseguia burlar. Fix cirúrgico em 2 pontos:
+  - `src/server/services/rate-limiter.service.ts`: exports novos
+    `SENDER_INBOUND_LIMIT = { limit: 10, windowSeconds: 60 * 60 }`
+    + `senderInboundKey(tenantId, email)` (lowercased, prefixo
+    `inbound:sender:`) seguindo o mesmo shape dos helpers Sprint 11
+    (`LOGIN_LIMIT` / `PUBLIC_FORM_LIMIT`).
+  - `src/server/services/inbound-lead-creator.service.ts`: novo gate
+    "4.1" entre confidence e resolve-company/contact — quando
+    `parsed.contact.email` presente, chama
+    `checkRate(senderInboundKey(...), SENDER_INBOUND_LIMIT.limit,
+    SENDER_INBOUND_LIMIT.windowSeconds)`. Não-allowed → grava em
+    `inbound_leads_rejected` com `reason='rate_limited_per_sender'`
+    sem tocar DB pesado (company/contact/opp create).
+  Ordem escolhida (após confidence, antes de create): leads de baixo
+  sinal já foram descartados; genuínos consomem quota; spam de alta
+  confidence é o alvo real. Lead sem email pula o gate (parser exige
+  email OU cnpj — CNPJ segue passando). Redis fail-open igual ao
+  resto do rate-limiter (Cloudflare WAF em prod é 2ª linha).
+  Zero mudança em endpoint público (P-29 é backend do worker, não do
+  webhook receiver — dedup/parse já rodam antes).
+  Testes: `tests/unit/inbound-rate-limit-sender.test.ts` novo com **9
+  casos**: primeiro lead OK + chama `checkRate` com key correta;
+  10º lead (limite exato) ainda cria opp; 11º vai pra rejected com
+  reason=rate_limited_per_sender + sem side effects em opp/company/
+  contact; emails distintos = keys distintas; tenants distintos =
+  keys isoladas mesmo com email igual; case-insensitive
+  (`ABC@X.com` = `abc@x.com`); lead sem `contact.email` pula o gate
+  (não chama `checkRate`); shape `SENDER_INBOUND_LIMIT`; formato
+  `senderInboundKey`. Padrão de mock via `vi.hoisted()` + dynamic
+  imports (pattern do `inbound-assign-push.test.ts`).
+  Baseline: **777 passing (+9 novos) / 4 pré-existentes por env vars
+  em `field-encryption` (`TENANT_FIELD_ENCRYPTION_KEY` ausente no
+  worktree) — confirmado idêntico ANTES do fix via `git stash` (768
+  → 777, delta exatamente igual aos 9 novos) / 172 skipped**.
+  Type-check zero. Lint zero. Rollback trivial (reverter 3 arquivos).
 - **P-60** `communication-summary-errors.test.ts` 6 falhas — bisect
   identificou commit culpado `9aef608` (Sprint 15F, 2026-06-30) que
   trocou `callAiFeature` (mockável) por `dispatchChat` (roteador

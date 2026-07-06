@@ -1,6 +1,11 @@
 import { prisma } from '@/server/db/client';
 import { runAsSystem } from '@/server/db/tenant-context';
 import { audit } from '@/server/services/audit.service';
+import {
+  checkRate,
+  SENDER_INBOUND_LIMIT,
+  senderInboundKey,
+} from '@/server/services/rate-limiter.service';
 import { parseLead, type ParsedLead, type ParseSource } from './inbound-parser.service';
 import type { Company, Contact, Opportunity } from '@prisma/client';
 
@@ -241,6 +246,31 @@ export async function createInboundLead(
         'low_confidence',
       );
       return { kind: 'rejected', rejectedId, reason: 'low_confidence' };
+    }
+
+    // 4.1. P-29 — rate limit por sender email. PUBLIC_FORM_LIMIT do endpoint
+    // trava por IP, mas integradores como Zapier rotacionam IP. Aqui capamos
+    // 10 leads/hora por email dentro do mesmo tenant. Lead sem email pula
+    // esse gate (parser exige email OU cnpj mínimo — CNPJ segue passando).
+    if (parsed.contact.email) {
+      const rl = await checkRate(
+        senderInboundKey(input.tenantId, parsed.contact.email),
+        SENDER_INBOUND_LIMIT.limit,
+        SENDER_INBOUND_LIMIT.windowSeconds,
+      );
+      if (!rl.allowed) {
+        const rejectedId = await saveRejected(
+          input.tenantId,
+          input,
+          parsed,
+          'rate_limited_per_sender',
+        );
+        return {
+          kind: 'rejected',
+          rejectedId,
+          reason: 'rate_limited_per_sender',
+        };
+      }
     }
 
     // 5. Resolve company + contact

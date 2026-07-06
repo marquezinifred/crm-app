@@ -316,7 +316,7 @@ Fecha o loop — prova que a IA que os cards mostram funciona ponta a ponta.
 
 ### 2.4. Inbound Marketing end-to-end (~25min — Sprint 15D)
 
-Cobre 8 variações do fluxo completo: config webhook → 5 matchers do parser → blacklist → low confidence → rate limit → fila → alocação. Derivado de `src/server/services/inbound-parser.service.ts` (5 matchers: webhook JSON / Typeform / RD Station / HTML table / plain key:value) e `src/server/services/inbound-lead-creator.service.ts` (`MIN_CONFIDENCE=0.4`, 4 reasons: `parse_error`, `no_signal`, `blacklisted_domain`, `low_confidence`).
+Cobre 9 variações do fluxo completo: config webhook → 5 matchers do parser → blacklist → low confidence → rate limit por IP → rate limit por sender email → fila → alocação. Derivado de `src/server/services/inbound-parser.service.ts` (5 matchers: webhook JSON / Typeform / RD Station / HTML table / plain key:value) e `src/server/services/inbound-lead-creator.service.ts` (`MIN_CONFIDENCE=0.4`, 5 reasons: `parse_error`, `no_signal`, `blacklisted_domain`, `low_confidence`, `rate_limited_per_sender`).
 
 **Pré-requisito:**
 - Ativar tab "Forms de captura" em `/admin/email-inbound` → toggle "webhookEnabled" ligado + salvar
@@ -408,18 +408,44 @@ export SECRET="<cole-o-secret-daqui>"
    - **Passa se:** requests 1–10 respondem `202`; requests 11–12 respondem `429` (rate limited).
    - Aguardar 60s antes de rodar outra variação (janela do rate limiter).
 
-**Após 8 variações, testar alocação na fila:**
+9. **V9 — Rate limit por sender email (`SENDER_INBOUND_LIMIT` — 10/h — P-29)**
+   ```bash
+   # 11 requests com o MESMO email; janela por hora, IP não mais o limitador.
+   SAME_EMAIL="spam+sender@venzo.com"
+   for i in $(seq 1 11); do
+     curl -s -o /dev/null -w "req $i: %{http_code}\n" -X POST "$WEBHOOK_URL?secret=$SECRET" \
+       -H 'content-type: application/json' \
+       -d "{\"contact\":{\"fullName\":\"Sender $i\",\"email\":\"$SAME_EMAIL\"},\"company\":{\"razaoSocial\":\"Sender Co\"},\"message\":\"spam $i\"}"
+     sleep 7  # espaça o suficiente pra não bater `PUBLIC_FORM_LIMIT` (10/min) e isolar sender limit
+   done
+   ```
+   - **Passa se:** os 11 requests retornam `202` (o webhook enfileira ANTES do rate limit do sender, que só age no worker).
+   - **Verifica no DB (depois de ~30s):**
+     ```sql
+     SELECT reason, COUNT(*) FROM inbound_leads_rejected
+     WHERE tenant_id = '<TENANT>'::uuid
+       AND received_at > now() - interval '5 minutes'
+       AND reason = 'rate_limited_per_sender'
+     GROUP BY reason;
+     ```
+     → conta **1** (as 10 primeiras viraram opp; a 11ª rejected).
+   - Confirmar em `SELECT COUNT(*) FROM opportunities WHERE tenant_id='<TENANT>'::uuid AND is_inbound=true AND client_contact_id IN (SELECT id FROM contacts WHERE email = '$SAME_EMAIL')` = **10**.
+   - **Falha se:** 11ª vira opp (rate limit por sender não ativou) ou nenhuma vira opp (rate limit deu falso positivo).
+   - Aguardar 1h antes de rerun ou usar email diferente.
 
-9. **Alocar vendedor**
-   - `/inbox/prospects` → em qualquer card, botão "Alocar" → Popover Radix com vendedores ordenados por `activeOpps asc`.
-   - Clicar num vendedor.
-   - **Passa se:** toast success "Lead alocado." + card some da fila. Verificar SQL: `SELECT owner_id FROM opportunities WHERE id='<opp_id>';` → owner_id preenchido.
+**Após 9 variações, testar alocação na fila:**
+
+10. **Alocar vendedor**
+    - `/inbox/prospects` → em qualquer card, botão "Alocar" → Popover Radix com vendedores ordenados por `activeOpps asc`.
+    - Clicar num vendedor.
+    - **Passa se:** toast success "Lead alocado." + card some da fila. Verificar SQL: `SELECT owner_id FROM opportunities WHERE id='<opp_id>';` → owner_id preenchido.
 
 **Bloqueia release se:**
 - V2/V3/V4 falham (parser regex quebrou — perde leads reais)
 - V5 vaza PII em masking (crítico LGPD)
 - V6 deixa passar blacklist (spam vira opp)
-- V8 permite mais de 10 req/min (rate limit não bloqueia bot)
+- V8 permite mais de 10 req/min (rate limit por IP não bloqueia bot)
+- V9 permite 11+ leads do mesmo email numa hora (rate limit por sender inativo — P-29 regressão)
 
 ### 2.5. RBAC Granular (~10min — Sprint 15E)
 
@@ -548,8 +574,12 @@ Rápidos (~10min total) mas críticos.
   Falha: 200 com dados do tenant B → **stopping bug**, rollback obrigatório.
 
 - [ ] **Rate limit em endpoint público**
-  Ver §2.4 passo 6 — 11ª request em 60s pro `/api/v1/inbound/lead` retorna 429.
+  Ver §2.4 passo 8 — 11ª request em 60s pro `/api/v1/inbound/lead` retorna 429.
   Já validado em §2.4 se rodou. Marcar aqui só como confirmação.
+
+- [ ] **Rate limit por sender email (P-29)**
+  Ver §2.4 passo 9 — 11º lead do mesmo email em 1h vira `inbound_leads_rejected` com `reason='rate_limited_per_sender'`.
+  Bloqueia release se sender consegue mandar 11+ leads/h (bot com IPs rotativos passa).
 
 - [ ] **Guard anti-escalada RBAC**
   Ver §2.5 passo 7 — ADMIN sem X não delega X.
@@ -702,7 +732,8 @@ Origem completa da lista: `src/lib/env.ts` (Zod schema).
 
 | Endpoint | Método | Limite | Origem | Validação |
 |---|---|---|---|---|
-| `/api/v1/inbound/lead` | POST | 10 req/min por IP | `PUBLIC_FORM_LIMIT` (Sprint 11) | §2.4 passo 6 |
+| `/api/v1/inbound/lead` | POST | 10 req/min por IP | `PUBLIC_FORM_LIMIT` (Sprint 11) | §2.4 passo 8 |
+| Worker `inbound-lead-create` (após parse) | — | 10 leads/hora por sender email | `SENDER_INBOUND_LIMIT` (P-29) | §2.4 passo 9 |
 | `/api/v1/privacy-request` | POST | 10 req/min por IP | `PUBLIC_FORM_LIMIT` | Rate limit testado em `tests/unit/rate-limiter.test.ts` |
 | `/api/v1/consent` | POST | 10 req/min por IP | `PUBLIC_FORM_LIMIT` | idem |
 | `/api/v1/inbound/email` | POST | sem rate limit explícito (auth via secret) | webhook Postmark/Resend | validação de assinatura |
@@ -710,7 +741,7 @@ Origem completa da lista: `src/lib/env.ts` (Zod schema).
 | `/sign-in` | POST via Clerk | 5 login/15min por IP | `LOGIN_LIMIT` | Clerk enforce + backup local |
 | `/api/trpc/*` | POST | 1000 req/min por tenant | `API_LIMIT_PER_TENANT` | limits em `src/server/services/rate-limiter.service.ts` |
 
-Origem: `src/server/services/rate-limiter.service.ts` (constants `LOGIN_LIMIT`, `PUBLIC_FORM_LIMIT`, `API_LIMIT_PER_TENANT`).
+Origem: `src/server/services/rate-limiter.service.ts` (constants `LOGIN_LIMIT`, `PUBLIC_FORM_LIMIT`, `SENDER_INBOUND_LIMIT`, `API_LIMIT_PER_TENANT`).
 
 ---
 

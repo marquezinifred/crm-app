@@ -1331,20 +1331,29 @@ Priorizar por demanda:
 | Pipedrive Forms | empresas migrando | ~2d |
 | Mautic (self-hosted) | empresas técnicas | ~2d |
 
-### P-29. Rate limit por sender em lead inbound
-**Severidade:** Baixa. Registrado ao fechar Sprint 15D.
+### ~~P-29. Rate limit por sender em lead inbound~~ ✅ FECHADO 2026-07-05
 
-Spec §5.3 propunha limite "mesmo email mandando > 10 leads/h vira
-suspeito". Sprint 15D só implementou rate limit por IP no endpoint
-(`PUBLIC_FORM_LIMIT` 10 req/min). Falta limite por *sender email*
-que sobreviva através de IPs diferentes (Zapier envia de IPs
-rotativos).
+**Fix:** `SENDER_INBOUND_LIMIT = { limit: 10, windowSeconds: 60 * 60 }`
++ helper `senderInboundKey(tenantId, email)` em `rate-limiter.service.ts`.
+`createInboundLead` chama `checkRate(senderInboundKey(...), ...)`
+após o gate de confidence e antes de resolver company/contact.
+Quando `!allowed`, grava em `inbound_leads_rejected` com
+`reason='rate_limited_per_sender'` e retorna sem tocar DB pesado.
 
-**Solução:** contador Redis chaveado por email do contact quando
-`parsed.contact.email` presente. Se > 10 leads/hora, marca como
-`inbound_leads_rejected.reason='rate_limited_per_sender'`.
+Key inclui `tenantId` (isolamento cross-tenant) e email lowercased
+(case-insensitive). Lead sem `contact.email` pula o gate (pattern
+preservado — parser exige email OU cnpj).
 
-**Esforço:** ~3h. Reusar `checkRate` do rate-limiter service.
+**Complementa** `PUBLIC_FORM_LIMIT` do endpoint público (Sprint 11):
+IP capa transporte, sender capa origem. Redis fail-open igual ao
+resto do rate-limiter (Cloudflare WAF em prod é 2ª linha).
+
++9 testes em `tests/unit/inbound-rate-limit-sender.test.ts`
+(primeiro lead OK, 10º OK, 11º rejected, emails distintos =
+keys distintas, tenants distintos = keys distintas, case-insensitive,
+lead sem email pula o gate, shape do helper, formato da key).
+Baseline: 777 passing (+9) / 4 pré-existentes por env vars
+(field-encryption) / 172 skipped. Type-check zero. Lint zero.
 
 ### P-30. UI de revisão de `inbound_leads_rejected`
 **Severidade:** Baixa. Registrado ao fechar Sprint 15D.

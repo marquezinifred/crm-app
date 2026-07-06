@@ -1441,6 +1441,40 @@ foram fechados na Sprint 11.
   - Memory nova `rbac-kill-switch-runtime.md` documenta lições:
     default flip pra preservar runtime, fallback via defaults vs
     legacy, rollback é reversível sem migração
+- **P-44** Integration tests via `appRouter.createCaller` (P-42 residual)
+  — `tests/integration/opportunities-update.test.ts` chamava Prisma
+  direto e não exercitava o pipeline Zod → RBAC → audit. Fix cirúrgico
+  (só testes + fixture nova, `src/` intacto):
+  - **`tests/integration/fixtures/authed-caller.ts` novo** — encapsula
+    `buildAuthedCaller({tenantId, role, emailPrefix?})` que cria User
+    no DB (via `runAsSystem`), popula `cachedPermissions` via
+    `computeAndCacheUserPermissions` (evita cache-miss no primeiro
+    `withPermission`), monta `Context` compatível com `appRouter.createCaller`
+    e devolve `{userId, ctx, caller, run}` onde `run<T>(fn) =
+    runWithTenant({...}, fn)`. `cleanupTestUsers` helper pra afterAll.
+  - **`opportunities-update.test.ts` refatorado** — 4 casos P-42
+    migrados de Prisma direto pra caller (meetingScheduled+Happened,
+    description-only, cross-tenant NOT_FOUND, Zod strip protege contra
+    tenantId no payload). Backstop de `data.tenantId ≠ ctx` (P-42)
+    fica com `tests/unit/tenant-backstop.test.ts` porque o Zod default-strip
+    descarta o campo antes de chegar ao backstop no path caller.
+  - **7 casos novos** cobrem: (1) `create` injeta tenantId auto +
+    escreve `opportunityStageHistory` inicial; (2) `ANALISTA` sem
+    `opportunity:read_others` só vê próprias opps em `list` (regressão
+    Sprint 15E spec §6.4); (3) `byId` cross-tenant → NOT_FOUND legível;
+    (4) `update` grava audit_log com `tenantId` correto via
+    `tenantIdOverride` (regressão `audit-trpc-context-loss`); (5)
+    `DIRETOR_FINANCEIRO` sem `opportunity:update` → FORBIDDEN; (6)
+    `DIRETOR_FINANCEIRO` com `opportunity:read` consegue `byId`
+    (sanity, FORBIDDEN é procedure-específico); (7) `TRPCError`
+    propaga como instância real (não Error genérico).
+  - **Guard `describeIfDb` preservado** — 11 tests skipam automaticamente
+    quando `DATABASE_URL_TEST` não está setada. CI segue não regridindo.
+  - **Baseline: 768 passing (+11 novos vão pra skipped sem DB test) /
+    4 pré-existentes por env vars em `field-encryption` (confirmado
+    idêntico ANTES via stash) / 179 skipped (172 baseline + 7 do delta)**.
+    Type-check zero. Lint zero. Roles cobertos: ADMIN, ANALISTA,
+    DIRETOR_FINANCEIRO. Rollback trivial (reverter 2 arquivos)
 - **P-60** `communication-summary-errors.test.ts` 6 falhas — bisect
   identificou commit culpado `9aef608` (Sprint 15F, 2026-06-30) que
   trocou `callAiFeature` (mockável) por `dispatchChat` (roteador

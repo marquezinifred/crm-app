@@ -241,7 +241,8 @@ seguir esse padrão. Regressão coberta por
 
 | Camada | Ferramenta | Quando |
 |---|---|---|
-| Unit | Vitest | Funções puras, services, hooks, componentes React isolados |
+| Unit | Vitest | Funções puras, services, hooks, helpers |
+| Component (Testing Library) | Vitest + `@testing-library/react` + `user-event` + `jest-dom` (P-53, 2026-07-05) | Forms com digitação e submit, comportamento de mutation handlers, DOM assertions ergonômicas. Testes ficam em `tests/component/**/*.test.tsx` (jsdom). Ver piloto `tests/component/pipeline-new.test.tsx` |
 | Integration | Supertest | Procedures tRPC, endpoints REST, cross-tenant, RBAC |
 | E2E | Playwright | Fluxos críticos de usuário (onboarding, pipeline, IA) |
 | Visual | Playwright + screenshots | Baseline de 25 rotas × 3 viewports (P-03) |

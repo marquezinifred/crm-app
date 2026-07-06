@@ -474,30 +474,64 @@ resolve 3 violations WCAG AA de uma vez.
 **Esforço:** ~10min UI + verificação axe. Escopo cirúrgico
 (3 edits mecânicos, sem lógica). Não bloqueia deploy.
 
-### P-53. Pipeline pages `.tsx` sem coverage — falta harness React
-**Severidade:** Média (débito arquitetural). Descoberto pelo QA
-automation pós-P-50 em 2026-07-05.
+### ~~P-53. Pipeline pages `.tsx` sem coverage — falta harness React~~ ✅ FECHADO 2026-07-05
+Chip `claude/p53-testing-library`. Piloto de Testing Library +
+`jsdom` (já presente) + `@testing-library/react@^14.3.1` +
+`@testing-library/user-event@^14.6.1` +
+`@testing-library/jest-dom@^6.9.1`. Setup:
+- `tests/setup.ts` importa `@testing-library/jest-dom/vitest` e
+  chama `cleanup()` em `afterEach` (isolamento DOM entre casos).
+- `vitest.config.ts:include` ganha
+  `tests/component/**/*.test.tsx`; `coverage.exclude` remove
+  `page.tsx` (mantém layout/loading/error/not-found/template
+  como excludes).
+- `tests/component/pipeline-new.test.tsx` cobre 11 casos: render
+  cabeçalho + campos essenciais + botão Criar; filtro de
+  PARCEIRO na lista de responsáveis; máscara BRL P-50 em tempo
+  real (digitação, decimal com vírgula, filtro não-numéricos);
+  submit com `estimatedValue` unformatado; submit sem valor
+  envia `undefined`; `onSuccess` dispara `router.push` +
+  toast Venzo; Cancelar chama `router.back`; existência do
+  bloco `create.error && …` (integração fina fica pros unit
+  tests dedicados de `friendlyTrpcError`).
 
-`vitest.config.ts:16-19` exclui `src/app/**/{layout,page,...}.tsx`
-do coverage report. Wiring de UI de forms críticos (pipeline/new,
-pipeline/[id], companies, contacts) não tem teste de componente.
-QA valida via smoke Playwright + código estático — insuficiente.
+**Coverage:** `src/app/pipeline/new/page.tsx` = **82.22% lines
+/ 75% branches / 57.14% funcs** (target era ≥40%). Uncovered:
+lead sources dinâmico (leadSources.data.length>0), branch de
+Parceiro (source==='PARCEIRO'), bloco `create.error`
+(coberto pelos unit tests dedicados de friendlyTrpcError).
 
-**Fix:** adicionar Testing Library + jsdom no vitest setup, criar
-`tests/component/pipeline-new.test.tsx` como piloto cobrindo:
-digitação no Valor estimado, submissão do form, coerção de campos.
-Se piloto der bom sinal, expandir pra outros forms críticos.
+**Baseline:** **759 passing** (baseline pré-P-53 = 748 + 11
+novos) / 4 pré-existentes por env vars em `field-encryption` /
+172 skipped. Type-check zero. Lint zero. Zero regressão.
 
-**Esforço:** ~4h (piloto). Não bloqueia — mas todo chip novo que
-toca form vai ter mesma gap. Candidato Sprint 16.
+**Padrão adotado (Testing Library vs createRoot manual do P-54):**
+os dois padrões coexistem. Testing Library ganha em ergonomia
+pra forms com digitação e submit (`userEvent.type`,
+`getByLabelText`, `getByRole`); createRoot manual segue útil
+pra páginas que só validam mutation handlers (mock trpc +
+disparo direto de `onSuccess/onError`). Débitos residuais
+registrados abaixo pra expansão do padrão.
 
-**Update 2026-07-05 (P-54 fix)**: chip P-54 escreveu
+**Débitos residuais (candidatos Sprint 16+):**
+- **P-65:** `/companies` (form novo + edit) — CompanyForm com
+  CNPJ auto-fill (BrasilAPI) e endereço via CEP. ~3h.
+- **P-66:** `/contacts` (form novo + edit) — ContactForm com
+  QuickCreate de Empresa aninhado. ~2h.
+- **P-67:** `/admin/users` (convite + edição) — role picker
+  com guard anti-escalada (SUPER_ADMIN). ~2h.
+- **P-68:** `/pipeline/[id]` — migrar
+  `tests/unit/pipeline-detail-page.test.tsx` (padrão
+  createRoot manual) pra Testing Library, cobrindo agora
+  também interações de digitação nos campos de estágio (não
+  só handlers de mutation). ~4h. Opcional — padrão atual
+  segue estável.
+
+**Update 2026-07-05 (P-54 fix, histórico)**: chip P-54 escreveu
 `tests/unit/pipeline-detail-page.test.tsx` com 7 casos mockando
 `@/lib/trpc/client` no padrão do `admin-ai-page.test.tsx` — sem
 Testing Library, apenas `createRoot` + `act` + `ToastProvider`.
-Mostrou que dá pra testar comportamento de mutation handler +
-DOM assertions sem harness Testing Library. Se P-53 for reavaliado,
-considerar manter esse padrão em vez de adicionar dep nova.
+Padrão validado e mantido em paralelo ao Testing Library.
 
 ### P-57. IA bloqueia por dirty em campos NÃO relacionados ao Receptor
 **Severidade:** Baixa (decisão de produto). Descoberto no P-54 fix

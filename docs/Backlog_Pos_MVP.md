@@ -13,6 +13,76 @@ Mantido em sincronia com `CLAUDE.md` e memory `MEMORY.md`.
 
 ## 🔥 Pendências de curto prazo (próximas 2 semanas)
 
+### P-68. `.text-caption.text-text-3` no header público reprova WCAG AA
+**Severidade:** Baixa (a11y). Descoberto pelo QA automation pós-bloco
+H+I em 2026-07-05.
+
+`axe-smoke.spec.ts` reporta 5 falhas de color-contrast em
+`p:CRM B2B` (header público sign-in). NÃO é regressão dos 9 chips —
+diff não toca sign-in, `.text-caption`, `.text-text-3` nem `globals.css`.
+Pré-existente ao P-52 (axe iframe exclude).
+
+**Fix:** avaliar contraste do token `--text-text-3` sobre bg da rota
+pública e trocar por `--text-text-2` OU escurecer o background.
+
+**Esforço:** ~30min.
+
+### P-69. CookieBanner sem teste de componente (0% coverage)
+**Severidade:** Baixa (débito arquitetural). Descoberto pelo QA
+automation pós-bloco H+I em 2026-07-05.
+
+P-55 fixou contraste mas não tem teste de componente cobrindo
+CookieBanner. Testing Library harness já existe (P-53) — extender pra
+cobrir consumer categories, dispensar via botão, persistência
+localStorage.
+
+**Esforço:** ~2h.
+
+### P-70. Rate-limit por sender inbound NÃO tem bypass em `forcePromoted`
+**Severidade:** 🟡 Média (decisão de produto). Descoberto pelo QA
+automation pós-bloco H+I em 2026-07-05.
+
+P-29 (rate limit sender) roda ANTES do check de `forcePromoted`
+(P-30 promote manual). Consequência: admin tenta promover lead
+rejeitado por rate limit → cai no gate de rate limit outra vez.
+
+**Fix escopo (2 caminhos):**
+- **A**: `createInboundLead({forcePromoted: true})` bypassa rate
+  limit (admin já aprovou manualmente)
+- **B**: manter — admin não bypassa rate limit (decisão de
+  compliance — evita re-aceitar spam)
+
+Consultar PO antes de implementar.
+
+**Esforço:** ~30min investigação + fix.
+
+### P-71. Metodologia §5.2 baseline stale
+**Severidade:** Baixa (só doc). Descoberto pelo QA automation
+pós-bloco H+I em 2026-07-05.
+
+§5.2 ainda cita "715 passing / 0 failing / 168 skipped". Real
+com env dummy consistente é **927 / 0 / 174**.
+
+**Fix:** atualizar §5.2 e nota de variância (777 do bloco G intermediário,
+816 do bloco G final, 927 do bloco H+I atual).
+
+**Esforço:** ~15min inline.
+
+### P-72. `permissions.service.ts` funcs 25%
+**Severidade:** Baixa (débito de cobertura). Descoberto pelo QA
+automation pós-bloco H+I em 2026-07-05.
+
+Helpers como `computeAndCacheUserPermissions`,
+`invalidateUserPermissionsCache`, `computeEffectivePermissions` só
+são exercitados em suites gated por `DATABASE_URL_TEST`. Testes
+unit puros sem DB cobrem hoje ~25% das funcs.
+
+**Fix:** testes unit adicionais com prisma mocked cobrindo lógica
+sem DB (Set intersect, override apply/revoke, cache hit/miss
+simulado).
+
+**Esforço:** ~3h.
+
 ### P-65. `estimatedValue` da oportunidade não sincroniza com valor da proposta
 **Severidade:** 🟡 Média (UX crítico — desalinha forecast + relatórios).
 Descoberto em uso 2026-07-05 pelo Fred:

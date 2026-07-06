@@ -19,7 +19,7 @@ Substitui [HANDOFF_Estado_Atual_2026-07-04.md](HANDOFF_Estado_Atual_2026-07-04.m
   - `npm run lint`: zero na paterna
 - **Deploy Vercel production:** `https://crm-app-pi-eight.vercel.app`
   - Último deploy: `dpl_Guj9B3xGfKXDV2JdjbD6ejfwSB7B` (bloco G) — P-54 desbloqueio Salvar + IA
-  - **⚠️ Bloco H+I (9 chips: P-55/P-63/P-29/P-62/P-44/P-61/P-53/P-37/P-30) NÃO deployado ainda** — pendente confirmação de QA verde
+  - **⚠️ Bloco H+I (9 chips: P-55/P-63/P-29/P-62/P-44/P-61/P-53/P-37/P-30) NÃO deployado ainda** — QA verde ✅ mas deploy pendente autorização Fred
 - **Worker BullMQ Railway:** ainda não subiu (P-36 pendente ação Fred)
 - **Env vars prod:** só as 9 essenciais (Clerk + DATABASE + APP_URL). Ausentes: `TENANT_FIELD_ENCRYPTION_KEY`, `ANTHROPIC_API_KEY`, `RESEND_API_KEY`, Redis, Stripe, flags kill-switch
 
@@ -68,7 +68,9 @@ Substitui [HANDOFF_Estado_Atual_2026-07-04.md](HANDOFF_Estado_Atual_2026-07-04.m
 - P-29 rate limit por sender email
 - P-30 UI /admin/inbound-rejected
 
-**6 QA automations rodadas** (todas verdes): pós-P-42, pós-P-50, pós-bloco A+B+C, pós-bloco G, pós-bloco H+I (aguardando).
+**6 QA automations rodadas** (todas verdes): pós-P-42, pós-P-50, pós-bloco A+B+C, pós-bloco G, pós-bloco H+I ✅ 927/0/174.
+
+**Relatórios QA persistidos**: `docs/qa-sessions/auto-report-2026-07-05-batch-9-merges.md` (chip QA salvou).
 
 ## 3. Deploys prod feitos
 
@@ -99,6 +101,11 @@ a proposta).
 |---|---|---|
 | P-57 | Design "IA bloqueia por dirty em campos não-Receptor" | Chip P-54 (decisão produto) |
 | P-64 | 3 outras ocorrências `.text-brand` (admin/branding + PolicyAcceptGate) | Chip P-55 |
+| P-68 | `.text-caption.text-text-3` no header público reprova WCAG AA | QA H+I |
+| P-69 | CookieBanner sem teste de componente (0% coverage) | QA H+I |
+| P-70 | Rate-limit sender sem bypass em `forcePromoted` — decisão produto | QA H+I |
+| P-71 | Metodologia §5.2 baseline stale (715→927) | QA H+I |
+| P-72 | `permissions.service.ts` funcs 25% (helpers gated por DB) | QA H+I |
 
 ### 🟡 Aberto anterior (Sprint 16 hardening + backlog)
 

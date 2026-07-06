@@ -1320,6 +1320,25 @@ foram fechados na Sprint 11.
   ad-hoc
 
 **Débitos zerados em 2026-07-05:**
+- **QA automation pós-bloco H+I** — chip QA verificou main `@d7740e8`
+  contra baseline `@54ec108`. Verdict: **OK seguir, zero regressão**.
+  Baseline pós: **927 passing / 0 failing / 174 skipped (1101 total)**
+  bate 1:1 com modelo. Reconciliação chip-a-chip: P-30 (23) + P-29
+  (9) + P-37 (30) + P-53 (11) + P-61 (21) + P-62 (15) + P-63 (1) +
+  reajuste = +111. Coverage: `dispatch.ts` 100%/100%/100%,
+  `ai-usage.service.ts` 100%/100%/100%, `trpc.ts` 85.6%/88.9%/100%,
+  `pipeline/new/page.tsx` 82.2%/75%/57%, `inbound-lead-creator.service.ts`
+  89.1%/68.9%/100% — todas acima do alvo. Type-check zero, lint zero.
+  Playwright `smoke.spec` 3/3 pass; `axe-smoke` 5 pré-existentes em
+  header público sign-in (não regressão — diff não toca `.text-caption`).
+  **Integridade docs OK**: batch `sed` limpo — cada P-XX aparece 1× no
+  cabeçalho, zero conflict markers residuais, zero duplicações
+  estruturais. Débitos residuais registrados: **P-68** (text-caption
+  WCAG AA), **P-69** (CookieBanner sem teste componente), **P-70**
+  (rate-limit sender sem bypass `forcePromoted` — decisão produto),
+  **P-71** (Metodologia §5.2 baseline stale), **P-72** (permissions.service
+  funcs 25%). Recomendação: **OK seguir**, sem chip de fix. Deploy
+  autorizado
 - **P-55** Contraste `.text-brand` na CookieBanner falha WCAG AA —
   commit `eb38597` (pré-merge; final SHA muda no merge). `axe-smoke` reportava `color-contrast` no
   `<a class="underline text-brand" href="/privacy">` da CookieBanner:

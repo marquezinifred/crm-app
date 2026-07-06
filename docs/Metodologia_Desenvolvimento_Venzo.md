@@ -47,63 +47,109 @@ Ver §9.4 (spawn) e §11.4 (gate deploy) e §16.1 (case study 2026-07-06).
 
 ## 2. Fluxo canônico de uma tarefa (do débito até deploy)
 
-**Regra fundamental:** QA acontece **na branch, ANTES do merge em main**.
-Nunca depois. Isso evita revert commits, mantém main sempre "verde por
-definição" e elimina retrabalho. Ver §9.4, §11.4 e §16.1.
+**Regra fundamental:** QA automation acontece **antes do deploy prod**,
+sempre. A posição do QA dentro do ciclo depende do modo (§9.4):
+
+- **Modo B — Bloco paralelo (DEFAULT):** N chips disjuntos → merges
+  sequenciais em main → **1 QA único sobre main integrado** → ajustes →
+  prep deploy → deploy
+- **Modo A — Chip único alto risco (exceção justificada):** chip →
+  **QA na branch** → merge → smoke → deploy
+
+Modo B é o default porque (a) detecta interações entre chips que QA
+isolado perderia, (b) testa o produto real integrado que vai pra prod,
+(c) é mais eficiente em tokens/tempo. Modo A vale só quando revert do
+merge é caro (migration schema, refactor arquitetural, mudança em
+módulo core).
+
+### 2.1. Modo B (default) — bloco paralelo
 
 ```
-Débito identificado
+Débitos identificados (múltiplos débitos P-XX disjuntos)
    ↓
-Registrar no Backlog_Pos_MVP.md com ID P-XX único + severidade + escopo
+Registrar todos no Backlog_Pos_MVP.md
    ↓
-[opcional] Debater com PO / atualizar spec / preparar amendments
+Spawn N chips em paralelo via spawn_task
    ↓
-Spawn chip via spawn_task — prompt inclui o Checklist de fechamento (§3)
+Chips trabalham em worktrees isolados — commits nas branches claude/<nome>
    ↓
-Chip trabalha em worktree isolado — 1 ou mais commits NA BRANCH claude/<nome>
-(NUNCA em main direto)
+Cada chip reporta no chat quando finaliza
    ↓
-Chip reporta no chat: título commit(s), arquivos tocados, contagem linhas,
-próximos passos identificados
+Sessão paterna aguarda TODOS os chips do bloco finalizarem
    ↓
-[opcional] Sessão paterna faz smoke local na branch:
-git -C .claude/worktrees/<nome> && npx tsc --noEmit + npm run lint
-(rápido, não substitui QA — só pega quebras óbvias antes do chip QA rodar)
+Merges sequenciais em main --no-ff (ordem: menor risco primeiro)
+[opcional] Smoke curto entre merges (tsc + lint) pra pegar conflito óbvio
    ↓
-Spawn chip QA Automation NA BRANCH — skill anthropic-skills:qa-automation
-(OBRIGATÓRIO — não opcional. Case study §16.1 mostra o custo de pular.)
-QA compara: branch @<commit-chip> vs main @HEAD atual como baseline pré
+Spawn chip QA Automation ÚNICO sobre main pós-todos-merges
+QA compara: main@<pós-bloco> vs main@<pré-bloco> como baseline pré
    ↓
 Consumir verdict do QA:
-   • VERDE → prossegue pro merge
-   • AMARELO → registra débito residual + prossegue pro merge
-   • VERMELHO (regressão real) → chip volta com fix, NÃO merge, loop
-     (branch descartável — não sujou main)
+   • VERDE → prep deploy
+   • AMARELO → registra débito residual + prep deploy
+   • VERMELHO → analisa qual(is) merge(s) causaram → revert cirúrgico
+     OU spawn chip de fix → novo QA
    ↓
-Sessão paterna faz merge --no-ff na branch main (nunca push direto)
+Atualizar Backlog + CLAUDE.md + HANDOFF + Roteiro_QA_Homologacao (se UX)
    ↓
-Post-merge smoke (rápido): npx tsc --noEmit && npm run lint && npm test
-(confirma que main está no estado esperado; QA já validou o conteúdo)
-   ↓
-Atualizar task list (TaskUpdate) marcando como completed
-   ↓
-Atualizar Backlog_Pos_MVP.md marcando débito como ✅ FECHADO com commit hash
-   ↓
-Atualizar CLAUDE.md changelog
-   ↓
-Se mudança tem impacto UX/funcionalidade em staging:
-atualizar docs/Roteiro_QA_Homologacao_Staging.md com cenário pass/fail
+Commit de "prep deploy" (docs atualizados) — main pronta pra ir pra prod
    ↓
 [Se autorizado pelo Fred] Deploy prod via vercel --prod
-(main verde por definição — QA já rodou pré-merge)
 ```
 
-**Consequências desse ordenamento:**
-- Main **sempre** reflete código validado. Zero revert commits sujando o histórico
-- Rollback pré-merge = descartar branch (trivial), não `git revert <merge>` (barulhento)
-- Deploy prod = merge em main + autorização humana; sem QA "extra" pré-deploy
-  (QA já rodou antes do merge)
+**Consequências deste modo:**
+- QA vê produto integrado real — detecta interações entre chips
+- 1 QA vs N QAs sequenciais = eficiência tokens/tempo
+- Rollback vermelho custa revert de N merges (probabilidade baixa dado
+  chips disjuntos + coverage prévia dos próprios chips)
+- Padrão empiricamente validado no bloco H+I (9 chips, zero regressão)
+
+### 2.2. Modo A (exceção) — chip único alto risco
+
+Usar quando revert do merge é caro:
+- Migration schema (ex: 0026 clerk_id_per_scope)
+- Refactor arquitetural (ex: P-42 `assertTenantWritePayload`)
+- Mudança em módulo core (auth, tenant extension, approval engine)
+- Chip que outros débitos vão depender imediatamente
+
+```
+Débito identificado (1 débito alto risco)
+   ↓
+Spawn chip via spawn_task
+   ↓
+Chip trabalha em worktree isolado — commits na branch claude/<nome>
+   ↓
+Chip reporta no chat
+   ↓
+Spawn chip QA Automation NA BRANCH (não em main)
+QA compara: branch@<commit-chip> vs main@HEAD como baseline pré
+   ↓
+Consumir verdict:
+   • VERDE → merge em main → post-merge smoke → [autorizado] deploy
+   • AMARELO → merge + registra débito residual + deploy
+   • VERMELHO → chip volta com fix, NÃO merge; branch descartável
+```
+
+**Consequências deste modo:**
+- Main **sempre** verde por definição — zero revert commits no histórico
+- Custo: 1 QA por chip alto risco (aceito pelo custo maior do revert
+  arquitetural)
 - Chips vermelhos morrem na branch — main nunca vê código quebrado
+
+### 2.3. Quando escolher modo A vs B — heurística
+
+| Cenário | Modo |
+|---------|------|
+| Sprint corretivo — N débitos P-XX disjuntos | **B** |
+| Sprint feature — 1 chip por sub-tarefa disjunta | **B** |
+| Migration schema | **A** |
+| Refactor arquitetural amplo | **A** |
+| Mudança em módulo core (auth, RBAC, tenant, engine) | **A** |
+| Chip cuja saída outros chips do bloco dependem | **A** |
+| 2+ chips mexem no mesmo arquivo core | **A** em cada |
+
+Em dúvida entre A e B → **B** (default). Motivação: se realmente for
+alto risco, o QA integrado do bloco pega. Se for baixo risco tratado
+como A, gasta QA à toa.
 
 ---
 
@@ -490,19 +536,33 @@ Testing Library ao mesmo tempo que chip descobria P-65/66/67 pra bugs de prod.
 ### 8.4. Ordem de merges paralelos
 Do menor pro maior. Chips com áreas disjuntas: qualquer ordem.
 
-### 8.5. Pre-merge é onde o QA roda (§9.4)
-QA automation acontece **na branch**, comparando `branch@<commit-chip>` vs
-`main@HEAD` como baseline pré. Não depois do merge.
+### 8.5. Onde o QA roda depende do modo (§9.4)
 
-### 8.6. Post-merge validation (SMOKE curto)
+- **Modo B (default):** QA roda em **main pós-merges do bloco**, antes
+  do deploy. Compara `main@<pós-bloco>` vs `main@<pré-bloco>` como
+  baseline pré.
+- **Modo A (exceção alto risco):** QA roda **na branch**, antes do
+  merge. Compara `branch@<commit-chip>` vs `main@HEAD` como baseline pré.
+
+Nunca deploy prod sem QA em algum dos 2 modos. Case study §16.1
+documenta o custo de pular.
+
+### 8.6. Smoke curto entre merges (Modo B) ou pós-merge (Modo A)
+
 ```bash
 npx tsc --noEmit && npm run lint && npm test
 ```
-Isto é **smoke test da main session** — confirma que o merge não introduziu
-resolução de conflito quebrada. **Não é o QA**; o QA já rodou pré-merge.
 
-Se este smoke pós-merge falhar, é sinal de conflito de merge mal resolvido.
-Ação: revert o merge (`git reset --hard HEAD~1` antes do push), reconciliar
+Rápido. Confirma que merge foi limpo (nenhum conflito mal-resolvido) ou
+que estado atual da main é consistente. **Não substitui QA automation**.
+
+- Modo B: roda opcionalmente entre merges do bloco pra pegar quebra
+  óbvia cedo; o QA integrado vem depois
+- Modo A: roda pós-merge pra confirmar merge limpo; o QA já rodou
+  pré-merge
+
+Se este smoke falhar, é sinal de conflito de merge mal resolvido. Ação:
+revert o merge (`git reset --hard HEAD~1` antes do push), reconciliar
 manualmente e re-mergir. Não é regressão de código — é problema de merge.
 
 ---
@@ -568,52 +628,73 @@ Até 5-6 chips simultâneos toleráveis. Coordenar via git pull antes de mergir.
 - 2 chips em `prisma/schema.prisma`
 - 2 chips em `CLAUDE.md`
 
-### 9.4. Antes do merge → QA automation (OBRIGATÓRIO)
+### 9.4. Modos de execução do QA automation
 
-Regra permanente reforçada em 2026-07-06 (case study §16.1):
+Sempre spawnar chip QA **antes de deploy prod**. Posição no ciclo depende
+do modo:
 
-**SEMPRE spawnar chip QA automation ANTES de mergir chip com código de app
-em main.** QA roda contra a branch do chip, comparando com o estado atual
-de main como baseline. É comportamento default da sessão paterna, **não
-opcional** — não requer confirmação do Fred, é parte do fluxo canônico §2.
+#### 9.4.1. Modo B — Bloco paralelo (default)
 
-**Ordem CORRETA:**
+Padrão pra sprint work: N chips disjuntos rodando em paralelo, um QA
+único cobrindo o integrado.
+
+**Fluxo:**
 ```
-Chip finaliza commits na branch claude/<nome>
-    → sessão paterna smoke opcional na branch (tsc+lint)
-    → spawn chip QA na BRANCH (compara vs main atual como baseline)
-    → QA verdict
-        • VERDE/AMARELO → merge em main → post-merge smoke → [se autorizado] deploy
-        • VERMELHO → chip volta com fix, NÃO merge; branch descartável
+N chips finalizados nas branches
+  → paterna aguarda todos → N merges sequenciais em main (--no-ff)
+  → smoke curto entre merges (opcional) → spawn chip QA em main pós-bloco
+  → QA verdict
+      • VERDE/AMARELO → prep deploy → [autorizado] deploy
+      • VERMELHO → revert cirúrgico (ou chip fix) + novo QA
 ```
 
-**Ordem ERRADA (o que aconteceu em §16.1):**
+**Por que é o default:**
+- QA vê produto integrado real (detecta interações entre chips)
+- Eficiência: 1 QA para N chips vs N QAs sequenciais
+- Semântica realista — testa exatamente o estado que vai pra prod
+- Padrão empiricamente validado no bloco H+I (9 chips, zero regressão)
+
+**Custo aceitável:** se QA vermelho, revert de N merges. Probabilidade
+baixa dado chips disjuntos (§9.3) e coverage prévia dos próprios chips.
+
+#### 9.4.2. Modo A — Chip único alto risco (exceção justificada)
+
+Usar quando revert do merge é caro:
+- Migration schema
+- Refactor arquitetural amplo (ex: P-42 backstop)
+- Mudança em módulo core (auth, tenant extension, approval engine)
+- Chip cuja saída outros débitos vão depender imediatamente
+
+**Fluxo:**
 ```
-Chip finaliza → merge em main → smoke → DEPLOY PROD → QA retroativo
+Chip finalizado na branch → spawn chip QA NA BRANCH
+  → QA compara branch@<commit-chip> vs main@HEAD como baseline
+  → verdict
+      • VERDE/AMARELO → merge em main → post-merge smoke → [autorizado] deploy
+      • VERMELHO → chip volta com fix; NÃO merge; branch descartável
 ```
-Ordem errada obriga rollback (revert do merge) se QA vermelho — sujando main
-e criando retrabalho. A ordem correta bloqueia o problema antes de main.
 
-**Por que na branch, não em main:**
-1. Main **sempre** reflete código validado — zero revert commits no histórico
-2. Rollback = descartar branch (trivial), não `git revert <merge>`
-3. QA compara branch vs main como baseline pré — semântica limpa
-4. Deploy prod não precisa de "QA pré-deploy extra" — merge já foi validado
+**Vantagem:** main sempre verde por definição. Zero revert commits.
 
-**Chips paralelos:** se 2+ branches estão prontas pra QA ao mesmo tempo,
-cada uma tem seu QA independente contra main atual. Após 1º merge, o 2º
-QA deve ser re-rodado (baseline mudou). Alternativa pragmática: se as áreas
-são realmente disjuntas, mergir sequencial rodando QA único depois do último
-merge (padrão bloco H+I) — mas justificar a escolha por escrito.
+**Custo:** 1 QA por chip alto risco. Justifica-se pelo custo maior do
+revert de mudança arquitetural.
 
-**Exceções raras (justificar por escrito):**
+#### 9.4.3. Chips paralelos em áreas potencialmente conflitantes
+
+Se 2+ chips mexem no mesmo arquivo core ou em contratos que se tocam,
+tratar cada um como Modo A. Vale o custo dos QAs isolados pra evitar
+regressão cruzada difícil de isolar.
+
+#### 9.4.4. Exceções raras (justificar por escrito no commit)
+
+Casos em que dá pra pular QA:
 - Docs-only: sem código app, nada a testar
-- Tooling/infra sem impacto runtime: `.gitignore`, `Dockerfile.worker`, etc
-- Config puramente declarativa: `env.example` update sem mudança de código
+- Tooling/infra sem impacto runtime: `.gitignore`, `Dockerfile.worker`
+- Config puramente declarativa: `env.example` update sem código
 
-**Regra prática:** se ficar em dúvida se pula ou não → **NÃO pula, spawn o QA
-na branch antes do merge**. Custo do chip QA (~20-40min) << custo de rollback
-de merge + retrabalho.
+**Regra prática:** em dúvida entre A/B → **B** (default). Em dúvida
+entre B e "sem QA" → **B**. Custo do chip QA (~20-40min) << custo de
+rollback prod + retrabalho.
 
 ### 9.5. Prompt canônico do chip QA (template)
 
@@ -745,36 +826,40 @@ Sempre testar em Neon dev antes.
 
 ### 11.4. Gate de QA antes de deploy prod
 
-**Deploy prod só depois de:**
-1. QA automation VERDE ou AMARELO **na branch** (§9.4)
-2. Merge em main (--no-ff)
-3. Post-merge smoke verde (tsc + lint + test) — confirma merge limpo
-4. Autorização humana (Fred)
+**Deploy prod só depois de QA VERDE ou AMARELO — sempre.** Posição do
+QA no ciclo depende do modo (§9.4):
 
-**QA já rodou pré-merge (§9.4).** Deploy não requer QA "extra" — main é
-verde por definição, porque nenhum chip com código de app foi mergido sem
-QA aprovar.
+**Modo B (default):**
+1. Todas as branches do bloco mergidas em main
+2. Smoke curto verde entre merges (opcional) + smoke final
+3. **QA automation VERDE/AMARELO** sobre main pós-bloco
+4. Prep deploy (docs atualizados)
+5. Autorização humana (Fred)
 
-**Consequência: rollback prod é raro.** Se acontecer, é por bug de contexto
-prod que não reproduz local (ex: env var mal setada, latência Neon, etc) —
-não por regressão de código.
+**Modo A (exceção):**
+1. **QA automation VERDE/AMARELO** na branch
+2. Merge em main
+3. Post-merge smoke verde
+4. Autorização humana
 
-**Rollback prod pós-deploy (quando necessário):**
+**Nunca pular o QA.** Case study §16.1 documenta o que aconteceu quando
+pulei em 2026-07-06 — precisou de QA retroativo pós-deploy, com risco de
+rollback caso viesse vermelho.
+
+**Rollback prod pós-deploy (raro):**
+Se algo escapou (bug de contexto prod que não reproduz local, env var
+mal setada, latência Neon, etc):
 ```bash
-vercel promote <deployment_id_anterior>  # aliasing pro deployment anterior
-# ou
-vercel rollback  # se o CLI suportar rollback simples
+vercel promote <deployment_id_anterior>  # aliasing pro anterior
 ```
+Deploy IDs preservados em `docs/HANDOFF_Estado_Atual_*.md`. Se rollback
+for por bug de contexto prod, spawn chip de fix + teste reproduzindo.
 
-Deploy IDs preservados no `docs/HANDOFF_Estado_Atual_*.md` pra rollback
-rápido. Se rollback for por bug de contexto prod, spawn chip de fix
-específico + testes que reproduzam o cenário prod.
-
-**Exceção de ordem: hotfix urgente.** Se produção está caída e o fix é
-óbvio (typo em env, comment mal fechado quebrando build), aceita-se
-"commit + deploy + QA retroativo" com autorização explícita do Fred.
-Justificar por escrito no commit ("hotfix — QA retroativo pendente
-task_XXX").
+**Exceção hotfix urgente.** Se produção está caída e fix é óbvio (typo
+em env, comment mal fechado quebrando build), aceita "commit + deploy +
+QA retroativo" com autorização explícita do Fred. Justificar por escrito
+no commit ("hotfix — QA retroativo pendente task_XXX"). Este é o único
+cenário em que QA retroativo é aceitável.
 
 ---
 
@@ -861,10 +946,11 @@ Exemplo:
 - ❌ Fechar débito sem atualizar `Backlog_Pos_MVP.md`
 - ❌ Nova feature UX sem cenário no `Roteiro_QA_Homologacao_Staging.md`
 - ❌ Spawn chip sem checklist de fechamento no prompt
-- ❌ **Mergir chip com código de app em main sem QA automation antes (§9.4)**
-- ❌ **Rodar QA depois do merge (obriga revert se vermelho — sujando main)**
-- ❌ Deploy prod sem que o merge que originou o main atual tenha tido QA
+- ❌ **Deploy prod sem QA (Modo A na branch OU Modo B pós-bloco) — §9.4**
+- ❌ **Mergir chip alto risco em main sem QA na branch (Modo A) — §9.4.2**
 - ❌ Confiar no commit message do próprio chip como QA — chip é juiz suspeito
+- ❌ QA retroativo pós-deploy como norma (só aceitável em hotfix urgente
+  autorizado por escrito — §11.4)
   da própria obra
 - ❌ Colisão de IDs P-XX no backlog sem renumerar (§8.3)
 
@@ -945,22 +1031,34 @@ teríamos ficado expostos se viesse vermelho:
 > falamos o correto é o QA acontecer antes do commit e deploy para nao
 > termos reversoes e retrabalhos"
 
-**Regra derivada (corrigida com o feedback do Fred):**
-- §2 fluxo canônico reordenado: QA acontece **na branch, antes do merge**
-- §9.4 reescrito: "Antes do merge → QA automation" (não "após merge")
-- §8.5 novo: pre-merge é onde o QA roda
-- §11.4 simplificado: deploy não precisa de QA "extra" — merge já foi validado
-- §13.2 antipattern: "Mergir em main sem QA da branch"
-- Case study preservado como aprendizado
+**Iterações da regra derivada:**
 
-**Se a ordem correta tivesse sido seguida em 2026-07-06:**
+**V1 (primeira reação, 2026-07-06):** "QA sempre na branch, antes do
+merge". Fred corrigiu logo depois: excessivamente conservador — obriga N
+QAs pra bloco de N chips, quando o produto real integrado é o que
+interessa.
+
+**V2 (corrigida com feedback do Fred):** dois modos formalizados em §9.4:
+- Modo B (default) — 1 QA sobre main pós-bloco. Padrão pra sprint work.
+- Modo A (exceção) — QA na branch pra chips alto risco.
+
+**Se a ordem correta (Modo B) tivesse sido seguida em 2026-07-06:**
 ```
-Chip P-65 finaliza → QA na branch p65 → verde → merge → smoke → OK
-Chip P-66 finaliza → QA na branch p66 (baseline atualizado) → verde → merge → smoke → OK
-Deploy prod (autorizado pelo Fred) — sem QA extra necessário
+Chip P-65 + Chip P-66 (paralelo)
+   → merges sequenciais em main (menor risco primeiro: P-65 → P-66)
+   → smoke curto entre e após
+   → spawn QA em main pós-bloco
+   → verdict verde → prep deploy → deploy autorizado pelo Fred
 ```
-Nenhum revert commit, main sempre verde por definição, zero risco de
-rollback de merge.
+Nenhum QA retroativo, nenhum risco de rollback pós-deploy.
+
+**Padrão validado empiricamente pré-2026-07-06:** bloco H+I (9 chips)
+usou exatamente esse fluxo. Zero regressão. Bloco A+B+C e Bloco G,
+idem.
+
+**O erro específico de 2026-07-06 não foi "não escolher entre A e B"** —
+foi mergir 2 chips e pular o QA integralmente antes do deploy. Ambos os
+modos exigiriam QA antes do deploy.
 
 ### 16.2. P-42 backstop reformado
 

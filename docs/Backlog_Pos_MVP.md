@@ -1511,22 +1511,70 @@ com `Promise.all([...].close())` desde Sprint 15D — não precisou
 ajuste. Estimativa Fred: 30min-2h de execução manual (autenticar
 Railway + colar ~10 env vars + validar).
 
-### P-37. Cobertura hooks P-35 nos services (dispatch + ai-usage)
-**Severidade:** Média. Descoberto por QA automation em 2026-07-04.
-`src/lib/ai/dispatch.ts` = **21%** e `src/server/services/ai-usage.service.ts`
-= **10%** de cobertura statements. P-35 adicionou hooks (logAiUsage
-→ Axiom, breadcrumb Sentry) mas testes cobrem só wrappers puros de
-`src/lib/monitoring/*` (82-90% ok). Cobertura baixa era pré-existente
-(depende de Redis/BullMQ/Anthropic real); P-35 não piorou, só expôs
-o gap.
+### ~~P-37. Cobertura hooks P-35 nos services (dispatch + ai-usage)~~ ✅ FECHADO
+**Resolvido em 2026-07-05.** Baseline pós: **846 passing** (+30 novos)
+/ 172 skipped / 1018 total. Type-check zero. Lint zero.
 
-**Escopo:**
-- Testes puros de `logAiUsage()` verificando `provider`,
-  `used_fallback`, custo em BRL
-- Teste de `audit()` breadcrumb Sentry com/sem `tenantIdOverride`
-- Alvo: dispatch.ts → 60%+, ai-usage.service.ts → 60%+
+**Cobertura antes:** dispatch.ts = 21% / ai-usage.service.ts = 10%
+(reproduzido: 6.01% stmts combinado no baseline vazio).
+**Cobertura depois:** **100% stmts / 100% branches / 100% funcs / 100%
+lines em ambos.** Alvo era 60%, superado por larga margem porque os
+dois arquivos são funções puras sem side-effects não-mocáveis.
 
-**Esforço:** ~4h. Não bloqueia — candidato Sprint 16.
+**Fix aplicado (só testes, zero código app tocado):**
+- **`tests/unit/dispatch-chat.test.ts`** novo com **14 casos**
+  cobrindo `dispatchChat` + `dispatchEmbed`:
+  - Path novo (MULTI_AI_ENABLED=true, 5 casos): delega
+    `callAiWithFallback` + propaga usedFallback=false/true + shape
+    correto + callback interno recebe (client, model) + breadcrumb
+    Sentry com multiEnabled=true + propaga erro sem cair no path legado
+  - Path legado (MULTI_AI_ENABLED=false, 5 casos): delega
+    `callAiFeature` + `getAnthropicForTenant` → shape Anthropic-only
+    com usedProvider/configuredProvider='ANTHROPIC', usedFallback=false
+    + filtra mensagens role='system' antes do SDK + concatena blocos
+    text e ignora não-text no `completion.content` (defesa contra
+    tool_use blocks) + breadcrumb com multiEnabled=false + precedência
+    `input.chat.model` sobre model do gate + fallback pra model do
+    gate quando caller não passa
+  - `dispatchEmbed` (4 casos): path novo delega pra callAiWithFallback
+    com client.embed + lança erro se adapter não implementa embed +
+    path legado retorna shape vazio pra sinalizar fallback tsvector
+- **`tests/unit/ai-usage-service.test.ts`** novo com **16 casos**
+  cobrindo `AI_PRICING`/`calculateCost`/`logAiUsage`/`getMonthlyUsage`:
+  - AI_PRICING contém haiku/sonnet/opus/gpt (4 modelos verificados)
+  - calculateCost linear em prompt+completion (haiku 1M+1M=6 USD)
+  - calculateCost modelo desconhecido retorna 0 sem crashar
+  - calculateCost zero tokens retorna 0
+  - logAiUsage grava row com totalTokens=prompt+completion + costUsd
+    computado pelo pricing table
+  - defaults corretos (usedFallback=false / configuredProvider=null /
+    success=true / errorCode=null / latencyMs=null / userId=null)
+  - respeita overrides de success/errorCode/latencyMs/usedFallback/
+    configuredProvider
+  - publica evento Axiom com `costBrl = costUsd * env.USD_BRL_RATE`
+    (mock USD_BRL_RATE=5 → 6 USD × 5 = 30 BRL)
+  - Prisma falha → console.error + Axiom ainda é chamado (
+    observabilidade não bloqueia)
+  - modelo desconhecido → costUsd=0 tanto no row quanto no Axiom
+  - getMonthlyUsage vazio (sem rows)
+  - getMonthlyUsage filtra por tenantId + success=true + createdAt
+    >= dia 1 do mês corrente 00:00:00.000
+  - getMonthlyUsage agrupa (provider, model, usedFallback) e pivota
+    primary vs fallback com stats separados
+  - trata `_sum` null como zero
+  - ordena breakdown por `(cost + fallbackCost)` desc
+  - primary-only não polui fallback stats
+
+**Mocks:**
+- `@/lib/env` via Proxy pra flipar MULTI_AI_ENABLED entre testes
+  (padrão `claude-per-tenant.test.ts` do P-14)
+- `@/lib/ai/call` (callAiWithFallback), `@/lib/ai/feature-gate`
+  (callAiFeature), `@/lib/ai/claude` (getAnthropicForTenant),
+  `@/lib/monitoring/sentry` (addBreadcrumb) — zero rede real
+- `@/server/db/client` (prisma.aIUsageLog.create + groupBy),
+  `@/lib/monitoring/axiom` (logAiUsage) — zero Postgres real
+
+**Rollback trivial** (dois arquivos de teste + reverter 3 blocos docs).
 
 ### P-38. Cobertura worker duration em queues.ts
 **Severidade:** Média. Descoberto por QA automation em 2026-07-04.

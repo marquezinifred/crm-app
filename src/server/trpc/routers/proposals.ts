@@ -83,27 +83,72 @@ export const proposalsRouter = router({
     .mutation(async ({ input, ctx }) => {
       const proposal = await prisma.proposal.findFirst({
         where: { id: input.proposalId, deletedAt: null },
-        include: { versions: { orderBy: { version: 'desc' }, take: 1 } },
+        include: {
+          versions: { orderBy: { version: 'desc' }, take: 1 },
+          opportunity: { select: { id: true, estimatedValue: true } },
+        },
       });
       if (!proposal) throw new TRPCError({ code: 'NOT_FOUND' });
 
       const nextVersion = (proposal.versions[0]?.version ?? 0) + 1;
-      const version = await prisma.proposalVersion.create({
-        data: {
-          tenantId: ctx.tenantId,
-          proposalId: input.proposalId,
-          version: nextVersion,
-          contentJson: input.contentJson as Prisma.InputJsonValue,
-          totalValue: input.totalValue,
-          marginPct: input.marginPct ?? null,
-          documentKey: input.documentKey ?? null,
-          createdBy: ctx.user.id,
-        } as Prisma.ProposalVersionUncheckedCreateInput,
-      });
-      await prisma.proposal.update({
-        where: { id: input.proposalId },
-        data: { currentVersion: nextVersion, updatedBy: ctx.user.id },
-      });
+      const shouldSyncEstimated =
+        input.totalValue !== null && input.totalValue !== undefined;
+      const previousEstimatedValue = proposal.opportunity.estimatedValue
+        ? Number(proposal.opportunity.estimatedValue)
+        : null;
+
+      // P-65: sync Opportunity.estimatedValue = ProposalVersion.totalValue
+      // na MESMA transação. Kanban/forecast/reports lêem estimatedValue
+      // como valor "vigente" da oportunidade.
+      const writes: Prisma.PrismaPromise<unknown>[] = [
+        prisma.proposalVersion.create({
+          data: {
+            tenantId: ctx.tenantId,
+            proposalId: input.proposalId,
+            version: nextVersion,
+            contentJson: input.contentJson as Prisma.InputJsonValue,
+            totalValue: input.totalValue,
+            marginPct: input.marginPct ?? null,
+            documentKey: input.documentKey ?? null,
+            createdBy: ctx.user.id,
+          } as Prisma.ProposalVersionUncheckedCreateInput,
+        }),
+        prisma.proposal.update({
+          where: { id: input.proposalId },
+          data: { currentVersion: nextVersion, updatedBy: ctx.user.id },
+        }),
+      ];
+      if (shouldSyncEstimated) {
+        writes.push(
+          prisma.opportunity.update({
+            where: { id: proposal.opportunityId },
+            data: {
+              estimatedValue: input.totalValue,
+              updatedBy: ctx.user.id,
+            } as Prisma.OpportunityUncheckedUpdateInput,
+          }),
+        );
+      }
+      const results = (await prisma.$transaction(writes)) as unknown[];
+      const version = results[0] as { id: string };
+
+      if (shouldSyncEstimated) {
+        await audit({
+          action: 'opportunity.estimated_value.synced_from_proposal',
+          tableName: 'opportunities',
+          recordId: proposal.opportunityId,
+          before: { estimatedValue: previousEstimatedValue },
+          after: {
+            estimatedValue: input.totalValue,
+            proposalId: input.proposalId,
+            proposalVersionId: version.id,
+            version: nextVersion,
+          },
+          ip: ctx.ip,
+          userAgent: ctx.userAgent,
+          tenantIdOverride: ctx.tenantId,
+        });
+      }
 
       // Dispara approval engine
       const approvalResult = await createApprovalsForProposalVersion(

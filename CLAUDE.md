@@ -1475,6 +1475,42 @@ foram fechados na Sprint 11.
     idêntico ANTES via stash) / 179 skipped (172 baseline + 7 do delta)**.
     Type-check zero. Lint zero. Roles cobertos: ADMIN, ANALISTA,
     DIRETOR_FINANCEIRO. Rollback trivial (reverter 2 arquivos)
+- **P-61** `src/server/trpc/trpc.ts` reportava 0% coverage estático —
+  módulo era exercido só por replay em `tenant-isolation-error-map.test.ts`
+  (P-46 fecho), coverage v8 não conta replay. **Fix caminho A**
+  (spec preferencial): refactor cirúrgico em `src/server/trpc/trpc.ts`
+  extraindo os 5 handlers como funções puras EXPORTADAS no mesmo
+  arquivo — `formatTrpcError`, `assertAuthContext`, `assertPlatformContext`,
+  `runMapErrors`, `runMonitor` (+ interface `MonitorHookInput`).
+  Os wrappers `t.middleware(...)` viraram one-liners delegando pras
+  funções puras. Contrato tRPC preservado (errorFormatter tipado com
+  `DefaultErrorShape` do SDK). `tests/unit/trpc-middlewares.test.ts`
+  novo com **21 casos**: formatTrpcError ×4 (tenant-isolation via cause;
+  via message fallback bypass mapErrors; ZodError flatten; erro comum
+  preserva shape), assertAuthContext ×3 (happy; sem user; sem tenantId),
+  assertPlatformContext ×3 (happy; sem platformUser; role errada
+  `PLATFORM_SUPPORT`), runMapErrors ×5 (passthrough; ForbiddenError →
+  FORBIDDEN; tenant-isolation Error → INTERNAL_SERVER_ERROR com cause
+  preservado pro Sentry; Error genérico re-throw intacto; TRPCError
+  original re-throw intacto), runMonitor ×6 (success mutation loga
+  Axiom ok=true sem Sentry; success query com AXIOM_LOG_QUERIES=false
+  NÃO loga; TRPCError FORBIDDEN loga sem Sentry pois
+  `shouldReportTrpcError('FORBIDDEN')=false`; Error genérico dispara
+  Sentry captureException com tags {procedure, kind, tenantId, userId,
+  errorCode}; string throw vira errorMessage=String(err) +
+  errorCode=INTERNAL_SERVER_ERROR; ctx com nulls não crash).
+  Padrão `vi.mock('@/lib/monitoring/axiom')` + `vi.mock('@/lib/monitoring/sentry')`
+  com spies capturando payloads. **Coverage antes:** 0%.
+  **Coverage depois:** **85.6% linhas / 88.88% branches / 100% funcs**
+  (v8, sobre trpc.ts). Uncovered residual: linhas 188-196, 201, 215-223
+  — só os wrappers `t.middleware((opts) => runHandler(...))` que
+  executam quando servidor tRPC roteia request real; a lógica está
+  100% coberta via os handlers puros. **Baseline:** pré-chip 768 passing
+  / 4 failing (field-encryption pré-existentes) / 172 skipped (944);
+  pós-chip **789 passing (+21) / 4 failing preservados / 172 skipped
+  (965)**. Zero regressão confirmada via `git stash` + `npm test`
+  no baseline anterior. Type-check zero. Lint zero. Rollback trivial
+  (reverter 1 arquivo + apagar teste)
 - **P-60** `communication-summary-errors.test.ts` 6 falhas — bisect
   identificou commit culpado `9aef608` (Sprint 15F, 2026-06-30) que
   trocou `callAiFeature` (mockável) por `dispatchChat` (roteador

@@ -1353,6 +1353,25 @@ foram fechados na Sprint 11.
     via `git stash`) / 172 skipped**. Type-check zero. Lint zero.
   - Memory `env-boolean-parsing.md` nova documenta a lição: nunca
     usar `z.coerce.boolean()` pra env — usar `envBoolean()`
+- **P-63** Auditoria retroativa `AXIOM_LOG_QUERIES` em prod — débito
+  documental preventivo do QA automation pós-bloco G. Verificação
+  `vercel env ls production` confirmou que a var **não estava
+  setada** em prod — default `.default(false)` seguiu vigente
+  durante todo o intervalo de exposição ao bug P-60. **Sem risco
+  retroativo confirmado.** Fecha como ação preventiva pura:
+  - `docs/Metodologia_Desenvolvimento_Venzo.md` §4.9 nova documenta a
+    regra "`envBoolean(default)` obrigatório em toda flag booleana
+    de env" com histórico do bug P-60 (`Boolean("false") === true`)
+    e link cruzado com os dois testes de regressão. §13.1 ganha
+    entrada `❌ z.coerce.boolean() em env var (usar envBoolean)`
+  - `tests/unit/env-schema-regression.test.ts` novo faz grep
+    estrutural em `src/lib/env.ts` proibindo `z.coerce.boolean(`.
+    Filtra linhas começadas com `//` pra ignorar a nota histórica
+    do P-60 no cabeçalho do arquivo. Complementa
+    `env-boolean-parsing.test.ts` que valida o parser case-a-caso.
+    +1 teste passando. Baseline preservado. Type-check zero. Lint
+    zero. QA automation exception aplicada (docs + regressão
+    estrutural, sem código de app novo)
 - **P-56** `billing.status` bloqueia todo role não-ADMIN (falso 403 no
   AppShell) — descoberto em uso 2026-07-05 pelo Fred logado como
   DIRETOR_COMERCIAL: `GET /api/trpc/billing.status?batch=1 → 403

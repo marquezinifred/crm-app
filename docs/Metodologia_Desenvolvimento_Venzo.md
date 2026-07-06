@@ -214,6 +214,25 @@ real só em rota específica de LGPD (`/api/v1/gdpr/erase` — anonimização).
 Breakpoint base 375px. Bottom navigation em mobile. Tables → cards em < 768px.
 Touch targets ≥ 44×44px.
 
+### 4.9. Feature flags booleanas — `envBoolean` obrigatório
+**NUNCA** usar `z.coerce.boolean()` para env vars. `z.coerce.boolean(v)` invoca
+`Boolean(v)` em JS, e `Boolean("false") === true` (qualquer string não-vazia é
+truthy). Isso silenciosamente **liga** flags que o admin escreveu como `"false"`.
+Bug bombástico descoberto no P-60 — `RBAC_GRANULAR_ENABLED`, `MULTI_AI_ENABLED`
+e `AXIOM_LOG_QUERIES` estavam sujeitos ao problema; um kill-switch escrito como
+`false` no `.env` era interpretado como `true` sem qualquer alerta, invalidando
+a promessa de rollback rápido.
+
+Use sempre o helper `envBoolean(default)` de `src/lib/env.ts`:
+- `"true" | "1" | "yes" | "on"` (case-insensitive, trim) → `true`
+- `"false" | "0" | "no" | "off" | ""` → `false`
+- `undefined`, `null` OU valor desconhecido → default
+
+Todo novo kill-switch de release ou flag runtime que entra em `envSchema` deve
+seguir esse padrão. Regressão coberta por
+`tests/unit/env-schema-regression.test.ts` (grep estrutural em `src/lib/env.ts`)
++ `tests/unit/env-boolean-parsing.test.ts` (parsing case-a-caso).
+
 ---
 
 ## 5. Padrões de teste
@@ -550,6 +569,7 @@ Em `~/.claude/projects/…/memory/`. Escopo:
 - ❌ `console.log(user)` (PII leak)
 - ❌ Hardcode de tenant IDs em teste (usar fixtures)
 - ❌ DELETE real (usar soft delete)
+- ❌ `z.coerce.boolean()` em env var (usar `envBoolean(default)` — ver §4.9)
 
 ### 13.2. Processo
 - ❌ Chip que resolve 2 débitos ao mesmo tempo

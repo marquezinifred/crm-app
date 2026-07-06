@@ -1320,6 +1320,40 @@ foram fechados na Sprint 11.
   ad-hoc
 
 **Débitos zerados em 2026-07-05:**
+- **P-53** Pipeline pages `.tsx` sem coverage — falta harness React —
+  chip `claude/p53-testing-library`. Piloto de Testing Library
+  (`@testing-library/react@^14.3.1` + `user-event@^14.6.1` +
+  `jest-dom@^6.9.1`; `jsdom` já era dep). Setup:
+  - `tests/setup.ts` importa `@testing-library/jest-dom/vitest` e
+    chama `cleanup()` em `afterEach` (isolamento DOM).
+  - `vitest.config.ts:include` ganha `tests/component/**/*.test.tsx`;
+    `coverage.exclude` remove `page.tsx` (mantém
+    layout/loading/error/not-found/template como excludes — não
+    têm lógica testável).
+  - `tests/component/pipeline-new.test.tsx` novo com **11 casos**:
+    render + label matching + filtro PARCEIRO na lista de owners;
+    máscara BRL P-50 em tempo real (digitação incremental, decimal
+    com vírgula, filtro não-numéricos); submit com `estimatedValue`
+    unformatado; submit sem valor envia `undefined`; `onSuccess`
+    dispara `router.push('/pipeline/<id>')` + toast Venzo; Cancelar
+    chama `router.back`; existência do bloco `create.error && …`.
+  - Coverage `src/app/pipeline/new/page.tsx` = **82.22% lines / 75%
+    branches / 57.14% funcs** (target ≥40%). Uncovered: origem
+    detalhada dinâmica, branch Parceiro, bloco `create.error`
+    (coberto pelos unit tests dedicados de `friendlyTrpcError`).
+  - Padrões coexistem: Testing Library ganha em ergonomia pra forms
+    com digitação e submit; `createRoot` manual do P-54 segue útil
+    pra pages que só validam mutation handlers.
+  - Débitos residuais: P-65 (`/companies` form), P-66 (`/contacts`
+    form), P-67 (`/admin/users` role picker), P-68 (migrar
+    pipeline-detail-page.test.tsx pra RTL) — todos opcionais,
+    padrão atual segue estável. Registrados no
+    `docs/Backlog_Pos_MVP.md`.
+  - Baseline: **759 passing** (baseline pré-P-53 = 748 + 11 novos)
+    / 4 pré-existentes por env vars em `field-encryption` (confirmado
+    idêntico ANTES do fix via `git stash`) / 172 skipped. Type-check
+    zero. Lint zero. Rollback trivial (reverter `vitest.config.ts`,
+    `tests/setup.ts`, `tests/component/`, `package.json`)
 - **P-60** `communication-summary-errors.test.ts` 6 falhas — bisect
   identificou commit culpado `9aef608` (Sprint 15F, 2026-06-30) que
   trocou `callAiFeature` (mockável) por `dispatchChat` (roteador

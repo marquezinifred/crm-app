@@ -1,4 +1,6 @@
 import { afterEach } from 'vitest';
+import '@testing-library/jest-dom/vitest';
+import { cleanup } from '@testing-library/react';
 
 // Sprint 0: setup minimalista. Sprint 1+ adiciona:
 //   - reset de banco de teste por arquivo
@@ -19,6 +21,8 @@ if (typeof Blob !== 'undefined' && typeof Blob.prototype.arrayBuffer !== 'functi
   };
 }
 
+// P-53 — Testing Library cleanup entre testes evita vazamento de DOM
+// e handlers de context (ToastProvider, mocks) entre casos.
 afterEach(() => {
-  // placeholder
+  cleanup();
 });

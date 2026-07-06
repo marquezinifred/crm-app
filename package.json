@@ -84,6 +84,9 @@
   "devDependencies": {
     "@faker-js/faker": "^9.9.0",
     "@playwright/test": "^1.61.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^14.3.1",
+    "@testing-library/user-event": "^14.6.1",
     "@types/node": "^22.20.0",
     "@types/react": "^18",
     "@types/react-dom": "^18",

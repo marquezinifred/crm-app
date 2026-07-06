@@ -196,20 +196,60 @@ com erro genérico não-mapeado que caía no ramo aiGenerated:false).
 
 Type-check zero. Lint zero.
 
-### P-61. `src/server/trpc/trpc.ts` reporta 0% coverage estático
+### P-61. `src/server/trpc/trpc.ts` reporta 0% coverage estático ✅ FECHADO em 2026-07-05
 **Severidade:** Baixa. Descoberto pelo QA automation pós-bloco A+B+C
 em 2026-07-05.
 
-Módulo é exercido por replay em `tests/unit/tenant-isolation-error-map.test.ts:121-179`
+Módulo era exercido por replay em `tests/unit/tenant-isolation-error-map.test.ts:121-179`
 (bloco "errorFormatter — integração com tRPC") sem instanciar
-servidor. Coverage estático não conta o replay. Comportamento
-validado semanticamente mas relatório fica ruim.
+servidor. Coverage estático não contava o replay. Comportamento
+validado semanticamente mas relatório ficava ruim.
 
-**Fix:** teste dedicado que instancia `mapErrors` middleware isolado
-OU comentário `/* istanbul ignore next */` documentando a razão da
-gap estatística.
+**Fix aplicado (caminho A da spec):** refactor cirúrgico em
+`src/server/trpc/trpc.ts` extraindo a lógica dos 5 handlers para
+funções puras EXPORTADAS no mesmo arquivo — `formatTrpcError`,
+`assertAuthContext`, `assertPlatformContext`, `runMapErrors`,
+`runMonitor` (+ interface `MonitorHookInput`). Os wrappers
+`t.middleware(...)` viraram one-liners que delegam pras funções
+puras. Zero mudança semântica: contrato do tRPC preservado
+(errorFormatter usa `DefaultErrorShape` do próprio SDK; middlewares
+mantêm signature `({ctx, path, type, next}) => next()`).
 
-**Esforço:** ~1h. Nice-to-have.
+`tests/unit/trpc-middlewares.test.ts` novo com **21 casos**:
+- `formatTrpcError` × 4 (tenant-isolation via cause; via message
+  fallback; ZodError flatten; erro comum preserva shape)
+- `assertAuthContext` × 3 (happy path; sem user; sem tenantId)
+- `assertPlatformContext` × 3 (happy path; sem platformUser; role
+  errada `PLATFORM_SUPPORT`)
+- `runMapErrors` × 5 (passthrough; ForbiddenError→FORBIDDEN;
+  tenant-isolation Error→INTERNAL_SERVER_ERROR com cause; Error
+  genérico re-throw intacto; TRPCError re-throw intacto)
+- `runMonitor` × 6 (success mutation loga Axiom ok=true; success
+  query com AXIOM_LOG_QUERIES=false NÃO loga; TRPCError FORBIDDEN
+  loga sem Sentry; Error genérico dispara Sentry captureException
+  com tags corretas; string throw vira errorMessage=String(err);
+  ctx nulls não crash)
+
+Padrão: `vi.mock` de `@/lib/monitoring/axiom` + `@/lib/monitoring/sentry`
+com spies capturando payloads. Reusa mesmo `process.env.DATABASE_URL`
+guard-import de `tests/unit/audit-context-loss.test.ts`.
+
+**Coverage antes:** 0% linhas / 0% funcs.
+**Coverage depois:** **85.6% linhas / 88.88% branches / 100% funcs**
+(v8, sobre trpc.ts). Uncovered: linhas 188-196, 201, 215-223 — só os
+wrappers `t.middleware((opts) => runHandler(...))` que executam
+quando servidor tRPC roteia request real. A lógica está 100%
+coberta via os handlers puros.
+
+**Baseline:** pré-chip 768 passing / 4 failing (field-encryption
+pré-existentes) / 172 skipped (944 total); pós-chip **789 passing
+(+21) / 4 failing preservados / 172 skipped (965 total)**. Zero
+regressão confirmada via `git stash` + `npm test` no baseline
+anterior. Type-check zero. Lint zero.
+
+**Rollback:** trivial — reverter `src/server/trpc/trpc.ts` (mantendo
+o formato original com handlers inline) + remover
+`tests/unit/trpc-middlewares.test.ts`.
 
 ### P-62. `RBAC_GRANULAR_ENABLED` flag morta — sem consumer runtime
 **Severidade:** Média (débito arquitetural). Descoberto pelo QA

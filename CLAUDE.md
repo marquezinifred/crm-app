@@ -1320,6 +1320,34 @@ foram fechados na Sprint 11.
   ad-hoc
 
 **Débitos zerados em 2026-07-05:**
+- **P-55** Contraste `.text-brand` na CookieBanner falha WCAG AA —
+  commit `eb38597` (pré-merge; final SHA muda no merge). `axe-smoke` reportava `color-contrast` no
+  `<a class="underline text-brand" href="/privacy">` da CookieBanner:
+  foreground `#7c3aee` (brand-primary HSL 262/84/58) sobre background
+  `#1f1a2d` (bg-card dark HSL 256/27/14) = **2.97:1**, abaixo do
+  4.5:1 requerido pra texto normal < 18px. Fix cirúrgico (caminho A
+  da spec — token no link): `src/components/legal/CookieBanner.tsx:97`
+  substitui `text-brand` por `text-brand-primary-light`. Tailwind já
+  expõe o token via `brand.primary-light` (HSL 273/92/75); mesmo
+  utility idiomático usado em `privacy/page.tsx`, `privacy-request/page.tsx`
+  e `page.tsx`. Contraste pós-fix: `#c585fa` sobre `#1f1a2d` = **6.52:1**
+  ✅ PASS WCAG AA (folga 45% acima do mínimo). Estética violet
+  preservada (light violet em vez do primary). Rejeitados: (a)
+  `text-brand-accent` (contraste 8.04 ✅ mas quebra estética — vira
+  laranja); (b) ajustar `--brand-primary` dark theme (bagunçaria
+  outros consumidores primary — escopo cirúrgico preferido); (c)
+  `font-semibold` como workaround (não conta pra WCAG AA em < 18px).
+  Verificação: script `scratchpad/contrast-check.mjs` reusa
+  `hexToRgb`, `srgbToLinear`, `relativeLuminance`, `computeContrast`
+  do `wcag-validator.service.ts`. Playwright axe-smoke BLOCKED por
+  infra P-59. **Baseline preservado: 768 passing / 4 falhas
+  pré-existentes por env vars em `field-encryption.test.ts`
+  (confirmado idêntico ANTES do fix) / 172 skipped**. Type-check
+  zero. Lint zero. Rollback trivial (1 linha). Débito adjacente
+  **P-64** registrado: 3 outras ocorrências de `.text-brand` fora do
+  escopo (`admin/branding/page.tsx:97` tab indicator +
+  `PolicyAcceptGate.tsx:60,67` dois `<a>` no modal LGPD) têm mesma
+  combinação 2.97:1 — replicar pattern em chip futuro
 - **P-60** `communication-summary-errors.test.ts` 6 falhas — bisect
   identificou commit culpado `9aef608` (Sprint 15F, 2026-06-30) que
   trocou `callAiFeature` (mockável) por `dispatchChat` (roteador

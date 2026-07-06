@@ -94,7 +94,7 @@ export function CookieBanner() {
             <p className="text-sm text-text-2 mt-1">
               Usamos cookies para operar o serviço, lembrar preferências e medir
               o desempenho. Você pode aceitar todos ou personalizar. Veja a{' '}
-              <a className="underline text-brand" href="/privacy">
+              <a className="underline text-brand-primary-light" href="/privacy">
                 Política de Privacidade
               </a>
               .

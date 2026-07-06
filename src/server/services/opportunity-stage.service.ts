@@ -2,6 +2,18 @@ import { prisma } from '@/server/db/client';
 import { audit } from '@/server/services/audit.service';
 import { OpportunityStage, OpportunityStatus, Prisma } from '@prisma/client';
 
+type PrismaProposalExitClient = {
+  proposalVersion: {
+    findFirst: (args: Prisma.ProposalVersionFindFirstArgs) => Promise<{
+      totalValue: Prisma.Decimal | null;
+      marginPct: Prisma.Decimal | null;
+    } | null>;
+  };
+  document: {
+    count: (args: Prisma.DocumentCountArgs) => Promise<number>;
+  };
+};
+
 export const STAGE_ORDER: OpportunityStage[] = [
   'PROSPECT',
   'LEAD',
@@ -80,6 +92,70 @@ export interface AdvanceStageInput {
   userAgent?: string | null;
 }
 
+/**
+ * Gate PROPOSTA → NEGOCIACAO (P-66).
+ *
+ * Além dos campos declarativos de STAGE_EXIT_REQUIREMENTS['PROPOSTA'] e do
+ * check "≥ 1 ProposalVersion" do Sprint 8 P-01, exige que a última versão
+ * de proposta tenha valor + margem preenchidos E que haja pelo menos 1
+ * Document categoria PROPOSTA_TECNICA ou PROPOSTA_COMERCIAL anexado.
+ *
+ * Aceita cliente Prisma OU cliente de transação — permite chamar do
+ * $transaction em `advanceStage` reusando o mesmo tx.
+ */
+export async function validateProposalExit(
+  client: PrismaProposalExitClient,
+  opportunityId: string,
+  tenantId: string,
+): Promise<void> {
+  const latestVersion = await client.proposalVersion.findFirst({
+    where: {
+      tenantId,
+      proposal: { opportunityId, deletedAt: null },
+      deletedAt: null,
+    },
+    orderBy: { version: 'desc' },
+    select: { totalValue: true, marginPct: true },
+  });
+  if (!latestVersion) {
+    throw new StageTransitionError(
+      'Crie uma versão de proposta com valor e margem preenchidos antes de avançar para Negociação.',
+      'MISSING_FIELDS',
+      { missingFields: ['proposalVersion'] },
+    );
+  }
+  if (latestVersion.totalValue === null || latestVersion.totalValue === undefined) {
+    throw new StageTransitionError(
+      'Preencha o valor total na proposta antes de avançar para Negociação.',
+      'MISSING_FIELDS',
+      { missingFields: ['proposalVersion.totalValue'] },
+    );
+  }
+  if (latestVersion.marginPct === null || latestVersion.marginPct === undefined) {
+    throw new StageTransitionError(
+      'Preencha a margem na proposta antes de avançar para Negociação.',
+      'MISSING_FIELDS',
+      { missingFields: ['proposalVersion.marginPct'] },
+    );
+  }
+  const docCount = await client.document.count({
+    where: {
+      tenantId,
+      relatedEntityType: 'opportunity',
+      relatedEntityId: opportunityId,
+      deletedAt: null,
+      category: { in: ['PROPOSTA_TECNICA', 'PROPOSTA_COMERCIAL'] },
+    },
+  });
+  if (docCount === 0) {
+    throw new StageTransitionError(
+      'Anexe o documento da proposta (Proposta Técnica ou Comercial) antes de avançar para Negociação.',
+      'MISSING_FIELDS',
+      { missingFields: ['document:PROPOSTA'] },
+    );
+  }
+}
+
 export class StageTransitionError extends Error {
   constructor(
     message: string,
@@ -135,19 +211,10 @@ export async function advanceStage(input: AdvanceStageInput): Promise<{
         );
       }
 
-      // PROPOSTA → NEGOCIACAO exige ≥ 1 ProposalVersion registrada
+      // PROPOSTA → NEGOCIACAO exige versão com valor + margem preenchidos
+      // E documento de proposta anexado (P-66; subsume o gate P-01 de ≥1 versão)
       if (input.fromStage === 'PROPOSTA') {
-        const propWithVersion = await tx.proposal.findFirst({
-          where: { tenantId: opp.tenantId, opportunityId: opp.id, deletedAt: null },
-          select: { versions: { select: { id: true }, take: 1 } },
-        });
-        if (!propWithVersion || propWithVersion.versions.length === 0) {
-          throw new StageTransitionError(
-            'É necessário criar pelo menos 1 versão de proposta antes de avançar para Negociação.',
-            'MISSING_FIELDS',
-            { missingFields: ['proposalVersion'] },
-          );
-        }
+        await validateProposalExit(tx, opp.id, opp.tenantId);
       }
 
       // NEGOCIACAO → ACEITE exige que as Approvals da proposta atual

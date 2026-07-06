@@ -1294,21 +1294,69 @@ rotativos).
 
 **Esforço:** ~3h. Reusar `checkRate` do rate-limiter service.
 
-### P-30. UI de revisão de `inbound_leads_rejected`
-**Severidade:** Baixa. Registrado ao fechar Sprint 15D.
+### ~~P-30. UI de revisão de `inbound_leads_rejected`~~ ✅ FECHADO 2026-07-05
 
-Router tRPC expõe `rejectedList` + `rejectedDiscard`, e a tab
-Histórico em `/admin/email-inbound` mostra os rejected junto com
-os created. Falta uma tela dedicada com:
-- Filtro por reason (low_confidence / blacklisted_domain / parse_error)
-- Ver o raw payload completo (útil pra debugar parser)
-- Botão "Promover" (força criar opp mesmo com confidence baixa)
-- Retry de parser em novos rejected (útil se subimos versão nova
-  do prompt IA)
+**Resolvido em 2026-07-05** (chip `claude/p30-rejected-review`).
 
-**Esforço:** ~4h. Não urgente porque a maioria dos rejected é spam
-que ninguém quer processar. Volta quando parser começar a ter
-falsos negativos.
+Tela dedicada `/admin/inbound-rejected` com filtro por motivo/status,
+raw payload viewer, promoção manual (bypassa confidence + blacklist),
+retry de parser (útil pós-upgrade do prompt IA) e descarte.
+
+**Backend:**
+- `inbound-lead-creator.service.ts` — `CreateInboundLeadInput` ganhou
+  campos opcionais `preParsed?: ParsedLead` (pula `parseLead`, evita
+  consumo IA) e `forcePromoted?: boolean` (bypassa checks de blacklist
+  E confidence). Path legado (sem os dois) inalterado. Endpoints
+  públicos webhook/email **não expõem** essas flags — só o router tRPC
+  usa via `rejectedPromote`
+- `inbound.rejectedList` estendido com filtro opcional `reason` (enum
+  com 6 valores). Match especial: `reason: 'parse_error'` casa qualquer
+  variante `parse_error:<Error.name>` (persistido com colon suffix
+  pelo service). Backward-compat: consumer existente `{take:30}` segue
+  funcionando
+- `inbound.rejectedPromote` (canConfigure) — reconstrói `ParsedLead`
+  de `parsedJson` (confidence virou string no JSON encoding, cast pra
+  number), chama `createInboundLead` com `forcePromoted:true`, marca
+  como `promoted` + reviewedById + reviewedAt, audit com
+  `tenantIdOverride`. BAD_REQUEST se status ≠ pending ou parsedJson=null
+- `inbound.rejectedRetryParser` (canConfigure) — re-executa `parseLead`
+  com versão atual, retorna preview `{parsed, wouldPromote}` sem
+  alterar o registro. Audit da tentativa
+
+**Frontend:**
+- `/admin/inbound-rejected/page.tsx` novo — PageHeader + 2 selects
+  (motivo, status), lista expansível de cards. Card colapsado: badges
+  reason/source/status + confidence % + data. Card expandido: `<pre>`
+  scrollable do raw payload + parsed JSON lado a lado (grid md:2col),
+  3 botões (Promover / Retry parser / Descartar), preview do retry
+  inline quando dispara. `AlertDialog` (design system, não `confirm()`)
+  em promover e descartar. Toast success/error via `useToast` +
+  `friendlyTrpcError`
+- `Sidebar.tsx` — item "Inbound rejeitados" novo em Admin com
+  `IconInbox` e gate `permission: 'inbound:configure'`
+
+**Testes:** +24 novos.
+- `tests/unit/inbound-rejected-router.test.ts` (17 casos) — filtro por
+  reason (4 casos incluindo startsWith em parse_error), promoção
+  (5 casos: bypass confidence+blacklist via forcePromoted, BAD_REQUEST
+  em parsedJson=null e status≠pending, cross-tenant NOT_FOUND, service
+  devolve rejected → INTERNAL_SERVER_ERROR), retry (5 casos:
+  wouldPromote true/false/null, cross-tenant, parseLead throw), RBAC
+  (3 casos FORBIDDEN em promote/retry/list)
+- `tests/unit/inbound-force-promoted.test.ts` (6 casos) — service com
+  Prisma mockado: sem force+lowConf → rejected, com force+lowConf →
+  created, sem force+blacklist → rejected, com force+blacklist →
+  created, preParsed pula parseLead, path legado sem preParsed preservado
+- `tests/unit/inbound-router-shape.test.ts` — +1 caso confirmando as
+  novas procedures expostas
+
+**Baseline:** 840 passing (+24 novos, base 816) / 0 failing / 172
+skipped (1012 total). Type-check zero. Lint zero. Rollback trivial
+(reverter 5 arquivos + apagar 2 testes + apagar `/admin/inbound-rejected/`).
+
+**Débitos residuais:** nenhum. Batch retry-all e auto-promote em
+background NÃO implementados por design — ação deve ser humana e
+individual (evita spam creation).
 
 ### ~~P-31. Push nativo pro vendedor quando alocado (mobile)~~ ✅ FECHADO 2026-07-05
 

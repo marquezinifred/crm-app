@@ -6,6 +6,8 @@ import { withPermission } from '@/server/trpc/middlewares';
 import { prisma } from '@/server/db/client';
 import { audit } from '@/server/services/audit.service';
 import { sendPushToUser } from '@/server/services/push-sender.service';
+import { createInboundLead } from '@/server/services/inbound-lead-creator.service';
+import { parseLead, type ParsedLead, type ParseSource } from '@/server/services/inbound-parser.service';
 import { zUuid } from '@/lib/validators';
 
 /**
@@ -371,6 +373,18 @@ export const inboundRouter = router({
       z
         .object({
           status: z.enum(['pending', 'discarded', 'promoted']).optional(),
+          // P-30 — filtro por reason. `parse_error` casa qualquer variante
+          // (o service persiste como `parse_error:<name>` do erro original).
+          reason: z
+            .enum([
+              'low_confidence',
+              'blacklisted_domain',
+              'parse_error',
+              'no_signal',
+              'rate_limited',
+              'rate_limited_per_sender',
+            ])
+            .optional(),
           take: z.number().int().min(1).max(200).default(30),
         })
         .default({ take: 30 }),
@@ -380,6 +394,11 @@ export const inboundRouter = router({
         where: {
           tenantId: ctx.tenantId,
           ...(input.status && { status: input.status }),
+          ...(input.reason && (
+            input.reason === 'parse_error'
+              ? { reason: { startsWith: 'parse_error' } }
+              : { reason: input.reason }
+          )),
         },
         orderBy: { receivedAt: 'desc' },
         take: input.take,
@@ -414,4 +433,143 @@ export const inboundRouter = router({
 
       return { ok: true };
     }),
+
+  // ═════════════════════════════════════════════════════════════════
+  // P-30 — Promoção manual + retry parser
+  // ═════════════════════════════════════════════════════════════════
+
+  /**
+   * Força criação de opp a partir de lead rejeitado — bypassa checks
+   * de confidence e blacklist. Requer `parsedJson` presente (rejects
+   * sem dados parseados precisam de retry parser antes).
+   */
+  rejectedPromote: canConfigure
+    .input(z.object({ id: zUuid }))
+    .mutation(async ({ input, ctx }) => {
+      const rejected = await prisma.inboundLeadRejected.findFirst({
+        where: { id: input.id, tenantId: ctx.tenantId },
+      });
+      if (!rejected) throw new TRPCError({ code: 'NOT_FOUND' });
+      if (rejected.status !== 'pending') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Lead já foi revisado (promovido ou descartado).',
+        });
+      }
+      if (!rejected.parsedJson) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Lead sem dados parseados. Use "Retry parser" primeiro.',
+        });
+      }
+
+      const preParsed = reconstructParsedLead(rejected.parsedJson);
+      const raw = rejected.rawPayload as string | Record<string, unknown>;
+
+      const result = await createInboundLead({
+        tenantId: ctx.tenantId,
+        source: rejected.source as ParseSource,
+        raw,
+        preParsed,
+        forcePromoted: true,
+        receivedAt: rejected.receivedAt,
+      });
+
+      if (result.kind !== 'created') {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Falha ao promover — service devolveu rejected.',
+        });
+      }
+
+      await prisma.inboundLeadRejected.update({
+        where: { id: input.id },
+        data: {
+          status: 'promoted',
+          reviewedById: ctx.user.id,
+          reviewedAt: new Date(),
+        },
+      });
+
+      await audit({
+        action: 'inbound.rejected.promoted',
+        tableName: 'inbound_leads_rejected',
+        recordId: input.id,
+        before: { status: rejected.status, reason: rejected.reason },
+        after: { status: 'promoted', opportunityId: result.opportunityId },
+        tenantIdOverride: ctx.tenantId,
+      });
+
+      return { ok: true, opportunityId: result.opportunityId };
+    }),
+
+  /**
+   * Re-executa parser (útil quando prompt IA foi atualizado ou nova
+   * versão do parser saiu). Retorna preview — não altera o registro.
+   * Gestor decide separadamente se promove com o novo parsed.
+   */
+  rejectedRetryParser: canConfigure
+    .input(z.object({ id: zUuid }))
+    .mutation(async ({ input, ctx }) => {
+      const rejected = await prisma.inboundLeadRejected.findFirst({
+        where: { id: input.id, tenantId: ctx.tenantId },
+      });
+      if (!rejected) throw new TRPCError({ code: 'NOT_FOUND' });
+
+      const raw = rejected.rawPayload as string | Record<string, unknown>;
+      let parsed: ParsedLead | null;
+      try {
+        parsed = await parseLead({
+          tenantId: ctx.tenantId,
+          raw,
+          source: rejected.source as ParseSource,
+        });
+      } catch (err) {
+        // Feature gate ou IA falhou — devolve erro estruturado; UI já
+        // exibe via friendlyTrpcError.
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Parser falhou: ${err instanceof Error ? err.message : 'unknown'}`,
+        });
+      }
+
+      await audit({
+        action: 'inbound.rejected.retry_parser',
+        tableName: 'inbound_leads_rejected',
+        recordId: input.id,
+        after: {
+          confidence: parsed?.confidence ?? null,
+          parsedBy: parsed?.parsedBy ?? null,
+        },
+        tenantIdOverride: ctx.tenantId,
+      });
+
+      return {
+        parsed,
+        wouldPromote: parsed !== null && parsed.confidence >= 0.4,
+      };
+    }),
 });
+
+/**
+ * Reconstitui ParsedLead a partir do `parsedJson` persistido. `confidence`
+ * foi salva como string por causa do JSON encoding — cast pra number.
+ */
+function reconstructParsedLead(json: unknown): ParsedLead {
+  const obj = (json ?? {}) as Record<string, unknown>;
+  const rawConfidence = obj.confidence;
+  const confidence =
+    typeof rawConfidence === 'number'
+      ? rawConfidence
+      : typeof rawConfidence === 'string'
+        ? Number(rawConfidence)
+        : 0;
+  return {
+    contact: (obj.contact as ParsedLead['contact']) ?? {},
+    company: (obj.company as ParsedLead['company']) ?? {},
+    interest: (obj.interest as ParsedLead['interest']) ?? {},
+    tracking: obj.tracking as Record<string, string> | undefined,
+    confidence: Number.isFinite(confidence) ? confidence : 0,
+    parsedBy: typeof obj.parsedBy === 'string' ? obj.parsedBy : 'manual_promoted',
+  };
+}

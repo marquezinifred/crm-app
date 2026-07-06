@@ -421,6 +421,32 @@ export SECRET="<cole-o-secret-daqui>"
 - V6 deixa passar blacklist (spam vira opp)
 - V8 permite mais de 10 req/min (rate limit não bloqueia bot)
 
+**Após 8 variações + alocação, revisar leads rejeitados:**
+
+10. **P-30 — Revisão de leads rejeitados em `/admin/inbound-rejected`**
+    - Sidebar → Admin → "Inbound rejeitados" (gate `inbound:configure`, aparece só pra ADMIN e outros users com permission granted).
+    - **Passa se:** tela abre com PageHeader + 2 Selects (motivo/status). Se rodou V6 e V7 acima, cards de `blacklisted_domain` e `low_confidence`/`no_signal` aparecem.
+    - Filtro por motivo: escolher "Domínio bloqueado" → só cards `blacklisted_domain`. Escolher "Erro de parse" → casa `parse_error:X` (startsWith).
+    - Expandir card (clicar no botão): mostra `<pre>` do **raw payload cru** + parsed JSON lado a lado. Útil pra debugar por que o parser não pegou.
+    - **P-30 promoção manual (bypass do confidence + blacklist):**
+      - Num card `low_confidence`, botão "Promover" → `AlertDialog` "Promover lead?" primary → confirmar.
+      - **Passa se:** toast success "Lead promovido. Oportunidade <id>… criada." + card muda status pra "Promovido" (badge success) + botões somem.
+      - SQL: `SELECT id, status FROM opportunities WHERE tenant_id=<X> AND is_inbound=true ORDER BY created_at DESC LIMIT 1;` → nova opp existe.
+      - SQL: `SELECT status FROM inbound_leads_rejected WHERE id='<rej_id>';` → `promoted`.
+      - **Falha (crítico dados):** promover mesmo com `parsedJson=null` → BAD_REQUEST esperado. Se conseguir promover sem parsed, criou opp sem dados de contato.
+    - **P-30 retry parser:**
+      - Num card `no_signal` (V7 acima), botão "Retry parser".
+      - **Passa se:** toast success "Parser re-executado." + seção "Novo resultado do parser" aparece embaixo do parsed original, mostrando novo output do parser atual (útil quando prompt IA foi atualizado). Card **não muda de status** — só é preview.
+      - Se novo confidence ≥ 0.4, toast diz "Confiança suficiente pra promover." → clicar "Promover" completa o fluxo.
+    - **P-30 descarte:** botão "Descartar" → `AlertDialog` danger → confirmar → status vira "Descartado" (badge default). Não é reversível.
+    - **P-30 RBAC:** logar como user com `inbound:view_queue` MAS sem `inbound:configure`.
+      - **Passa se:** consegue abrir a lista (view_queue basta pro `rejectedList`) MAS botões Promover/Retry/Descartar disparam 403 FORBIDDEN quando clica.
+      - Sidebar não mostra o item pra esse user (gate é `inbound:configure`).
+    - **Falha se:**
+      - Alterar registro sem passar por audit (SQL `SELECT * FROM audit_logs WHERE action LIKE 'inbound.rejected.%' ORDER BY created_at DESC LIMIT 3;` deve ter linha por ação com `tenant_id_override` batendo o tenant atual)
+      - Cross-tenant: acessar `/admin/inbound-rejected` no tenant A e promover ID de rejected do tenant B (via API direta) → deve retornar NOT_FOUND
+      - `confirm()` nativo em vez de `AlertDialog` Venzo
+
 ### 2.5. RBAC Granular (~10min — Sprint 15E)
 
 **Só rodar se `RBAC_GRANULAR_ENABLED=true` no ambiente.** Caso contrário, RBAC segue path legado — testes automatizados de §5 cobrem.

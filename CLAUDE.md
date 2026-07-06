@@ -1320,6 +1320,57 @@ foram fechados na Sprint 11.
   ad-hoc
 
 **Débitos zerados em 2026-07-05:**
+- **P-30** UI de revisão de `inbound_leads_rejected` — débito residual
+  do Sprint 15D fechado. Antes do fix, o Gestor de Inbound só via
+  rejects lado a lado com created na tab Histórico de `/admin/email-inbound`,
+  sem filtro, sem raw payload viewer, sem promoção manual, sem retry
+  de parser. Fix em 3 partes:
+  - **`src/server/services/inbound-lead-creator.service.ts`** —
+    `CreateInboundLeadInput` ganhou `preParsed?: ParsedLead` e
+    `forcePromoted?: boolean`. `preParsed` presente pula `parseLead`
+    (economiza IA). `forcePromoted=true` bypassa checks de blacklist E
+    confidence. Endpoints webhook/email públicos **não expõem** essas
+    flags — só o router tRPC usa via `rejectedPromote`
+  - **`src/server/trpc/routers/inbound.ts`** — `rejectedList` estendido
+    com filtro opcional `reason` (enum 6 valores; `parse_error` casa
+    qualquer variante `parse_error:<Error.name>` via `startsWith`,
+    porque o service persiste com colon suffix). `rejectedPromote`
+    (canConfigure) reconstrói `ParsedLead` de `parsedJson`, chama
+    `createInboundLead({forcePromoted:true, preParsed})`, marca como
+    `promoted` + reviewedById, audit com `tenantIdOverride`.
+    `rejectedRetryParser` (canConfigure) re-executa `parseLead` sem
+    alterar registro, retorna preview `{parsed, wouldPromote}`.
+    BAD_REQUEST em promote quando `parsedJson=null` ou `status≠pending`
+  - **`src/app/admin/inbound-rejected/page.tsx`** — PageHeader + 2
+    Selects (motivo/status), lista expansível. Card colapsado com
+    badges reason (colorido por severidade: danger=blacklist,
+    warning=parse/rate, info=default) + source + status + confidence %
+    + data. Card expandido: `<pre>` scrollable do raw payload + parsed
+    JSON lado a lado em grid, botões Promover/Retry/Descartar, preview
+    do retry inline. `AlertDialog` (design system, não `confirm()`)
+    em promover e descartar. Toast success/error via `useToast` +
+    `friendlyTrpcError`. Empty state Venzo "Sem leads rejeitados.
+    Fila limpa."
+  - `Sidebar.tsx` — item "Inbound rejeitados" em Admin gated por
+    `permission: 'inbound:configure'`
+  - Testes: +24 novos. `tests/unit/inbound-rejected-router.test.ts`
+    (17 casos: filtro por reason 4x, promote 5x incluindo BAD_REQUEST
+    parsedJson=null / status≠pending, cross-tenant NOT_FOUND, service
+    devolve rejected → INTERNAL_SERVER_ERROR; retry 5x incluindo
+    wouldPromote thresholds e throw; RBAC FORBIDDEN 3x).
+    `tests/unit/inbound-force-promoted.test.ts` (6 casos: sem/com
+    forcePromoted × low confidence + blacklist, preParsed pula
+    parseLead, path legado preservado). Shape test +1 caso.
+    Baseline: **840 passing (+24 novos, base 816 pós-bloco G) / 0
+    failing / 172 skipped (1012 total)**. Type-check zero. Lint zero.
+    Rollback trivial (reverter 5 arquivos + apagar 2 testes + apagar
+    diretório `/admin/inbound-rejected/`).
+  - Contrato preservado: endpoints públicos webhook (`/api/v1/inbound/lead`)
+    e email não expõem `forcePromoted`/`preParsed`; validação por
+    Zod no worker. `rejectedList` continua servindo a tab Histórico
+    em `/admin/email-inbound` (input `{take:30}` sem reason segue
+    OK — filtro é opcional). Zero mudança na semântica pré-P-30 do
+    fluxo automático
 - **P-60** `communication-summary-errors.test.ts` 6 falhas — bisect
   identificou commit culpado `9aef608` (Sprint 15F, 2026-06-30) que
   trocou `callAiFeature` (mockável) por `dispatchChat` (roteador

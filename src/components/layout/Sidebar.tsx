@@ -77,6 +77,7 @@ const SECTIONS: Section[] = [
       { href: '/admin/contracts', label: 'Config. contratos', Icon: IconSettings },
       { href: '/admin/conversion-rates', label: 'Taxas de conversão', Icon: IconPercent },
       { href: '/admin/email-inbound', label: 'E-mail inbound', Icon: IconAt, permission: 'inbound:configure' },
+      { href: '/admin/inbound-rejected', label: 'Inbound rejeitados', Icon: IconInbox, permission: 'inbound:configure' },
       { href: '/admin/templates', label: 'Templates', Icon: IconFiles },
       { href: '/admin/privacy', label: 'LGPD', Icon: IconLock },
       { href: '/imports', label: 'Importação', Icon: IconUpload, permission: 'import:run' },

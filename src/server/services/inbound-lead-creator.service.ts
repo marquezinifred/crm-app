@@ -37,6 +37,18 @@ export interface CreateInboundLeadInput {
   receivedAt?: Date;
   /** Origem do parser: quando webhook, o secret usado; quando email, o endereço. */
   originIdentifier?: string;
+  /**
+   * P-30 — reusa parsed já existente (row de inbound_leads_rejected).
+   * Quando presente, pula parseLead() e economiza chamada IA.
+   */
+  preParsed?: ParsedLead;
+  /**
+   * P-30 — promoção manual força criação de opp mesmo com confidence < 0.4
+   * ou domínio blacklisted. Usado APENAS via ação humana (Gestor de Inbound
+   * revisando fila de rejected). Público não pode disparar essa flag —
+   * endpoint webhook não expõe.
+   */
+  forcePromoted?: boolean;
 }
 
 const MIN_CONFIDENCE = 0.4;
@@ -202,23 +214,27 @@ export async function createInboundLead(
     });
     const blacklist = config?.blacklistDomains ?? [];
 
-    // 2. Parser
+    // 2. Parser — pula se caller já forneceu preParsed (P-30 promoção manual).
     let parsed: ParsedLead | null;
-    try {
-      parsed = await parseLead({
-        tenantId: input.tenantId,
-        raw: input.raw,
-        source: input.source,
-      });
-    } catch (err) {
-      // Feature gate error ou IA falhou irrecuperavelmente
-      const rejectedId = await saveRejected(
-        input.tenantId,
-        input,
-        null,
-        `parse_error:${err instanceof Error ? err.name : 'unknown'}`,
-      );
-      return { kind: 'rejected', rejectedId, reason: 'parse_error' };
+    if (input.preParsed) {
+      parsed = input.preParsed;
+    } else {
+      try {
+        parsed = await parseLead({
+          tenantId: input.tenantId,
+          raw: input.raw,
+          source: input.source,
+        });
+      } catch (err) {
+        // Feature gate error ou IA falhou irrecuperavelmente
+        const rejectedId = await saveRejected(
+          input.tenantId,
+          input,
+          null,
+          `parse_error:${err instanceof Error ? err.name : 'unknown'}`,
+        );
+        return { kind: 'rejected', rejectedId, reason: 'parse_error' };
+      }
     }
 
     if (!parsed) {
@@ -226,8 +242,8 @@ export async function createInboundLead(
       return { kind: 'rejected', rejectedId, reason: 'no_signal' };
     }
 
-    // 3. Blacklist
-    if (isBlacklisted(parsed.contact.email, blacklist)) {
+    // 3. Blacklist — bypass se forcePromoted (Gestor revisou e decidiu criar mesmo assim)
+    if (!input.forcePromoted && isBlacklisted(parsed.contact.email, blacklist)) {
       const rejectedId = await saveRejected(
         input.tenantId,
         input,
@@ -237,8 +253,8 @@ export async function createInboundLead(
       return { kind: 'rejected', rejectedId, reason: 'blacklisted_domain' };
     }
 
-    // 4. Confidence baixa
-    if (parsed.confidence < MIN_CONFIDENCE) {
+    // 4. Confidence baixa — bypass se forcePromoted
+    if (!input.forcePromoted && parsed.confidence < MIN_CONFIDENCE) {
       const rejectedId = await saveRejected(
         input.tenantId,
         input,

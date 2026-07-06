@@ -28,4 +28,10 @@ describe('inboundRouter — shape', () => {
     expect(proc.rejectedList).toBeDefined();
     expect(proc.rejectedDiscard).toBeDefined();
   });
+
+  it('P-30 — expõe rejectedPromote / rejectedRetryParser', () => {
+    const proc = inboundRouter._def.procedures as Record<string, unknown>;
+    expect(proc.rejectedPromote).toBeDefined();
+    expect(proc.rejectedRetryParser).toBeDefined();
+  });
 });

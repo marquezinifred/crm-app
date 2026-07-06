@@ -240,29 +240,27 @@ commits + `prisma migrate reset`. Documentar isso em CLAUDE.md.
 
 **Esforço:** ~2h implementação do gate real OU ~15min limpeza doc.
 
-### P-63. Auditoria retroativa `AXIOM_LOG_QUERIES` em prod (potencial LGPD)
-**Severidade:** 🟡 Alta (potencial risco LGPD). Descoberto pelo QA
-automation pós-bloco G em 2026-07-05.
+### ~~P-63. Auditoria retroativa `AXIOM_LOG_QUERIES` em prod (potencial LGPD)~~ ✅ FECHADO 2026-07-05
+Chip `claude/p63-envboolean-doc` — sem risco retroativo confirmado
+(`vercel env ls production` mostrou que a var não estava setada, então
+o default `.default(false)` seguiu vigente durante todo o intervalo de
+exposição ao bug P-60). Ação preventiva entregue como docs + teste de
+regressão estrutural:
+- `docs/Metodologia_Desenvolvimento_Venzo.md` §4.9 nova documenta a
+  regra "`envBoolean(default)` obrigatório em toda flag booleana de
+  env" com o histórico do bug e link cruzado pros dois testes
+- `docs/Metodologia_Desenvolvimento_Venzo.md` §13.1 (Antipatterns
+  código) ganha entrada `❌ z.coerce.boolean() em env var (usar
+  envBoolean(default))`
+- `tests/unit/env-schema-regression.test.ts` novo faz grep estrutural
+  em `src/lib/env.ts` proibindo `z.coerce.boolean(`. Filtra linhas de
+  comentário `//` pra evitar falso positivo com a nota histórica do
+  P-60 no cabeçalho. Complementa `env-boolean-parsing.test.ts` (P-60)
+  que valida o parser case-a-caso
 
-Análise do bug `z.coerce.boolean("false") === true` (P-60): se em
-prod `AXIOM_LOG_QUERIES=false` estivesse setada explicitamente antes
-de 2026-07-05, estava sendo interpretada como `true` — logando
-todas as queries tRPC no dataset Axiom, incluindo payloads que podem
-conter PII (filtros por email, CNPJ, nome).
-
-**Verificação atual:** `vercel env ls production` mostrou que a
-var **não está setada** em prod. Default `.default(false)` aplicava
-`false` corretamente pré-bug. **Sem risco retroativo confirmado.**
-
-**Ação preventiva:** documentar em `docs/Metodologia_Desenvolvimento_Venzo.md`
-que kill-switches devem usar `envBoolean` (nunca `z.coerce.boolean`).
-Adicionar teste de regressão que grep proíbe `z.coerce.boolean` em
-`src/lib/env.ts`.
-
-**Se um dia a var for setada em prod:** rodar checklist do sanity
-check (spec do QA automation §8) antes do próximo deploy.
-
-**Esforço:** ~30min (docs + regressão test).
+Se um dia a var for setada em prod, rodar checklist do sanity check
+(spec do QA automation §8) antes do próximo deploy — não há risco
+histórico a auditar.
 
 ### ~~P-54. Botão Salvar sem feedback + edits não limpos + IA bloqueada indefinidamente~~ ✅ FECHADO 2026-07-05
 Chip `claude/p54-salvar-feedback` (worktree `blissful-zhukovsky-24abed`),

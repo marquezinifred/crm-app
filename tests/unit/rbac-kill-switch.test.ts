@@ -1,140 +1,299 @@
-/* eslint-disable */
 // @vitest-environment node
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-nocheck -- QA scaffolding Sprint 15E; describe.skip até validação manual
 //
-// AC-23 — Kill-switch RBAC_GRANULAR_ENABLED=false restaura path legado
-//          (withRoles/withCapability) sem redeploy.
-
+// P-62 — Kill-switch runtime real do RBAC granular.
+// `env.RBAC_GRANULAR_ENABLED=false` → `hasPermission` volta ao role default
+// puro (sem overrides, sem cache). `true` (default P-62) preserva Sprint 15E
+// completo. Rollback é reversível — só religar a flag.
 process.env.DATABASE_URL ??= 'postgresql://test:test@localhost:5432/test';
 process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ??= 'pk_test_stub';
 process.env.CLERK_SECRET_KEY ??= 'sk_test_stub';
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { USER_IDS, makeCtx } from '../helpers/rbac-fixtures';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const hasPermissionSpy = vi.fn();
-const legacyGuardSpy = vi.fn();
-
-vi.mock('@/lib/auth/rbac', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/auth/rbac')>();
-  return {
-    ...actual,
-    hasPermission: (...args: unknown[]) => hasPermissionSpy(...args),
-    // Path legado
-    hasCapability: (...args: unknown[]) => legacyGuardSpy(...args),
-  };
-});
-
-vi.mock('@/server/db/client', () => ({
-  prisma: new Proxy({}, {
-    get: () => new Proxy({}, { get: () => vi.fn().mockResolvedValue(null) }),
-  }),
+const { mockUser, mockEnv } = vi.hoisted(() => ({
+  mockUser: {
+    findUnique: vi.fn(),
+    update: vi.fn(async () => undefined),
+  },
+  // P-62 — mockar env pra alternar a flag entre testes sem re-importar módulos.
+  mockEnv: { RBAC_GRANULAR_ENABLED: true },
 }));
 
-vi.mock('@/server/services/audit.service', () => ({ audit: vi.fn() }));
+vi.mock('@/server/db/client', () => ({
+  prisma: { user: mockUser },
+}));
 
-beforeEach(() => vi.clearAllMocks());
-afterEach(() => {
-  delete process.env.RBAC_GRANULAR_ENABLED;
+vi.mock('@/server/db/tenant-context', () => ({
+  runAsSystem: <T,>(fn: () => Promise<T>) => fn(),
+}));
+
+vi.mock('@/lib/env', () => ({ env: mockEnv }));
+
+import { hasPermission } from '@/server/services/permissions.service';
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mockEnv.RBAC_GRANULAR_ENABLED = true;
 });
 
-describe.skip('AC-23 — kill-switch RBAC_GRANULAR_ENABLED', () => {
-  it('flag=true (default): withPermission usa hasPermission async', async () => {
-    process.env.RBAC_GRANULAR_ENABLED = 'true';
-    hasPermissionSpy.mockResolvedValue(true);
+describe('P-62 — kill-switch RBAC_GRANULAR_ENABLED', () => {
+  describe('flag=true (default): path granular Sprint 15E', () => {
+    it('cache hit: usa cachedPermissions in-memory (respeita override granted)', async () => {
+      mockUser.findUnique.mockResolvedValueOnce({
+        role: 'ANALISTA',
+        platformRole: null,
+        cachedPermissions: ['opportunity:read', 'inbound:view_queue'],
+        cachedPermissionsAt: new Date('2026-07-05T12:00:00Z'),
+        deletedAt: null,
+        active: true,
+      });
 
-    const { withPermission } = await import('@/server/trpc/middlewares');
-    const middleware = withPermission('opportunity:read');
-    // Middleware é factory que retorna async fn
-    // Executa o middleware manualmente
-    const ctx = makeCtx({ role: 'ANALISTA' });
-    await middleware({
-      ctx: { user: ctx.user, tenantId: ctx.tenantId },
-      next: async () => ({ ok: true }),
-    } as never);
+      // ANALISTA não tem `inbound:view_queue` no default — mas override
+      // granted foi cacheado. Path granular deve retornar true.
+      const ok = await hasPermission('user-1', 'inbound:view_queue');
 
-    expect(hasPermissionSpy).toHaveBeenCalledWith(
-      ctx.user.id,
-      'opportunity:read',
-    );
-    expect(legacyGuardSpy).not.toHaveBeenCalled();
+      expect(ok).toBe(true);
+      expect(mockUser.findUnique).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        select: expect.objectContaining({
+          cachedPermissions: true,
+          cachedPermissionsAt: true,
+        }),
+      });
+    });
+
+    it('cache hit: respeita override revoked (permission fora do array)', async () => {
+      mockUser.findUnique.mockResolvedValueOnce({
+        role: 'ADMIN',
+        platformRole: null,
+        // ADMIN teria `user:delete` default; overrides revoked → não aparece.
+        cachedPermissions: ['opportunity:read', 'company:read'],
+        cachedPermissionsAt: new Date('2026-07-05T12:00:00Z'),
+        deletedAt: null,
+        active: true,
+      });
+
+      const ok = await hasPermission('user-1', 'user:delete');
+
+      expect(ok).toBe(false);
+    });
+
+    it('Platform Owner bypass total (não olha cache)', async () => {
+      mockUser.findUnique.mockResolvedValueOnce({
+        role: 'ADMIN',
+        platformRole: 'PLATFORM_OWNER',
+        cachedPermissions: [],
+        cachedPermissionsAt: null,
+        deletedAt: null,
+        active: true,
+      });
+
+      const ok = await hasPermission('platform-1', 'user:delete');
+
+      expect(ok).toBe(true);
+    });
+
+    it('deletedAt/inactive → false mesmo com cache válido', async () => {
+      mockUser.findUnique.mockResolvedValueOnce({
+        role: 'ADMIN',
+        platformRole: null,
+        cachedPermissions: ['user:delete'],
+        cachedPermissionsAt: new Date(),
+        deletedAt: new Date('2026-07-01'),
+        active: true,
+      });
+
+      const ok = await hasPermission('user-1', 'user:delete');
+
+      expect(ok).toBe(false);
+    });
   });
 
-  it('flag=false: withPermission cai no path legado hasCapability', async () => {
-    process.env.RBAC_GRANULAR_ENABLED = 'false';
-    legacyGuardSpy.mockReturnValue(true);
+  describe('flag=false: rollback ao role default puro', () => {
+    it('ADMIN mantém acesso via ROLE_DEFAULT_PERMISSIONS (60 permissions)', async () => {
+      mockEnv.RBAC_GRANULAR_ENABLED = false;
+      mockUser.findUnique.mockResolvedValueOnce({
+        role: 'ADMIN',
+        platformRole: null,
+        deletedAt: null,
+        active: true,
+      });
 
-    const { withPermission } = await import('@/server/trpc/middlewares');
-    const middleware = withPermission('opportunity:read');
-    const ctx = makeCtx({ role: 'ANALISTA' });
-    await middleware({
-      ctx: { user: ctx.user, tenantId: ctx.tenantId },
-      next: async () => ({ ok: true }),
-    } as never);
+      const ok = await hasPermission('user-1', 'opportunity:update');
 
-    // Path legado — traduz permission em resource:action pra hasCapability
-    expect(legacyGuardSpy).toHaveBeenCalled();
-    expect(hasPermissionSpy).not.toHaveBeenCalled();
+      expect(ok).toBe(true);
+      // Query enxuta — sem cachedPermissions no select
+      expect(mockUser.findUnique).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        select: {
+          role: true,
+          platformRole: true,
+          deletedAt: true,
+          active: true,
+        },
+      });
+    });
+
+    it('ANALISTA com override granted PERDE acesso — kill-switch ignora overrides', async () => {
+      mockEnv.RBAC_GRANULAR_ENABLED = false;
+      // Cenário crítico do rollback: analista tinha `inbound:view_queue`
+      // via grant individual do admin. Com flag=false, override é ignorado
+      // e cai no default puro — ANALISTA não tem essa permission por default.
+      mockUser.findUnique.mockResolvedValueOnce({
+        role: 'ANALISTA',
+        platformRole: null,
+        deletedAt: null,
+        active: true,
+      });
+
+      const ok = await hasPermission('user-1', 'inbound:view_queue');
+
+      expect(ok).toBe(false);
+    });
+
+    it('ANALISTA mantém `opportunity:read` (é default do role)', async () => {
+      mockEnv.RBAC_GRANULAR_ENABLED = false;
+      mockUser.findUnique.mockResolvedValueOnce({
+        role: 'ANALISTA',
+        platformRole: null,
+        deletedAt: null,
+        active: true,
+      });
+
+      const ok = await hasPermission('user-1', 'opportunity:read');
+
+      expect(ok).toBe(true);
+    });
+
+    it('ANALISTA não tem `opportunity:read_others` (Sprint 15E breaking change preservado)', async () => {
+      mockEnv.RBAC_GRANULAR_ENABLED = false;
+      mockUser.findUnique.mockResolvedValueOnce({
+        role: 'ANALISTA',
+        platformRole: null,
+        deletedAt: null,
+        active: true,
+      });
+
+      const ok = await hasPermission('user-1', 'opportunity:read_others');
+
+      expect(ok).toBe(false);
+    });
+
+    it('Platform Owner bypass funciona também com flag=false', async () => {
+      mockEnv.RBAC_GRANULAR_ENABLED = false;
+      mockUser.findUnique.mockResolvedValueOnce({
+        role: 'ADMIN',
+        platformRole: 'PLATFORM_OWNER',
+        deletedAt: null,
+        active: true,
+      });
+
+      // audit:read_platform não está em nenhum role default — só Platform Owner
+      const ok = await hasPermission('platform-1', 'audit:read_platform');
+
+      expect(ok).toBe(true);
+    });
+
+    it('deletedAt → false (respeitado no path legado também)', async () => {
+      mockEnv.RBAC_GRANULAR_ENABLED = false;
+      mockUser.findUnique.mockResolvedValueOnce({
+        role: 'ADMIN',
+        platformRole: null,
+        deletedAt: new Date('2026-07-01'),
+        active: true,
+      });
+
+      const ok = await hasPermission('user-1', 'opportunity:update');
+
+      expect(ok).toBe(false);
+    });
+
+    it('active=false → false', async () => {
+      mockEnv.RBAC_GRANULAR_ENABLED = false;
+      mockUser.findUnique.mockResolvedValueOnce({
+        role: 'ADMIN',
+        platformRole: null,
+        deletedAt: null,
+        active: false,
+      });
+
+      const ok = await hasPermission('user-1', 'opportunity:update');
+
+      expect(ok).toBe(false);
+    });
+
+    it('user não encontrado → false', async () => {
+      mockEnv.RBAC_GRANULAR_ENABLED = false;
+      mockUser.findUnique.mockResolvedValueOnce(null);
+
+      const ok = await hasPermission('user-missing', 'opportunity:read');
+
+      expect(ok).toBe(false);
+    });
+
+    it('PARCEIRO com apenas 5 permissions default (sem overrides)', async () => {
+      mockEnv.RBAC_GRANULAR_ENABLED = false;
+      mockUser.findUnique.mockResolvedValueOnce({
+        role: 'PARCEIRO',
+        platformRole: null,
+        deletedAt: null,
+        active: true,
+      });
+
+      const canRead = await hasPermission('user-1', 'company:read');
+      expect(canRead).toBe(true);
+    });
+
+    it('PARCEIRO sem `opportunity:update` (não está no default)', async () => {
+      mockEnv.RBAC_GRANULAR_ENABLED = false;
+      mockUser.findUnique.mockResolvedValueOnce({
+        role: 'PARCEIRO',
+        platformRole: null,
+        deletedAt: null,
+        active: true,
+      });
+
+      const ok = await hasPermission('user-1', 'opportunity:update');
+      expect(ok).toBe(false);
+    });
   });
 
-  it('flag=false: middleware ainda respeita 403 (path legado retorna false)', async () => {
-    process.env.RBAC_GRANULAR_ENABLED = 'false';
-    legacyGuardSpy.mockReturnValue(false);
+  describe('rollback reversível (flip mid-runtime)', () => {
+    it('flag=true→false→true no mesmo user preserva default; override volta a valer quando religa', async () => {
+      // Round 1: flag ON, cache com override granted
+      mockEnv.RBAC_GRANULAR_ENABLED = true;
+      mockUser.findUnique.mockResolvedValueOnce({
+        role: 'ANALISTA',
+        platformRole: null,
+        cachedPermissions: ['opportunity:read', 'inbound:view_queue'],
+        cachedPermissionsAt: new Date(),
+        deletedAt: null,
+        active: true,
+      });
+      expect(await hasPermission('user-1', 'inbound:view_queue')).toBe(true);
 
-    const { withPermission } = await import('@/server/trpc/middlewares');
-    const middleware = withPermission('user:delete');
-    const ctx = makeCtx({ role: 'PARCEIRO' });
+      // Round 2: flag OFF — mesmo user, mesma DB row (cache preservado no DB
+      // mas ignorado runtime). Query nova, sem cachedPermissions no select.
+      mockEnv.RBAC_GRANULAR_ENABLED = false;
+      mockUser.findUnique.mockResolvedValueOnce({
+        role: 'ANALISTA',
+        platformRole: null,
+        deletedAt: null,
+        active: true,
+      });
+      expect(await hasPermission('user-1', 'inbound:view_queue')).toBe(false);
 
-    await expect(
-      middleware({
-        ctx: { user: ctx.user, tenantId: ctx.tenantId },
-        next: async () => ({ ok: true }),
-      } as never),
-    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
-  });
-
-  it('rollback: setar flag mid-request funciona sem redeploy', async () => {
-    // Round 1: flag ON
-    process.env.RBAC_GRANULAR_ENABLED = 'true';
-    hasPermissionSpy.mockResolvedValue(true);
-
-    const { withPermission } = await import('@/server/trpc/middlewares');
-    const middleware = withPermission('opportunity:read');
-    const ctx = makeCtx({ role: 'ADMIN' });
-
-    await middleware({
-      ctx: { user: ctx.user, tenantId: ctx.tenantId },
-      next: async () => ({ ok: true }),
-    } as never);
-    expect(hasPermissionSpy).toHaveBeenCalledTimes(1);
-
-    // Round 2: flag flip pra OFF
-    process.env.RBAC_GRANULAR_ENABLED = 'false';
-    legacyGuardSpy.mockReturnValue(true);
-    hasPermissionSpy.mockClear();
-
-    await middleware({
-      ctx: { user: ctx.user, tenantId: ctx.tenantId },
-      next: async () => ({ ok: true }),
-    } as never);
-    expect(hasPermissionSpy).not.toHaveBeenCalled();
-    expect(legacyGuardSpy).toHaveBeenCalled();
-  });
-
-  it('sem env var (undefined) trata como default=true (Sprint 15E ativo)', async () => {
-    delete process.env.RBAC_GRANULAR_ENABLED;
-    hasPermissionSpy.mockResolvedValue(true);
-
-    const { withPermission } = await import('@/server/trpc/middlewares');
-    const middleware = withPermission('opportunity:read');
-    const ctx = makeCtx({ role: 'ANALISTA' });
-
-    await middleware({
-      ctx: { user: ctx.user, tenantId: ctx.tenantId },
-      next: async () => ({ ok: true }),
-    } as never);
-
-    expect(hasPermissionSpy).toHaveBeenCalled();
+      // Round 3: flag ON de novo, cache DB ainda íntegro — override volta.
+      mockEnv.RBAC_GRANULAR_ENABLED = true;
+      mockUser.findUnique.mockResolvedValueOnce({
+        role: 'ANALISTA',
+        platformRole: null,
+        cachedPermissions: ['opportunity:read', 'inbound:view_queue'],
+        cachedPermissionsAt: new Date(),
+        deletedAt: null,
+        active: true,
+      });
+      expect(await hasPermission('user-1', 'inbound:view_queue')).toBe(true);
+    });
   });
 });

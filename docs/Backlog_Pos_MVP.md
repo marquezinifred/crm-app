@@ -2663,6 +2663,91 @@ apagar script + 3 testes novos. Rollback preserva dados no DB
 (read_others removida no catálogo mas overrides antigos ainda
 persistem enquanto não rodar `15g:migrate-permissions`).
 
+### Sprint 15G Fase 2a — Service central `sales-structure` ✅ FECHADO 2026-07-07
+Spec: `docs/chip-prompts/Sprint_15G_estrutura_comercial.md` §5
+(escopo do Service) + `docs/Sprint_15G_amendments.md` A4 (PARCEIRO
+early-return) + A5 (transação `is_primary`). Chip Modo B disjunto
+do Fase 2b (router tRPC). **Fecha o débito P-73 candidato do QA
+Fase 1** — a flag `SALES_STRUCTURE_ENABLED` finalmente ganha
+consumer runtime real.
+
+**Escopo cirúrgico:**
+- `src/server/services/sales-structure.service.ts` **novo**:
+  * Interface `OpportunityVisibilityScope` exportada exatamente
+    conforme contrato §5 (`{type, filter, teamSize?}`). Fase 2b
+    consome sem re-declarar.
+  * `SalesStructureService.resolveOpportunityScope(user, tenantId)`
+    com ordem canônica: (1) kill-switch OFF → fallback pré-15G
+    binário (`read_team|read_all` → ALL, senão OWN); (2) PARCEIRO
+    early-return (A4) — sem `hasPermission`, sem subtree; (3)
+    `read_all` → ALL; (4) `read_team` + subtree via
+    `SalesUnitRepository.getSubtreeMemberIds` → TEAM com `teamSize`
+    (fallback OWN se subtree vazia); (5) default OWN.
+  * `createUnitType` valida level 1–8 (BAD_REQUEST fora), delega
+    pro Prisma com `tenantId` explícito no data.
+  * `addMember` com cross-tenant guard (unit + user por tenantId
+    → NOT_FOUND se qualquer errado); A5 preservado via
+    `$transaction` quando `isPrimary=true` (`updateMany` desmarca
+    outras primaries + `upsert`); `invalidateUserPermissionsCache`
+    + `audit()` com `tenantIdOverride`.
+  * `removeMember` com `deleteMany` filtrando `tenantId`;
+    `invalidateUserPermissionsCache` + `audit()`.
+- Kill-switch é o **primeiro** check em `resolveOpportunityScope` —
+  fecha P-73 candidato do QA Fase 1 (flag `SALES_STRUCTURE_ENABLED`
+  passa a ter consumer runtime que respeita rollback rápido §5.4).
+- Zero mudança em `_app.ts`, routers, Repository, migrations, UI —
+  escopo disjunto do Fase 2b.
+
+**Não escopo desta fase** (Fase 2b: router tRPC + `_app.ts`;
+Fase 3: migrar `opportunities.visibilityWhere` + `reports.visibility`
+pro service; Fase 4: UI).
+
+**Testes:** **+26 novos** em `tests/unit/sales-structure-service.test.ts`
+cobrindo:
+- `resolveOpportunityScope` com kill-switch OFF (3 casos: read_all→ALL,
+  só read_team→ALL fallback binário, sem perm→OWN + 1 caso PARCEIRO
+  preservado)
+- `resolveOpportunityScope` com kill-switch ON (6 casos: PARCEIRO
+  com/sem partnerCompanyId, read_all→ALL, read_team + subtree
+  não-vazia→TEAM, read_team + subtree vazia→OWN fallback, sem perm→OWN)
+- `createUnitType` (5 casos: level 0/9/1.5 BAD_REQUEST; level 1
+  passa data completa; level 8 no limite)
+- `addMember` (8 casos: cross-tenant guard unit ausente + user
+  ausente; `isPrimary=true` dispara `$transaction` com updateMany
+  filtrando `unitId: { not }`; `isPrimary=false` só upsert; cache
+  invalidation; audit com tenantIdOverride; lookup usa tenantId
+  do input; cross-tenant OTHER_TENANT sanity)
+- `removeMember` (3 casos: deleteMany com tenantId; cache
+  invalidation; audit com tenantIdOverride)
+
+Padrão de mock: `vi.mock('@/lib/env')` com Proxy pra flipar
+`SALES_STRUCTURE_ENABLED` entre testes (pattern P-62 do
+`rbac-kill-switch.test.ts`); mocks separados de `@/server/db/client`,
+`@/server/services/permissions.service`,
+`@/server/db/repositories/sales-unit.repository` e
+`@/server/services/audit.service`.
+
+**Baseline preservado:** pré-chip = 985 passing / 0 failing /
+174 skipped (bate 1:1 com QA report Fase 1). Pós-chip =
+**1011 passing (+26 exatos) / 0 failing / 174 skipped**. Zero
+regressão. Type-check zero. Lint zero.
+
+**Rollback:** reverter 2 arquivos (`sales-structure.service.ts` +
+`sales-structure-service.test.ts`). Rollback preserva schema DB —
+nenhuma mudança runtime foi ativada ainda (Fase 2b registra o
+router; Fase 3 migra os consumers reais).
+
+**Débitos residuais:**
+- Fase 2b (router tRPC + `_app.ts`): próximo chip Modo B disjunto
+- Fase 3 (migrar `opportunities.visibilityWhere` +
+  `reports.visibility` pro `SalesStructureService.resolveOpportunityScope`):
+  requer Fase 2b entregue + backfill A2 aplicado em prod
+- Fase 4 (UI `/admin/commercial-structure` + seed de demonstração
+  + cenários Roteiro QA): depende de Fase 3 mergida
+- Coverage integration real de `getSubtreeMemberIds` no path novo
+  (requer `DATABASE_URL_TEST`): fica pra Fase 3 quando o consumer
+  real existir
+
 ---
 
 ## 🚀 Roadmap médio prazo (Sprints 16–20)

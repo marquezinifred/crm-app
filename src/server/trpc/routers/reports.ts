@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { router, protectedProcedure } from '@/server/trpc/trpc';
 import { adminOnlyProcedure, withPermission } from '@/server/trpc/middlewares';
-import { hasPermission } from '@/server/services/permissions.service';
+import { SalesStructureService } from '@/server/services/sales-structure.service';
 import { prisma } from '@/server/db/client';
 import { audit } from '@/server/services/audit.service';
 import {
@@ -40,31 +40,20 @@ type FilterInput = z.infer<typeof filterInput>;
  * tudo. Para PERFORMANCE, ANALISTA enxerga próprias linhas + média anônima
  * do time (sem detalhe individual de outros).
  */
-// Sprint 15E — refatorado. Antes: role-based hardcoded. Agora: gate por
-// `opportunity:read_others`. PARCEIRO segue com row-level engagement filter.
-// Sprint 15G Fase 1b: `read_others` foi removida e substituída por
-// `opportunity:read_team` (equipe gerenciada) e `opportunity:read_all`
-// (tenant inteiro). Fase 3 vai wirar filtro real por team.
+// Sprint 15G Fase 3b (emenda A3) — delega ao SalesStructureService pra
+// alinhar a resolução de escopo com opportunities.ts. `scope.filter` já
+// inclui tenantId (segunda barreira defensiva). Chip Modo B do Fase 3.
 async function visibility(
   role: UserRole,
   userId: string,
+  tenantId: string,
   partnerCompanyId: string | null,
 ): Promise<Prisma.OpportunityWhereInput> {
-  if (role === 'PARCEIRO') {
-    if (partnerCompanyId) {
-      return {
-        partnerCompanyId,
-        partnerEngagements: { some: { partnerCompanyId, status: 'APPROVED' } },
-      };
-    }
-    return { id: '00000000-0000-0000-0000-000000000000' };
-  }
-  const [canSeeTeam, canSeeAllTenant] = await Promise.all([
-    hasPermission(userId, 'opportunity:read_team'),
-    hasPermission(userId, 'opportunity:read_all'),
-  ]);
-  if (canSeeTeam || canSeeAllTenant) return {};
-  return { OR: [{ ownerId: userId }, { team: { some: { userId } } }] };
+  const scope = await SalesStructureService.resolveOpportunityScope(
+    { id: userId, role, partnerCompanyId },
+    tenantId,
+  );
+  return scope.filter;
 }
 
 function whereFromFilters(f: FilterInput): Prisma.OpportunityWhereInput {
@@ -88,12 +77,13 @@ function whereFromFilters(f: FilterInput): Prisma.OpportunityWhereInput {
 async function loadOpps(
   role: UserRole,
   userId: string,
+  tenantId: string,
   partnerCompanyId: string | null,
   filters: FilterInput,
 ): Promise<OpportunitySnap[]> {
   const opps = await prisma.opportunity.findMany({
     where: {
-      ...(await visibility(role, userId, partnerCompanyId)),
+      ...(await visibility(role, userId, tenantId, partnerCompanyId)),
       ...whereFromFilters(filters),
     },
     include: { owner: { select: { fullName: true } } },
@@ -117,12 +107,13 @@ async function loadOpps(
 async function loadInboundOpps(
   role: UserRole,
   userId: string,
+  tenantId: string,
   partnerCompanyId: string | null,
   filters: FilterInput,
 ): Promise<InboundOpSnap[]> {
   const opps = await prisma.opportunity.findMany({
     where: {
-      ...(await visibility(role, userId, partnerCompanyId)),
+      ...(await visibility(role, userId, tenantId, partnerCompanyId)),
       ...whereFromFilters(filters),
     },
     select: {
@@ -148,25 +139,45 @@ async function loadInboundOpps(
   }));
 }
 
-// Sprint 15E — antes: `opportunity:read` (proxy grosso). Agora:
-// `reports:read` como gate mínimo. Cada procedure aplica filtro adicional
-// via `hasPermission(userId, 'opportunity:read_others')` pra reduzir o
-// escopo dos dados ao próprio user quando não pode ver dos outros.
+// Sprint 15G Fase 3b — `reports:read` como gate mínimo. Redução de escopo
+// (OWN vs TEAM vs ALL vs PARTNER) fica com `SalesStructureService`. Sprint 5
+// preservado: ANALISTA em performanceByOwner mostra só a própria linha +
+// média anônima do time (independentemente de scope).
 const canRead = withPermission('reports:read');
 
 export const reportsRouter = router({
   funnel: canRead.input(filterInput.default({})).query(async ({ input, ctx }) => {
-    const opps = await loadOpps(ctx.user.role, ctx.user.id, ctx.user.partnerCompanyId, input);
+    const opps = await loadOpps(
+      ctx.user.role,
+      ctx.user.id,
+      ctx.tenantId,
+      ctx.user.partnerCompanyId,
+      input,
+    );
     return computeFunnel(opps);
   }),
 
   winLoss: canRead.input(filterInput.default({})).query(async ({ input, ctx }) => {
-    const opps = await loadOpps(ctx.user.role, ctx.user.id, ctx.user.partnerCompanyId, input);
+    const opps = await loadOpps(
+      ctx.user.role,
+      ctx.user.id,
+      ctx.tenantId,
+      ctx.user.partnerCompanyId,
+      input,
+    );
     return winLossBreakdown(opps);
   }),
 
   timePerStage: canRead.input(filterInput.default({})).query(async ({ input, ctx }) => {
-    const oppIds = (await loadOpps(ctx.user.role, ctx.user.id, ctx.user.partnerCompanyId, input)).map((o) => o.id);
+    const oppIds = (
+      await loadOpps(
+        ctx.user.role,
+        ctx.user.id,
+        ctx.tenantId,
+        ctx.user.partnerCompanyId,
+        input,
+      )
+    ).map((o) => o.id);
     if (oppIds.length === 0) {
       return {} as ReturnType<typeof avgDaysPerStage>;
     }
@@ -178,9 +189,18 @@ export const reportsRouter = router({
   }),
 
   performanceByOwner: canRead.input(filterInput.default({})).query(async ({ input, ctx }) => {
-    const opps = await loadOpps(ctx.user.role, ctx.user.id, ctx.user.partnerCompanyId, input);
+    const opps = await loadOpps(
+      ctx.user.role,
+      ctx.user.id,
+      ctx.tenantId,
+      ctx.user.partnerCompanyId,
+      input,
+    );
     const report = performanceByOwner(opps);
-    // ANALISTA: filtra para mostrar apenas a própria linha + manter teamAverage
+    // Sprint 5 preservado: ANALISTA vê só a própria linha + média anônima.
+    // Regra é role-based (não scope-based): mesmo que scope resolver evolua
+    // pra dar outra visibilidade ao ANALISTA no futuro, aqui a linha
+    // individual dos outros continua oculta.
     if (ctx.user.role === 'ANALISTA') {
       const ownRow = report.rows.find((r) => r.ownerId === ctx.user.id);
       return {
@@ -193,7 +213,13 @@ export const reportsRouter = router({
   }),
 
   revenueProjection: canRead.input(filterInput.default({})).query(async ({ input, ctx }) => {
-    const opps = await loadOpps(ctx.user.role, ctx.user.id, ctx.user.partnerCompanyId, input);
+    const opps = await loadOpps(
+      ctx.user.role,
+      ctx.user.id,
+      ctx.tenantId,
+      ctx.user.partnerCompanyId,
+      input,
+    );
     const tenant = await prisma.tenant.findUnique({
       where: { id: ctx.tenantId },
       select: { conversionRates: true },
@@ -213,6 +239,7 @@ export const reportsRouter = router({
       const opps = await loadInboundOpps(
         ctx.user.role,
         ctx.user.id,
+        ctx.tenantId,
         ctx.user.partnerCompanyId,
         input,
       );

@@ -2862,6 +2862,92 @@ Type-check zero. Lint zero.
 `sales-structure.ts` router, `sales-structure.service.ts` stub) +
 apagar 1 teste. Sem migration, sem UI, sem lock-in.
 
+### Sprint 15G Fase 3a — Migração `opportunities.ts` pro scope resolver ✅ FECHADO 2026-07-07
+Spec: `docs/chip-prompts/Sprint_15G_estrutura_comercial.md` §7 +
+`docs/Sprint_15G_amendments.md` A4. Modo B disjunto do Fase 3b
+(reports).
+
+**Escopo cirúrgico (Fase 3a — só camada visibility em opportunities):**
+- `src/server/trpc/routers/opportunities.ts`:
+  * `visibilityWhere` refatorado — antes checava duas permissions
+    em paralelo (`opportunity:read_team | opportunity:read_all`) e
+    inline PARCEIRO row-level. Agora **delega inteiramente** a
+    `SalesStructureService.resolveOpportunityScope({id, role,
+    partnerCompanyId}, tenantId)`. Assinatura ganha `tenantId` e
+    troca `role: string` por `role: UserRole`. Retorna `scope.filter`
+    puro (já inclui tenantId).
+  * PARCEIRO: lógica removida do router (service faz A4 early-return
+    interno). Zero duplicação — se PARCEIRO aparecer em outro caller
+    futuro, o service continua sendo autoridade.
+  * `list` / `kanban` / `byId`: os 3 callers passam
+    `(ctx.user.id, ctx.tenantId, ctx.user.role, ctx.user.partnerCompanyId)`.
+  * **Composição via `AND: [scopeFilter]`** — decisão crítica de
+    segurança. Antes o `visibilityWhere` devolvia `{OR: [...]}` (para
+    ANALISTA) ou `{}` (para ADMIN), e o spread com `input.ownerId`
+    respeitava o OR do scope (Prisma resolve por chave). Agora o
+    scope filter é um objeto flat (`{tenantId, ownerId: userId}` para
+    OWN, `{tenantId, ownerId: {in:[...]}}` para TEAM, etc.), e um
+    spread com `...input.ownerId` sobrescreveria a chave `ownerId`
+    protegida do scope — regressão de segurança. `AND: [scopeFilter]`
+    força intersecção Prisma: scope nunca é sobrescrito, filtros de
+    input compõem por cima. Comentário JSDoc no `visibilityWhere`
+    documenta a razão.
+  * `count` no `list` continua reusando a mesma variável `where` do
+    `findMany` (consistência já garantida — teste dedicado cobre).
+
+**Migração de shape (não regride semântica pré-15G):**
+- Kill-switch `SALES_STRUCTURE_ENABLED=false` (default): service
+  faz fallback binário `read_team | read_all` → ALL, replicando
+  comportamento pré-15G exato. Router não sabe disso — só delega.
+- Kill-switch ligado: usa subtree via `SalesUnitRepository.getSubtreeMemberIds`,
+  ANALISTA sem override continua OWN, PARCEIRO com engagement
+  APPROVED continua PARTNER. Rollback é reversível apenas religando
+  a flag (não mexe em DB).
+
+**Testes:** **+12 novos** em `tests/unit/opportunities-visibility-scope.test.ts`:
+- ADMIN + read_all → scope ALL, filter só tenantId, AND wrapper OK
+- GESTOR + read_team → scope TEAM, filter tem ownerId IN subtree
+- ANALISTA sem overrides → scope OWN, filter tem ownerId=self
+- PARCEIRO com partnerCompanyId → scope PARTNER com engagement
+  APPROVED (regressão A4: service passou pelo early-return correto)
+- PARCEIRO sem partnerCompanyId → scope NONE com uuid zero
+- Composição input.stage + input.search com scope OWN preservam ambos
+- **Regressão de segurança**: input.ownerId=X + scope OWN → scope
+  ownerId NÃO sobrescrito (AND wrapper garante intersecção Prisma)
+- kanban: GESTOR + scope TEAM aplicado + status ACTIVE
+- byId: cross-tenant → NOT_FOUND (scope.tenantId ≠ opp.tenantId)
+- byId: PARCEIRO opp não engajada → NOT_FOUND (engagement APPROVED
+  ausente)
+- Kill-switch OFF: router propaga fallback do service sem mudar shape
+- list: `count` reusa o mesmo `where` do `findMany`
+
+Padrão de mock: `vi.mock('@/server/services/sales-structure.service')`
+com stub `resolveOpportunityScope` (pattern do
+`sales-structure-router.test.ts`) — cada teste devolve o shape
+esperado pelo service (ALL/TEAM/OWN/PARTNER/NONE) e valida que o
+router compôs corretamente. Service em si tem sua bateria de testes
+completa em `sales-structure-service.test.ts` (Fase 2a).
+
+**Baseline preservado:** pré-chip main = 1034 passing / 0 failing /
+174 skipped. Pós-chip = **1046 passing (+12 novos) / 0 failing / 174
+skipped** (1220 total). Zero regressão confirmada. Type-check zero.
+Lint zero.
+
+**Débitos residuais (escopo Fase 3b + Fase 4):**
+- **Fase 3b** (disjunto — chip separado): `reports.ts` `visibility()`
+  em `loadOpps` + `loadInboundOpps`. Mesmo pattern de delegação;
+  não conflita com Fase 3a porque o arquivo é outro
+- **Backfill A2**: script de migração de overrides individuais
+  `opportunity:read_others` → `opportunity:read_team` +
+  `opportunity:read_all`. Depende de Fase 3b entregue
+- **Fase 4**: UI `/admin/commercial-structure` (CRUD tipos, árvore
+  drag-drop, membros) + seed demo 3 níveis + cenários QA
+
+**Rollback:** reverter 1 arquivo (`opportunities.ts`) + apagar 1
+teste (`opportunities-visibility-scope.test.ts`). Zero migration,
+zero UI, zero lock-in. Kill-switch OFF continua funcionando via
+service (fallback pré-15G).
+
 ---
 
 ## 🚀 Roadmap médio prazo (Sprints 16–20)

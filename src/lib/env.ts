@@ -114,6 +114,15 @@ const envSchema = z.object({
   // Ver docs/Sprint_15F_IA_Multi_Provider.md.
   MULTI_AI_ENABLED: envBoolean(false),
 
+  // Sprint 15G Fase 1a — Kill-switch da estrutura comercial hierárquica.
+  // false (default): fase 2 (resolveOpportunityScope + visibility por subtree)
+  // ainda não consome esta flag; behavior pré-15G preservado. Migration
+  // 0031 cria as tabelas + backfill A1 (1 unit "Padrão" por tenant) sempre.
+  // true: chip Fase 2 lê a subtree via SalesUnitRepository e restringe
+  // visibilidade de opportunities/reports. Rollback = flag false (sem
+  // redeploy). Ver docs/Sprint_15G_amendments.md §A1.
+  SALES_STRUCTURE_ENABLED: envBoolean(false),
+
   // Sprint 15E — Kill-switch do RBAC granular (permissions individuais).
   // true (default; P-62): `hasPermission` async respeita role default +
   // overrides individuais + cache (Sprint 15E completo).

@@ -2748,6 +2748,120 @@ router; Fase 3 migra os consumers reais).
   (requer `DATABASE_URL_TEST`): fica pra Fase 3 quando o consumer
   real existir
 
+### Sprint 15G Fase 2b — Router tRPC `salesStructure` ✅ FECHADO 2026-07-07
+Spec: `docs/chip-prompts/Sprint_15G_estrutura_comercial.md` §8 +
+`docs/Sprint_15G_amendments.md` A5/A7. Modo B disjunto do Fase 2a
+(service) — contrato compartilhado via
+`@/server/services/sales-structure.service`.
+
+**Escopo cirúrgico (Fase 2b — só camada tRPC):**
+- `src/server/trpc/routers/sales-structure.ts` novo com 11 procedures:
+  * **Types (3):** `listUnitTypes` (read), `createUnitType` (manage),
+    `updateUnitType` (manage — cross-tenant guard), `deleteUnitType`
+    (manage — CONFLICT se em uso por unidades ativas)
+  * **Units (4):** `getTree` (read — delega ao Repository),
+    `getUnit` (read — Promise.all: findFirst + getAncestors +
+    getChildren, NOT_FOUND cross-tenant), `createUnit` (manage —
+    **A7 crítico**: NUNCA `prisma.salesUnit.create` direto, sempre
+    `SalesUnitRepository.create` calcula path ltree; cross-tenant
+    guard no typeId e parentId), `deactivateUnit` (manage — soft
+    delete + CONFLICT se há filhos ativos)
+  * **Members (2):** `addMember` / `removeMember` (manage — delegam
+    ao Service; A5 semântica de `is_primary` fica no Service com
+    transação atômica `updateMany + upsert`)
+  * **Scope (1):** `myScope` (só `protectedProcedure` — resposta
+    role-aware via `SalesStructureService.resolveOpportunityScope`
+    com user + tenantId; UI do pipeline consome pra scope switcher)
+- `src/server/trpc/routers/_app.ts` registra `salesStructure:
+  salesStructureRouter`
+- `src/server/services/sales-structure.service.ts` **stub** com
+  contrato compartilhado (types + funções que throw "não
+  implementado — aguardando Fase 2a"). **No merge do Fase 2a, o
+  arquivo é substituído** pela implementação real; testes seguem
+  passando porque mockam o service.
+
+**Contrato exportado (consumido por Fase 3 + UI Fase 4):**
+```typescript
+export type ScopeType = 'ALL' | 'TEAM' | 'OWN' | 'PARTNER' | 'NONE';
+export interface OpportunityVisibilityScope {
+  type: ScopeType;
+  filter: Prisma.OpportunityWhereInput;
+  teamSize?: number;
+}
+```
+
+**Guards obrigatórios em toda mutation (§4 metodologia):**
+- Cross-tenant guard (§4.1): `findFirst({where: {id, tenantId}})`
+  antes de update/delete/getUnit → NOT_FOUND se não pertence
+- Audit (§4.4): `tenantIdOverride: ctx.tenantId` em toda mutation
+  do router (service faz internamente em addMember/removeMember)
+- RBAC (§4.5): `withPermission('sales_structure:read'|'manage')`
+  conforme §8 spec; `myScope` só autenticado
+- A7 (§8 spec): `createUnit` delega a `SalesUnitRepository.create`
+  — proibição documentada de `prisma.salesUnit.create` direto
+- Backstop P-42 (§4.10): update/delete não passam tenantId no
+  data (WHERE injection cobre)
+
+**Testes:** **+23 novos** em `tests/unit/sales-structure-router.test.ts`:
+- listUnitTypes retorna filtrado por tenantId + orderBy level asc
+- createUnitType delega ao Service + audit + tenantIdOverride
+- createUnitType Zod rejeita level 0 e 9 (fora do range 1..8)
+- createUnitType Zod rejeita color não-hex
+- updateUnitType NOT_FOUND cross-tenant + guard bloqueia update
+- updateUnitType sucesso + audit quando é do tenant
+- deleteUnitType CONFLICT quando em uso + delete não chamado
+- deleteUnitType sucesso + audit quando 0 usos
+- getTree delega ao Repository.getTree
+- getUnit NOT_FOUND cross-tenant
+- getUnit retorna `{unit, ancestors, children}` + filtro
+  `deletedAt: null`
+- createUnit cross-tenant NOT_FOUND no typeId (parent skip)
+- createUnit cross-tenant NOT_FOUND no parentId (com typeId OK)
+- **createUnit A7**: delega a `SalesUnitRepository.create` + audit
+  (mock verifica que Repository foi chamado, não prisma direto)
+- createUnit parentId omitido vira `null` (nó raiz) + parent check
+  pulado
+- deactivateUnit CONFLICT com filhos ativos
+- deactivateUnit soft delete (active=false + deletedAt Date) + audit
+- addMember delega ao Service com assignedBy=ctx.user.id
+- addMember Zod rejeita role inválido ("OWNER" fora do enum)
+- removeMember delega ao Service com tenantId injetado
+- myScope delega ao Service com `{id, role, partnerCompanyId}` +
+  tenantId
+- RBAC FORBIDDEN quando user sem `sales_structure:read`
+- RBAC FORBIDDEN quando user sem `sales_structure:manage`
+
+Padrão de mock (compat com Fase 2a):
+`vi.mock('@/server/services/sales-structure.service')` com stubs
+locais (`svcCreateUnitType`, `svcAddMember`, `svcRemoveMember`,
+`svcResolveScope`) + `vi.mock('@/server/db/repositories/sales-unit.repository')`
++ `vi.mock('@/server/db/client')`. No merge com Fase 2a a
+implementação real toma o lugar, mas os testes seguem passando
+porque exercitam só o contrato mockado.
+
+**Baseline preservado:** pré-chip = 985 passing / 0 failing / 174
+skipped (pós-Fase 1a+1b). Pós-chip = **1008 passing (+23 novos) /
+0 failing / 174 skipped** (1182 total). Zero regressão confirmada.
+Type-check zero. Lint zero.
+
+**Débitos residuais (escopo Fase 2a + Fase 3 + Fase 4):**
+- **Fase 2a** (paralelo a este chip): implementação real de
+  `SalesStructureService` — resolveOpportunityScope (A4 PARCEIRO
+  early-return, respeita `SALES_STRUCTURE_ENABLED`), createUnitType
+  (persistência + audit), addMember/removeMember (A5 transação
+  atômica para `is_primary`)
+- **Fase 3**: opportunities.ts `visibilityWhere` migra pra
+  `resolveOpportunityScope`; reports.ts `visibility()` (loadOpps +
+  loadInboundOpps) idem; script backfill A2 read_others → read_team/
+  read_all
+- **Fase 4**: UI `/admin/commercial-structure` (CRUD tipos, árvore
+  drag-drop, membros), seed de demonstração 3 níveis, cenários
+  QA `Roteiro_QA_Homologacao_Staging.md`
+
+**Rollback:** reverter 3 arquivos (`_app.ts` snippet,
+`sales-structure.ts` router, `sales-structure.service.ts` stub) +
+apagar 1 teste. Sem migration, sem UI, sem lock-in.
+
 ---
 
 ## 🚀 Roadmap médio prazo (Sprints 16–20)

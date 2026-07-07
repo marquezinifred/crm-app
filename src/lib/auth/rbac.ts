@@ -35,14 +35,23 @@ export { PERMISSIONS_CATALOG, PERMISSION_KEYS, type Permission } from './permiss
 
 /**
  * Defaults por role. Contagens validadas contra `docs/permission-matrix.md`
- * (2026-07-01):
- *   ADMIN=60, DIRETOR_COMERCIAL=39, DIRETOR_OPERACOES=25,
- *   DIRETOR_FINANCEIRO=18, GESTOR=31, ANALISTA=23, PARCEIRO=5.
+ * + `docs/Sprint_15G_estrutura_comercial.md` §6.
+ *
+ * Pós-Sprint 15G Fase 1b — `opportunity:read_others` removida do
+ * catálogo; substituída por `opportunity:read_team` (equipe gerenciada)
+ * + `opportunity:read_all` (tenant inteiro). Adicionado `sales_structure:read`
+ * (todos exceto PARCEIRO) e `sales_structure:manage` (só ADMIN).
+ *
+ * Contagens novas:
+ *   ADMIN=63 (60 − 1 + 4), DIRETOR_COMERCIAL=41 (39 − 1 + 3),
+ *   DIRETOR_OPERACOES=27 (25 − 1 + 3), DIRETOR_FINANCEIRO=19 (18 − 1 + 2),
+ *   GESTOR=32 (31 − 1 + 2), ANALISTA=24 (23 + 1), PARCEIRO=5 (inalterado).
  *
  * NOTA sobre PARCEIRO: as 5 permissions são potenciais — o service
  * aplica filtro row-level (Sprint 7) restringindo ao escopo dos
  * engajamentos aprovados. Nenhum PARCEIRO enxerga companies/contacts/
- * opps/documents fora dos que participa.
+ * opps/documents fora dos que participa. PARCEIRO não recebe
+ * sales_structure:read pois nunca opera na estrutura interna.
  */
 export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, ReadonlySet<Permission>> = {
   ADMIN: new Set<Permission>([
@@ -56,9 +65,12 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, ReadonlySet<Permission>>
     'company:create', 'company:read', 'company:update', 'company:delete',
     // Contacts (4)
     'contact:create', 'contact:read', 'contact:update', 'contact:delete',
-    // Opportunities (7)
+    // Opportunities (8) — Sprint 15G split read_others → read_team + read_all
     'opportunity:create', 'opportunity:read', 'opportunity:update', 'opportunity:delete',
-    'opportunity:advance_stage', 'opportunity:cancel', 'opportunity:read_others',
+    'opportunity:advance_stage', 'opportunity:cancel',
+    'opportunity:read_team', 'opportunity:read_all',
+    // Commercial (2) — Sprint 15G estrutura organizacional
+    'sales_structure:read', 'sales_structure:manage',
     // Proposals (4)
     'proposal:create', 'proposal:read', 'proposal:update', 'proposal:approve',
     // Contracts (3)
@@ -82,7 +94,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, ReadonlySet<Permission>>
     'audit:read',
     // Import (2)
     'import:run', 'import:read',
-  ]), // 60
+  ]), // 63
 
   DIRETOR_COMERCIAL: new Set<Permission>([
     'tenant:read',
@@ -91,7 +103,9 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, ReadonlySet<Permission>>
     'company:read', 'company:update',
     'contact:read', 'contact:update',
     'opportunity:create', 'opportunity:read', 'opportunity:update',
-    'opportunity:advance_stage', 'opportunity:cancel', 'opportunity:read_others',
+    'opportunity:advance_stage', 'opportunity:cancel',
+    'opportunity:read_team', 'opportunity:read_all',
+    'sales_structure:read',
     'proposal:create', 'proposal:read', 'proposal:update', 'proposal:approve',
     'contract:create', 'contract:read', 'contract:update',
     'document:upload', 'document:read',
@@ -103,7 +117,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, ReadonlySet<Permission>>
     'alert:receive_admin',
     'audit:read',
     'import:read',
-  ]), // 39
+  ]), // 41
 
   DIRETOR_OPERACOES: new Set<Permission>([
     'tenant:read',
@@ -111,7 +125,9 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, ReadonlySet<Permission>>
     'catalog:read',
     'company:read', 'company:update',
     'contact:read', 'contact:update',
-    'opportunity:read', 'opportunity:read_others',
+    'opportunity:read',
+    'opportunity:read_team', 'opportunity:read_all',
+    'sales_structure:read',
     'proposal:read',
     'contract:create', 'contract:read', 'contract:update',
     'document:upload', 'document:read',
@@ -122,7 +138,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, ReadonlySet<Permission>>
     'alert:receive_admin',
     'audit:read',
     'import:read',
-  ]), // 25
+  ]), // 27
 
   DIRETOR_FINANCEIRO: new Set<Permission>([
     'tenant:read',
@@ -130,7 +146,11 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, ReadonlySet<Permission>>
     'catalog:read',
     'company:read',
     'contact:read',
-    'opportunity:read', 'opportunity:read_others',
+    'opportunity:read',
+    // Sprint 15G: DIRETOR_F NÃO tem read_team (não gerencia squad),
+    // mas tem read_all (auditoria financeira do tenant inteiro).
+    'opportunity:read_all',
+    'sales_structure:read',
     'proposal:read', 'proposal:approve',
     'contract:read',
     'document:read',
@@ -139,7 +159,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, ReadonlySet<Permission>>
     'ai:use_scoring',
     'alert:receive_admin',
     'audit:read',
-  ]), // 18
+  ]), // 19
 
   GESTOR: new Set<Permission>([
     'user:read',
@@ -147,7 +167,11 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, ReadonlySet<Permission>>
     'company:create', 'company:read', 'company:update',
     'contact:create', 'contact:read', 'contact:update',
     'opportunity:create', 'opportunity:read', 'opportunity:update',
-    'opportunity:advance_stage', 'opportunity:cancel', 'opportunity:read_others',
+    'opportunity:advance_stage', 'opportunity:cancel',
+    // Sprint 15G: GESTOR gerencia SEU squad (read_team), NÃO tem
+    // visão tenant-wide. Admin pode conceder read_all via override.
+    'opportunity:read_team',
+    'sales_structure:read',
     'proposal:create', 'proposal:read', 'proposal:update',
     'contract:read',
     'document:upload', 'document:read',
@@ -156,7 +180,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, ReadonlySet<Permission>>
     'reports:read', 'reports:export',
     'ai:use_summary', 'ai:use_extraction', 'ai:use_scoring',
     'import:run', 'import:read',
-  ]), // 31
+  ]), // 32
 
   ANALISTA: new Set<Permission>([
     'catalog:read',
@@ -164,8 +188,10 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, ReadonlySet<Permission>>
     'contact:create', 'contact:read', 'contact:update',
     'opportunity:create', 'opportunity:read', 'opportunity:update',
     'opportunity:advance_stage', 'opportunity:cancel',
-    // NOTE: ANALISTA NÃO tem `opportunity:read_others` — só vê próprias opps
-    // Breaking change do Sprint 15E; admin pode conceder override individual.
+    // Sprint 15G: ANALISTA NÃO tem read_team nem read_all — só vê
+    // próprias opps. Admin pode conceder read_team ou read_all via
+    // override individual. Continua breaking change herdado do 15E.
+    'sales_structure:read',
     'proposal:read',
     'contract:read',
     'document:upload', 'document:read',
@@ -173,7 +199,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, ReadonlySet<Permission>>
     'reports:read',
     'ai:use_summary', 'ai:use_extraction',
     'import:read',
-  ]), // 23
+  ]), // 24
 
   PARCEIRO: new Set<Permission>([
     // Row-level filter aplicado no service — só vê o próprio escopo.

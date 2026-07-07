@@ -23,6 +23,7 @@
     "worker": "tsx src/jobs/index.ts",
     "worker:scan-now": "tsx -e \"import('./src/jobs/queues').then(async ({makeQueue,QUEUE_NAMES})=>{const q=makeQueue(QUEUE_NAMES.alertsScan);await q.add('manual',{});console.log('enfileirado');process.exit(0)})\"",
     "rbac:backfill-cache": "tsx scripts/rbac-backfill-cache.ts",
+    "15g:migrate-permissions": "tsx scripts/15g-migrate-permissions.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {

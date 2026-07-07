@@ -2489,6 +2489,76 @@ Spec: `docs/Sprint_15F_IA_Multi_Provider.md`
 Ver histórico completo no `CLAUDE.md`. Backend + UI dos 4 Cards em
 `/admin/ai` entregues; rollout gradual (`MULTI_AI_ENABLED` já ativo).
 
+### Sprint 15G Fase 1b — Catálogo + Roles matriz ✅ FECHADO 2026-07-07
+Spec: `docs/Sprint_15G_estrutura_comercial.md` §6 +
+`docs/Sprint_15G_amendments.md` A2.
+
+**Escopo cirúrgico (Fase 1b — só catálogo + matrix + backfill A2):**
+- `src/lib/auth/permissions-catalog.ts`: `opportunity:read_others`
+  removida; adicionadas 4 novas — `opportunity:read_team`,
+  `opportunity:read_all`, `sales_structure:read`, `sales_structure:manage`
+  (nova category `commercial`). Total 61 − 1 + 4 = **64 permissions**.
+- `src/lib/auth/rbac.ts` — `ROLE_DEFAULT_PERMISSIONS` atualizado
+  conforme matriz §6:
+  * ADMIN=63 (era 60), DIRETOR_COMERCIAL=41 (era 39),
+    DIRETOR_OPERACOES=27 (era 25), DIRETOR_FINANCEIRO=19 (era 18),
+    GESTOR=32 (era 31), ANALISTA=24 (era 23), PARCEIRO=5 (inalterado)
+  * DIRETOR_F NÃO tem `read_team` (não gerencia squad) mas tem
+    `read_all` (auditoria financeira tenant-wide)
+  * GESTOR NÃO tem `read_all` (SEU squad via `read_team`); admin
+    concede override individual quando necessário
+  * ANALISTA continua sem visão tenant-wide (breaking 15E preservado)
+  * `sales_structure:manage` só ADMIN (mínima superfície de ataque)
+- `scripts/15g-migrate-permissions.ts` novo + `npm run 15g:migrate-permissions`.
+  Backfill idempotente: users com override granted de `read_others`
+  ganham override granted de `read_team` (`ON CONFLICT DO NOTHING`),
+  overrides revoked de `read_others` são simplesmente deletados,
+  `cachedPermissionsAt = NULL` força recompute. Audit log por tenant
+  com `tenantIdOverride` + metadata `{userIds, migrated_count,
+  legacy_permission, target_permission}`. Segunda execução loga
+  "nada a migrar" e não faz mutations.
+- Routers **minimamente tocados** por dependência de type-check:
+  `src/server/trpc/routers/opportunities.ts` e `.../reports.ts`
+  trocaram literal `'opportunity:read_others'` por `hasPermission(read_team)
+  || hasPermission(read_all)` (2 linhas cada, comportamento
+  preservado sob nova matrix para TODOS os roles não-PARCEIRO —
+  ADMIN/DIRETOR_C/DIRETOR_O têm ambas; DIRETOR_F tem read_all; GESTOR
+  tem read_team; ANALISTA sem nenhuma segue vendo só próprias).
+  Filtro real por team (via SalesUnit) fica pra Fase 3.
+
+**Não escopo desta fase** (Fase 1a: schema + ltree; Fase 2:
+sales-structure.service + router; Fase 3: opportunities/reports.ts
+wireup real por team; Fase 4: UI).
+
+**Testes:** **+22 novos** distribuídos em 3 arquivos:
+`permissions-catalog-15g.test.ts` (8 casos — read_others ausente,
+4 novas presentes com label PT-BR, total=64, category "commercial",
+integridade), `role-default-permissions-15g.test.ts` (10 casos —
+matriz célula por célula + contagens por role + NENHUM role tem
+read_others), `15g-migrate-permissions-script.test.ts` (4 casos —
+fluxo normal com 3 users e 2 tenants + idempotência + ON CONFLICT
+DO NOTHING + cache invalidation incluindo revoked users).
+
+Testes existentes atualizados: `permissions-catalog.test.ts`
+(count 61→64 + swap read_others → read_team/read_all nas listas
+positivas + adição em rejeição do isValidPermission),
+`role-default-permissions.test.ts` (matriz e cascade atualizadas
+pra 15G), `permissions-router.test.ts` (count 61→64),
+`rbac-kill-switch.test.ts` (1 caso trocou read_others por read_team).
+
+**Baseline preservado:** pré-chip = 875 passing / 4 pré-existentes
+por env vars em `field-encryption.test.ts` / 174 skipped.
+Pós-chip = **896 passing (+21 líquido: 22 novos − 1 assertion legado
+"ANALISTA NÃO tem read_others" que virou parte do bloco -15g)** /
+4 pré-existentes / 174 skipped. Zero regressão confirmada via
+`git stash`. Type-check zero. Lint zero.
+
+**Rollback:** reverter 4 arquivos (`permissions-catalog.ts`,
+`rbac.ts`, `opportunities.ts` snippet, `reports.ts` snippet) +
+apagar script + 3 testes novos. Rollback preserva dados no DB
+(read_others removida no catálogo mas overrides antigos ainda
+persistem enquanto não rodar `15g:migrate-permissions`).
+
 ---
 
 ## 🚀 Roadmap médio prazo (Sprints 16–20)

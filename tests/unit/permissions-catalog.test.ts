@@ -7,10 +7,10 @@ import {
   CATEGORY_LABELS,
 } from '@/lib/auth/permissions-catalog';
 
-describe('permissions catalog — Sprint 15E', () => {
-  it('tem 61 permissions distintas', () => {
-    expect(PERMISSIONS_CATALOG.length).toBe(61);
-    expect(PERMISSION_KEYS.size).toBe(61);
+describe('permissions catalog — Sprint 15E + 15G Fase 1b', () => {
+  it('tem 64 permissions distintas (Sprint 15G: 61 − 1 + 4)', () => {
+    expect(PERMISSIONS_CATALOG.length).toBe(64);
+    expect(PERMISSION_KEYS.size).toBe(64);
   });
 
   it('todas as keys seguem formato `resource:action`', () => {
@@ -39,7 +39,8 @@ describe('permissions catalog — Sprint 15E', () => {
 
   it('isValidPermission aceita keys do catálogo e rejeita fora', () => {
     expect(isValidPermission('user:create')).toBe(true);
-    expect(isValidPermission('opportunity:read_others')).toBe(true);
+    expect(isValidPermission('opportunity:read_team')).toBe(true);
+    expect(isValidPermission('opportunity:read_all')).toBe(true);
     expect(isValidPermission('ai:manage_breaker')).toBe(true);
     expect(isValidPermission('inexistente:foo')).toBe(false);
     expect(isValidPermission('')).toBe(false);
@@ -47,6 +48,8 @@ describe('permissions catalog — Sprint 15E', () => {
     expect(isValidPermission('opportunity:assign')).toBe(false);
     expect(isValidPermission('opportunity:set_inbound_owner')).toBe(false);
     expect(isValidPermission('ai:configure')).toBe(false);
+    // Sprint 15G Fase 1b — read_others substituída por read_team + read_all
+    expect(isValidPermission('opportunity:read_others')).toBe(false);
   });
 
   it('novas permissions do 15D/15E/15F/P-19/P-20 estão presentes', () => {
@@ -64,12 +67,17 @@ describe('permissions catalog — Sprint 15E', () => {
     expect(PERMISSION_KEYS.has('ai:use_extraction')).toBe(true);
     expect(PERMISSION_KEYS.has('ai:use_scoring')).toBe(true);
 
-    // Sprint 15E — 5 novos
+    // Sprint 15E — 5 novos (opportunity:read_others removida no 15G Fase 1b)
     expect(PERMISSION_KEYS.has('user:grant_permissions')).toBe(true);
-    expect(PERMISSION_KEYS.has('opportunity:read_others')).toBe(true);
     expect(PERMISSION_KEYS.has('reports:financial')).toBe(true);
     expect(PERMISSION_KEYS.has('reports:export')).toBe(true);
     expect(PERMISSION_KEYS.has('audit:read_platform')).toBe(true);
+
+    // Sprint 15G Fase 1b — split visibilidade + estrutura organizacional
+    expect(PERMISSION_KEYS.has('opportunity:read_team')).toBe(true);
+    expect(PERMISSION_KEYS.has('opportunity:read_all')).toBe(true);
+    expect(PERMISSION_KEYS.has('sales_structure:read')).toBe(true);
+    expect(PERMISSION_KEYS.has('sales_structure:manage')).toBe(true);
 
     // P-19 documents
     expect(PERMISSION_KEYS.has('document:upload')).toBe(true);

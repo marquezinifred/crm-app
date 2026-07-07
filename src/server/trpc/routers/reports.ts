@@ -42,6 +42,9 @@ type FilterInput = z.infer<typeof filterInput>;
  */
 // Sprint 15E — refatorado. Antes: role-based hardcoded. Agora: gate por
 // `opportunity:read_others`. PARCEIRO segue com row-level engagement filter.
+// Sprint 15G Fase 1b: `read_others` foi removida e substituída por
+// `opportunity:read_team` (equipe gerenciada) e `opportunity:read_all`
+// (tenant inteiro). Fase 3 vai wirar filtro real por team.
 async function visibility(
   role: UserRole,
   userId: string,
@@ -56,8 +59,11 @@ async function visibility(
     }
     return { id: '00000000-0000-0000-0000-000000000000' };
   }
-  const canSeeAll = await hasPermission(userId, 'opportunity:read_others');
-  if (canSeeAll) return {};
+  const [canSeeTeam, canSeeAllTenant] = await Promise.all([
+    hasPermission(userId, 'opportunity:read_team'),
+    hasPermission(userId, 'opportunity:read_all'),
+  ]);
+  if (canSeeTeam || canSeeAllTenant) return {};
   return { OR: [{ ownerId: userId }, { team: { some: { userId } } }] };
 }
 

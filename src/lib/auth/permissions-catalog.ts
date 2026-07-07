@@ -1,9 +1,10 @@
 /**
- * Catálogo estático de permissions granulares — Sprint 15E.
+ * Catálogo estático de permissions granulares — Sprint 15E + 15G Fase 1b.
  *
- * Fonte da verdade: `docs/permission-matrix.md` (contagens validadas
- * célula a célula em 2026-07-01). Total: **61 permissions distintas**
- * (spec header mencionou "65" — atualizado em 15E: valor real é 61).
+ * Fonte da verdade: `docs/permission-matrix.md` + `docs/Sprint_15G_estrutura_comercial.md` §6.
+ * Total: **64 permissions distintas** (Sprint 15G removeu `opportunity:read_others`
+ * e adicionou `opportunity:read_team`, `opportunity:read_all`,
+ * `sales_structure:read`, `sales_structure:manage` — 61 − 1 + 4 = 64).
  *
  * Formato: `resource:action`. Alinhado com o legado `withCapability`
  * (Sprint 0). Novas features devem adicionar permission nova aqui
@@ -40,14 +41,19 @@ export const PERMISSIONS_CATALOG = [
   { key: 'contact:update', label: 'Editar contatos', category: 'contacts' },
   { key: 'contact:delete', label: 'Desativar contatos', category: 'contacts' },
 
-  // Opportunities (7)
+  // Opportunities (7) — Sprint 15G Fase 1b split visibilidade em team/all
   { key: 'opportunity:create', label: 'Criar oportunidades', category: 'opportunities' },
   { key: 'opportunity:read', label: 'Ver oportunidades', category: 'opportunities' },
   { key: 'opportunity:update', label: 'Editar oportunidades', category: 'opportunities' },
   { key: 'opportunity:delete', label: 'Cancelar oportunidades', category: 'opportunities' },
   { key: 'opportunity:advance_stage', label: 'Avançar estágio no funil', category: 'opportunities' },
   { key: 'opportunity:cancel', label: 'Encerrar como perdida', category: 'opportunities' },
-  { key: 'opportunity:read_others', label: 'Ver oportunidades de outros usuários', category: 'opportunities' },
+  { key: 'opportunity:read_team', label: 'Ver oportunidades da equipe gerenciada', category: 'opportunities' },
+  { key: 'opportunity:read_all', label: 'Ver todas as oportunidades do tenant', category: 'opportunities' },
+
+  // Commercial — Sprint 15G Fase 1b estrutura organizacional (2)
+  { key: 'sales_structure:read', label: 'Ver estrutura organizacional comercial', category: 'commercial' },
+  { key: 'sales_structure:manage', label: 'Gerenciar estrutura e membros', category: 'commercial' },
 
   // Proposals (4)
   { key: 'proposal:create', label: 'Criar propostas', category: 'proposals' },
@@ -116,6 +122,7 @@ export type PermissionCategory =
   | 'companies'
   | 'contacts'
   | 'opportunities'
+  | 'commercial'
   | 'proposals'
   | 'contracts'
   | 'documents'
@@ -146,6 +153,7 @@ export function isValidPermission(key: string): key is Permission {
  */
 export const CATEGORY_ORDER: readonly PermissionCategory[] = [
   'opportunities',
+  'commercial',
   'proposals',
   'contracts',
   'documents',
@@ -171,6 +179,7 @@ export const CATEGORY_LABELS: Record<PermissionCategory, string> = {
   companies: 'Empresas',
   contacts: 'Contatos',
   opportunities: 'Oportunidades',
+  commercial: 'Estrutura comercial',
   proposals: 'Propostas',
   contracts: 'Contratos',
   documents: 'Documentos',

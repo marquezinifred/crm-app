@@ -35,13 +35,18 @@ const canCancel = withPermission('opportunity:cancel');
  * Antes: gate role-based hardcoded (ADMIN/DIRETOR/GESTOR viam tudo,
  * ANALISTA só própria, PARCEIRO row-level).
  *
- * Agora: gate por permission `opportunity:read_others`. Como a matrix
- * concede essa permission a ADMIN, DIRETOR_COMERCIAL, DIRETOR_OPERACOES,
- * DIRETOR_FINANCEIRO e GESTOR por default, comportamento pra elas segue
- * idêntico. **Breaking change**: ANALISTA passa a ver só as próprias —
- * admin pode conceder override individual de `opportunity:read_others`
- * sem mudar role. PARCEIRO segue com row-level filter (não é
- * permission-based).
+ * Sprint 15E: gate por permission única `opportunity:read_others`.
+ *
+ * Sprint 15G Fase 1b: `opportunity:read_others` foi removida e
+ * substituída por duas permissions granulares — `opportunity:read_team`
+ * (visão da equipe gerenciada) e `opportunity:read_all` (tenant inteiro).
+ * Fase 3 vai wirar o filtro real por team (dependência de SalesUnit da
+ * Fase 2). Nesta fase transitória o filtro segue binário: qualquer uma
+ * das duas permissions destrava visão tenant-wide. Isso preserva
+ * comportamento para ADMIN/DIRETOR_C/DIRETOR_O (têm ambas), DIRETOR_F
+ * (só read_all) e GESTOR (só read_team). ANALISTA segue vendo só as
+ * próprias — override individual pode conceder read_team ou read_all.
+ * PARCEIRO segue com row-level filter (não é permission-based).
  */
 async function visibilityWhere(
   userId: string,
@@ -61,8 +66,11 @@ async function visibilityWhere(
     return { id: '00000000-0000-0000-0000-000000000000' };
   }
 
-  const canSeeAll = await hasPermission(userId, 'opportunity:read_others');
-  if (canSeeAll) return {};
+  const [canSeeTeam, canSeeAllTenant] = await Promise.all([
+    hasPermission(userId, 'opportunity:read_team'),
+    hasPermission(userId, 'opportunity:read_all'),
+  ]);
+  if (canSeeTeam || canSeeAllTenant) return {};
   return {
     OR: [
       { ownerId: userId },

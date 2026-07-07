@@ -165,7 +165,7 @@ describe('P-62 — kill-switch RBAC_GRANULAR_ENABLED', () => {
       expect(ok).toBe(true);
     });
 
-    it('ANALISTA não tem `opportunity:read_others` (Sprint 15E breaking change preservado)', async () => {
+    it('ANALISTA não tem `opportunity:read_team` (Sprint 15G Fase 1b: substituiu read_others como breaking change preservado)', async () => {
       mockEnv.RBAC_GRANULAR_ENABLED = false;
       mockUser.findUnique.mockResolvedValueOnce({
         role: 'ANALISTA',
@@ -174,7 +174,7 @@ describe('P-62 — kill-switch RBAC_GRANULAR_ENABLED', () => {
         active: true,
       });
 
-      const ok = await hasPermission('user-1', 'opportunity:read_others');
+      const ok = await hasPermission('user-1', 'opportunity:read_team');
 
       expect(ok).toBe(false);
     });

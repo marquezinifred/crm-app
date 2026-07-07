@@ -7,21 +7,23 @@ import {
 import { PERMISSION_KEYS, type Permission } from '@/lib/auth/permissions-catalog';
 
 /**
- * Contagens autoritativas — validadas célula a célula na
- * `docs/permission-matrix.md` (2026-07-01). Qualquer mudança aqui
- * exige atualização paralela do matrix doc + Sprint spec.
+ * Contagens autoritativas — validadas contra `docs/permission-matrix.md`
+ * + `docs/Sprint_15G_estrutura_comercial.md` §6. Sprint 15G Fase 1b removeu
+ * `opportunity:read_others` e adicionou `opportunity:read_team`,
+ * `opportunity:read_all`, `sales_structure:read`, `sales_structure:manage`.
+ * Qualquer mudança aqui exige atualização paralela do matrix doc + spec.
  */
 const EXPECTED_COUNTS: Record<keyof typeof ROLE_DEFAULT_PERMISSIONS, number> = {
-  ADMIN: 60,
-  DIRETOR_COMERCIAL: 39,
-  DIRETOR_OPERACOES: 25,
-  DIRETOR_FINANCEIRO: 18,
-  GESTOR: 31,
-  ANALISTA: 23,
+  ADMIN: 63,
+  DIRETOR_COMERCIAL: 41,
+  DIRETOR_OPERACOES: 27,
+  DIRETOR_FINANCEIRO: 19,
+  GESTOR: 32,
+  ANALISTA: 24,
   PARCEIRO: 5,
 };
 
-describe('ROLE_DEFAULT_PERMISSIONS — Sprint 15E', () => {
+describe('ROLE_DEFAULT_PERMISSIONS — Sprint 15E + 15G Fase 1b', () => {
   it.each(Object.entries(EXPECTED_COUNTS) as Array<[keyof typeof ROLE_DEFAULT_PERMISSIONS, number]>)(
     '%s tem exatamente %i permissions default',
     (role, count) => {
@@ -44,16 +46,6 @@ describe('ROLE_DEFAULT_PERMISSIONS — Sprint 15E', () => {
     expect(ROLE_DEFAULT_PERMISSIONS.ADMIN.has('audit:read_platform')).toBe(false);
   });
 
-  it('ANALISTA NÃO tem opportunity:read_others (breaking change 15E)', () => {
-    expect(ROLE_DEFAULT_PERMISSIONS.ANALISTA.has('opportunity:read_others')).toBe(false);
-    // Mas as demais roles têm
-    expect(ROLE_DEFAULT_PERMISSIONS.ADMIN.has('opportunity:read_others')).toBe(true);
-    expect(ROLE_DEFAULT_PERMISSIONS.DIRETOR_COMERCIAL.has('opportunity:read_others')).toBe(true);
-    expect(ROLE_DEFAULT_PERMISSIONS.DIRETOR_OPERACOES.has('opportunity:read_others')).toBe(true);
-    expect(ROLE_DEFAULT_PERMISSIONS.DIRETOR_FINANCEIRO.has('opportunity:read_others')).toBe(true);
-    expect(ROLE_DEFAULT_PERMISSIONS.GESTOR.has('opportunity:read_others')).toBe(true);
-  });
-
   it('PARCEIRO só tem 5 permissions (isolamento estrito)', () => {
     const set = ROLE_DEFAULT_PERMISSIONS.PARCEIRO;
     expect(set.has('company:read')).toBe(true);
@@ -63,7 +55,9 @@ describe('ROLE_DEFAULT_PERMISSIONS — Sprint 15E', () => {
     expect(set.has('document:read')).toBe(true);
     // Nada mais
     expect(set.has('company:create')).toBe(false);
-    expect(set.has('opportunity:read_others')).toBe(false);
+    expect(set.has('opportunity:read_team')).toBe(false);
+    expect(set.has('opportunity:read_all')).toBe(false);
+    expect(set.has('sales_structure:read')).toBe(false);
     expect(set.has('ai:use_summary')).toBe(false);
     expect(set.has('user:read')).toBe(false);
   });
@@ -93,8 +87,11 @@ describe('hasPermissionByRole (sync UI helper)', () => {
   it('confirma default sem overrides', () => {
     expect(hasPermissionByRole('ADMIN', 'user:create')).toBe(true);
     expect(hasPermissionByRole('ANALISTA', 'user:create')).toBe(false);
-    expect(hasPermissionByRole('ANALISTA', 'opportunity:read_others')).toBe(false);
-    expect(hasPermissionByRole('GESTOR', 'opportunity:read_others')).toBe(true);
+    // Sprint 15G Fase 1b: read_team/read_all substituíram read_others
+    expect(hasPermissionByRole('ANALISTA', 'opportunity:read_team')).toBe(false);
+    expect(hasPermissionByRole('ANALISTA', 'opportunity:read_all')).toBe(false);
+    expect(hasPermissionByRole('GESTOR', 'opportunity:read_team')).toBe(true);
+    expect(hasPermissionByRole('GESTOR', 'opportunity:read_all')).toBe(false);
   });
 
   it('role nulo → false', () => {
@@ -107,17 +104,18 @@ describe('computeEffectivePermissions — cascata de resolução', () => {
   it('sem overrides retorna defaults do role', () => {
     const set = computeEffectivePermissions({ role: 'ANALISTA', overrides: [] });
     expect(set.has('company:read')).toBe(true);
-    expect(set.has('opportunity:read_others')).toBe(false);
-    expect(set.size).toBe(23);
+    expect(set.has('opportunity:read_team')).toBe(false);
+    expect(set.has('opportunity:read_all')).toBe(false);
+    expect(set.size).toBe(24);
   });
 
   it('grant adiciona permission fora do default', () => {
     const set = computeEffectivePermissions({
       role: 'ANALISTA',
-      overrides: [{ permission: 'opportunity:read_others', action: 'granted' }],
+      overrides: [{ permission: 'opportunity:read_team', action: 'granted' }],
     });
-    expect(set.has('opportunity:read_others')).toBe(true);
-    expect(set.size).toBe(24);
+    expect(set.has('opportunity:read_team')).toBe(true);
+    expect(set.size).toBe(25);
   });
 
   it('revoke remove permission do default', () => {
@@ -126,18 +124,18 @@ describe('computeEffectivePermissions — cascata de resolução', () => {
       overrides: [{ permission: 'company:read', action: 'revoked' }],
     });
     expect(set.has('company:read')).toBe(false);
-    expect(set.size).toBe(22);
+    expect(set.size).toBe(23);
   });
 
   it('revoked > granted quando ambos existem (conflito legítimo → revoga vence)', () => {
     const set = computeEffectivePermissions({
       role: 'ANALISTA',
       overrides: [
-        { permission: 'opportunity:read_others', action: 'granted' },
-        { permission: 'opportunity:read_others', action: 'revoked' },
+        { permission: 'opportunity:read_team', action: 'granted' },
+        { permission: 'opportunity:read_team', action: 'revoked' },
       ],
     });
-    expect(set.has('opportunity:read_others')).toBe(false);
+    expect(set.has('opportunity:read_team')).toBe(false);
   });
 
   it('ignora permissions inválidas nos overrides (defensive)', () => {
@@ -146,9 +144,11 @@ describe('computeEffectivePermissions — cascata de resolução', () => {
       overrides: [
         { permission: 'foo:bar', action: 'granted' },
         { permission: 'user:create', action: 'revoked' },
+        // Legacy read_others permission — removida no 15G, override antigo é ignorado
+        { permission: 'opportunity:read_others', action: 'granted' },
       ],
     });
-    // ADMIN perde user:create (revoked válido); foo:bar (inválido) ignorado
+    // ADMIN perde user:create (revoked válido); foo:bar e read_others (inválidas) ignoradas
     expect(set.has('user:create')).toBe(false);
     expect(set.has('foo:bar' as Permission)).toBe(false);
   });

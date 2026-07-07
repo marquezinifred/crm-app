@@ -371,6 +371,14 @@ enum PartnerEngagementStatus {
   REVOKED
 }
 
+// Sprint 15G Fase 1a — papel dentro de uma SalesUnit.
+//   MANAGER: gestor da unidade — vê subtree completa (Fase 2 respeitará).
+//   MEMBER: analista — visibilidade permanece OWN + team.
+enum UnitMemberRole {
+  MANAGER
+  MEMBER
+}
+
 // ---------------------------------------------------------------------
 // Tenant (raiz da árvore — único modelo SEM tenant_id)
 // ---------------------------------------------------------------------
@@ -466,6 +474,9 @@ model Tenant {
   inboundCaptureConfig    InboundCaptureConfig?
   inboundLeadsRejected    InboundLeadRejected[]
   userPermissionOverrides UserPermissionOverride[]
+  salesUnitTypes          SalesUnitType[]
+  salesUnits              SalesUnit[]
+  salesUnitMembers        SalesUnitMember[]
 
   @@map("tenants")
 }
@@ -528,6 +539,14 @@ model User {
   // Sprint 15E — overrides individuais + histórico de quem concedeu.
   permissionOverrides        UserPermissionOverride[]  @relation("PermissionForUser")
   grantedPermissionOverrides UserPermissionOverride[]  @relation("PermissionGrantedBy")
+
+  // Sprint 15G Fase 1a — membros de sales units (unidade comercial).
+  //   `salesUnitMemberships` = unidades onde este user é MANAGER ou MEMBER.
+  //   `salesUnitAssignments` = ações "assigned_by" (histórico de quem
+  //   adicionou este user a unidades). SET NULL preserva registro se o
+  //   admin que atribuiu for deletado.
+  salesUnitMemberships       SalesUnitMember[]         @relation("UnitMemberUser")
+  salesUnitAssignments       SalesUnitMember[]         @relation("UnitMemberAssignedBy")
 
   @@unique([tenantId, email])
   // Sprint 15A débito — migration 0026: UNIQUE composto. A constraint
@@ -1949,4 +1968,93 @@ model InboundLeadRejected {
 
   @@index([tenantId, status, receivedAt])
   @@map("inbound_leads_rejected")
+}
+
+// ---------------------------------------------------------------------
+// Sprint 15G Fase 1a — Estrutura comercial hierárquica
+//   Migration 0031 cria as 3 tabelas + backfill A1 (1 unit "Padrão" por
+//   tenant). Chip Fase 1b muda permissions-catalog. Chip Fase 2 monta
+//   `resolveOpportunityScope` que respeita subtree via ltree.
+//
+// Convenção A7: SEMPRE criar SalesUnit via `SalesUnitRepository.create()`
+//   — nunca `prisma.salesUnit.create()` direto. path é ltree e requer
+//   cálculo determinístico (parent.path + '.' + short_id); bypass
+//   direto quebra CHECK `sales_units_path_not_empty`.
+// ---------------------------------------------------------------------
+
+model SalesUnitType {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  name      String
+  level     Int
+  color     String?
+  icon      String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  units  SalesUnit[]
+
+  @@unique([tenantId, level], map: "sales_unit_types_tenant_level_unique")
+  @@unique([tenantId, name], map: "sales_unit_types_tenant_name_unique")
+  @@index([tenantId])
+  @@map("sales_unit_types")
+}
+
+model SalesUnit {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  typeId    String    @map("type_id") @db.Uuid
+  name      String
+  shortId   String    @map("short_id")
+  // path é `ltree` do Postgres. Prisma não tem tipo nativo — `Unsupported`
+  // vira `never` no cliente TS. Operações (INSERT/SELECT com queries
+  // hierárquicas) rodam via `$queryRaw` no SalesUnitRepository.
+  // Convenção A7 acima: nunca criar SalesUnit direto pelo Prisma.
+  path      Unsupported("ltree")
+  depth     Int
+  parentId  String?   @map("parent_id") @db.Uuid
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  type     SalesUnitType     @relation(fields: [typeId], references: [id], onDelete: Restrict)
+  parent   SalesUnit?        @relation("SalesUnitParent", fields: [parentId], references: [id], onDelete: Restrict)
+  children SalesUnit[]       @relation("SalesUnitParent")
+  members  SalesUnitMember[]
+
+  @@unique([tenantId, shortId], map: "sales_units_tenant_short_id_unique")
+  @@index([tenantId])
+  @@index([typeId])
+  @@index([parentId])
+  @@map("sales_units")
+}
+
+model SalesUnitMember {
+  id         String         @id @default(uuid()) @db.Uuid
+  userId     String         @map("user_id") @db.Uuid
+  unitId     String         @map("unit_id") @db.Uuid
+  tenantId   String         @map("tenant_id") @db.Uuid
+  role       UnitMemberRole
+  // is_primary marca a unidade "casa" do user. A migration 0031 cria um
+  // partial UNIQUE `sales_unit_members_one_primary_per_user WHERE
+  // is_primary = true` (Emenda A5) — Prisma não expressa partial unique,
+  // então a fonte da verdade é a migration SQL. Trocar primary tem que
+  // rodar em transação: updateMany({..., isPrimary: false}) + upsert.
+  isPrimary  Boolean        @default(false) @map("is_primary")
+  assignedBy String?        @map("assigned_by") @db.Uuid
+  assignedAt DateTime       @default(now()) @map("assigned_at")
+
+  user       User      @relation("UnitMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+  unit       SalesUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assignedByUser User? @relation("UnitMemberAssignedBy", fields: [assignedBy], references: [id], onDelete: SetNull)
+
+  @@unique([userId, unitId], map: "sales_unit_members_user_unit_unique")
+  @@index([userId])
+  @@index([unitId])
+  @@index([tenantId])
+  @@index([unitId, role])
+  @@map("sales_unit_members")
 }

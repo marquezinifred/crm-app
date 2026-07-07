@@ -2489,6 +2489,110 @@ Spec: `docs/Sprint_15F_IA_Multi_Provider.md`
 Ver histórico completo no `CLAUDE.md`. Backend + UI dos 4 Cards em
 `/admin/ai` entregues; rollout gradual (`MULTI_AI_ENABLED` já ativo).
 
+### Sprint 15G — Estrutura Comercial e Visibilidade Hierárquica
+
+Spec: `docs/Sprint_15G_estrutura_comercial.md` (chip-prompts) +
+`docs/Sprint_15G_amendments.md` (A1–A7 aprovadas 2026-07-06).
+
+Fase 1a — **Fundação schema + Repository** ✅ FECHADO 2026-07-07
+(commit `<preenchido no merge>`, branch `claude/sprint-15g-fase-1a`):
+
+- Migration 0031 (`prisma/migrations/0031_estrutura_comercial/`):
+  * `CREATE EXTENSION IF NOT EXISTS ltree` idempotente
+  * Enum `UnitMemberRole` (`MANAGER` | `MEMBER`)
+  * 3 tabelas: `sales_unit_types` (categorias com `UNIQUE(tenant, level)`
+    + `UNIQUE(tenant, name)`), `sales_units` (path=ltree, depth, parentId,
+    CHECK A7 `path::text != '' AND ~ '^[a-zA-Z0-9._]+$'`), `sales_unit_members`
+    (role, is_primary, assignedBy)
+  * Partial UNIQUE A5: `sales_unit_members_one_primary_per_user WHERE
+    is_primary = true` — 2 primary por user impossível mesmo sob write
+    concorrente
+  * Índices GiST no `sales_units.path` (suporta `<@`, `@>`) + índices
+    padrão em tenant/parent/type + partial index de ativos
+  * RLS via helper `enable_tenant_rls()` do 0002_rls nos 3 modelos
+  * **Backfill A1 idempotente** (`ON CONFLICT DO NOTHING` em cada INSERT):
+    cada tenant existente ganha 1 SalesUnitType "Unidade" nível 1 + 1
+    SalesUnit "Padrão" raiz + todos os users ativos como membros. Users
+    com role em (ADMIN, DIRETOR_*, GESTOR) → `MANAGER`; senão `MEMBER`.
+    Todos com `is_primary=true`. Objetivo: quando chip Fase 2 ligar
+    `SALES_STRUCTURE_ENABLED`, GESTOR/DIRETOR/ADMIN continuam vendo o
+    que já viam pré-15G via `read_team` sobre a subtree (Emenda A1)
+  * `assigned_by=NULL` no backfill (sem user real de origem)
+  * Rollback documentado no cabeçalho da migration
+
+- Prisma schema (`prisma/schema.prisma`):
+  * Novo enum `UnitMemberRole`
+  * 3 models: `SalesUnitType` (@@map sales_unit_types), `SalesUnit`
+    (@@map sales_units, path como `Unsupported("ltree")`), `SalesUnitMember`
+    (@@map sales_unit_members)
+  * Relações inversas em `Tenant` (salesUnitTypes, salesUnits,
+    salesUnitMembers) e `User` (salesUnitMemberships,
+    salesUnitAssignments com onDelete SetNull pro assignedBy)
+  * Doc inline no `SalesUnit`: nunca criar direto pelo Prisma
+    (Emenda A7 — path ltree exige cálculo determinístico)
+
+- Repository (`src/server/db/repositories/sales-unit.repository.ts`):
+  * `SalesUnitRepository.create(input)` — via `$queryRaw` INSERT +
+    lookup do parent (com filtro por tenantId — cross-tenant defense).
+    Path sem parent = `root.<shortId>`; com parent = `parent.path.<shortId>`.
+    Depth = parent.depth + 1 (ou 1 se raiz)
+  * `getSubtreeMemberIds(managerId, tenantId)` — retorna array de userIds
+    acessíveis a partir de todas as units onde o user é MANAGER (`role =
+    'MANAGER'` no WHERE); inclui o próprio + descendentes via `sub_unit.path
+    <@ mgr_unit.path`. Fallback pra `OWN` é responsabilidade do caller
+  * `getTree(tenantId)` — árvore ordenada por path com typeName +
+    memberCount
+  * `getAncestors(unitId, tenantId)` — breadcrumb ordenado por
+    `nlevel(path)` asc, exclui a própria unit (`anc.path != target.path`)
+  * `getChildren(unitId, tenantId)` — filhos diretos (`parent_id = ?`,
+    não recursivo)
+  * Comentário JSDoc no topo alerta a convenção A7
+
+- Helper `src/lib/utils/short-id.ts` — `generateShortId()` via
+  `crypto.randomBytes` sobre alfabeto [a-z0-9], 8 chars. Bate com a
+  regex A7 do CHECK. Constraint `sales_units_tenant_short_id_unique`
+  protege colisões.
+
+- Env flag `SALES_STRUCTURE_ENABLED: envBoolean(false)` (`src/lib/env.ts`)
+  documentada em `.env.example`. Nenhum consumer runtime — chip Fase 2
+  usa. Default false pra rollout gradual (opposite do `RBAC_GRANULAR_ENABLED`
+  que veio pós-15E com default true).
+
+- 20 testes novos (12 repository + 8 ltree-path):
+  * `tests/unit/sales-unit-repository.test.ts`: create com/sem parent,
+    shortId fallback, parent inexistente (`throw claro`), INSERT vazio,
+    getSubtreeMemberIds happy path + filtro MANAGER + descendentes N-nível
+    + tenantId em 4 JOINs, getTree/getAncestors/getChildren shape
+  * `tests/unit/ltree-path-generation.test.ts`: formato do short-id,
+    1000 gerações únicas, regex A7 sempre respeitada, path raiz vs
+    filho vs 5 níveis, boundary "label vazio nunca sai porque short-id
+    tem 8 chars"
+
+- Baseline: **964 passing (+20 novos) / 0 failing / 174 skipped (1138
+  total)**. Type-check zero. Lint zero. Zero regressão no baseline
+  pré-chip (944/0/174 → 964/0/174 delta exatamente = 20 tests novos).
+
+- Chip **NÃO fez** (escopo Fase 1b + Fase 2+):
+  * Zero mudança em `src/lib/auth/permissions-catalog.ts` ou
+    `src/lib/auth/rbac.ts`
+  * Nada de `resolveOpportunityScope` service
+  * Zero touch em `opportunities`/`reports` routers
+  * UI `/admin/commercial-structure` — Fase 4
+  * Seed de demonstração 3 níveis — Fase 4
+
+- Débitos residuais para próximos chips:
+  * **Fase 1b**: permissions catalog + role defaults (Sprint 15E
+    replaced `opportunity:read_others` por `read_team` + `read_all`)
+  * **Fase 2**: service `sales-structure.service.ts` + `resolveOpportunityScope`
+    consumindo `SalesUnitRepository.getSubtreeMemberIds` + respeitando
+    flag `SALES_STRUCTURE_ENABLED` + PARCEIRO early-return (Emenda A4)
+  * **Fase 3**: opportunities + reports routers usam scope resolver;
+    A2 backfill de overrides `read_others` → `read_team/read_all`
+    com `ON CONFLICT DO NOTHING` + cache invalidation
+  * **Fase 4**: UI CRUD `/admin/commercial-structure` + seed de
+    demonstração (Diretoria → Regional → Equipe) + cenários pass/fail
+    no `Roteiro_QA_Homologacao_Staging.md`
+
 ---
 
 ## 🚀 Roadmap médio prazo (Sprints 16–20)

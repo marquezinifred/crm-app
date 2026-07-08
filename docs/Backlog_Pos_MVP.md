@@ -2950,6 +2950,114 @@ service (fallback pré-15G).
 
 ---
 
+### Sprint 15G Fase 3b — Reports usa scope resolver ✅ FECHADO 2026-07-07
+Spec: `docs/chip-prompts/Sprint_15G_estrutura_comercial.md` §Fase 3 +
+`docs/Sprint_15G_amendments.md` **A3 (Reports migrados no Fase 3)**.
+Chip Modo B disjunto do Fase 3a (opportunities). Fecha a promessa
+de que `reports.ts` e `opportunities.ts` usem a mesma resolução
+canônica de escopo.
+
+**Escopo cirúrgico (Fase 3b — só `reports.ts` router):**
+- `src/server/trpc/routers/reports.ts` `visibility()` deixa de
+  chamar `hasPermission('opportunity:read_team'|'read_all')` +
+  branches de PARCEIRO manualmente e **delega ao
+  `SalesStructureService.resolveOpportunityScope`**. Assinatura ganha
+  `tenantId: string` (não pega mais implícito do ctx dentro do
+  helper — chamada explícita a partir das procedures).
+- `loadOpps` e `loadInboundOpps` ganham `tenantId` na assinatura e
+  propagam ao `visibility()`.
+- Cada procedure (`funnel`, `winLoss`, `timePerStage`,
+  `performanceByOwner`, `revenueProjection`, `inboundVsOutbound`)
+  passa `ctx.tenantId` novo argumento. **`scope.filter` já inclui
+  `tenantId`** (segunda barreira defensiva do service) —
+  `whereFromFilters()` continua adicionando filtros de período,
+  ownerId, stage, segmentId, territoryId por spread.
+- **Sprint 5 preservado**: regra ANALISTA em `performanceByOwner`
+  (só própria linha + média anônima do time via `teamAverage`) fica
+  intocada. Detecção via `ctx.user.role === 'ANALISTA'` (role-based,
+  não scope-based) — mesmo que scope evolua no futuro pra dar outra
+  visibilidade ao ANALISTA, a exposição individual de linha alheia
+  segue oculta.
+- **NÃO tocado:** `opportunities.ts` (Chip 3a), `SalesStructureService`,
+  `SalesUnitRepository` (só consumidos). UI (Fase 4). Procedures
+  que não usam `visibility()` (conversionRates, updateConversionRates,
+  suggestConversionRates) ficam iguais.
+
+**Guards obrigatórios verificados (§4 metodologia):**
+- Multi-tenancy §4.1: `scope.filter` traz `tenantId` (barreira além
+  do Prisma extension e RLS)
+- RBAC granular §4.5: delegação total ao service — nenhuma decisão
+  de escopo hardcoded no router
+- Backstop P-42 §4.10: preservado (só leitura via findMany, sem
+  writes tocando `visibility`)
+- Kill-switch runtime P-62: automático via service —
+  `SALES_STRUCTURE_ENABLED=false` cai no fallback pré-15G
+  (binário `read_team|read_all`)
+
+**Testes:** **+9 novos** em
+`tests/unit/reports-visibility-scope.test.ts`:
+1. `funnel` PARCEIRO com partnerCompanyId → filter PARTNER com
+   engagements (row-level); resolveScope chamado com
+   `{id, role, partnerCompanyId}` + tenantId; where inclui
+   `tenantId + partnerCompanyId + partnerEngagements`
+2. `funnel` ADMIN read_all → filter só `tenantId` (ALL); sem
+   ownerId nem partnerCompanyId no where
+3. `funnel` GESTOR read_team + subtree não-vazia → filter
+   `ownerId: { in: [...] }` + `tenantId`
+4. `winLoss` ADMIN read_all → tenantId no where; sanity
+   `winLossBreakdown` consumiu opps (`won.count`, `lost.count`)
+5. `revenueProjection` ADMIN read_all → scope filter propagado +
+   tenant.findUnique separado pra conversionRates (2 chamadas ao
+   prisma)
+6. `timePerStage` sem opps visíveis → history.findMany não
+   chamado (early return); resultado `{}`
+7. `performanceByOwner` ANALISTA + scope OWN → `anonymized=true`,
+   rows só do próprio ANALISTA, `teamAverage` presente (Sprint 5)
+8. `performanceByOwner` DIRETOR_COMERCIAL read_all →
+   `anonymized=false`, ≥2 linhas visíveis, ownerIds distintos
+9. `inboundVsOutbound` ADMIN read_all → `loadInboundOpps` passa
+   pelo mesmo `visibility()`; where com tenantId; resolveScope
+   chamado com args corretos
+
+Padrão de mock (mesmo do `sales-structure-service.test.ts`):
+`vi.mock('@/server/services/sales-structure.service')` com
+`resolveScopeMock`; `vi.mock('@/server/db/client')` só com
+`opportunity.findMany`, `opportunityStageHistory.findMany`,
+`tenant.findUnique`; `vi.mock('@/server/services/permissions.service')`
+retornando `true` por default (gate `reports:read` aberto);
+`reportsRouter.createCaller` com contexto real. Testes exercitam o
+contrato tRPC + spread do scope.filter — não exercitam o service
+interno (quem cobre é `sales-structure-service.test.ts` Fase 2a).
+
+**Baseline (worktree):** pré-chip = 965 passing / 4 pré-existentes
+por env vars ausentes em `field-encryption`
+(`TENANT_FIELD_ENCRYPTION_KEY`) / 174 skipped (1143 total). Pós-chip
+= **974 passing (+9 novos) / 4 pré-existentes idênticos / 174
+skipped (1152 total)**. Zero regressão confirmada via
+`mv tests/unit/reports-visibility-scope.test.ts /tmp/` + baseline
+sem meu test file: 965 passing / 4 failing / 174 skipped — deltas
+batem exatamente com os 9 novos. Baseline main referência
+1034/0/174 aplica com env vars completo. Type-check zero. Lint zero.
+
+**A3 cumprida:** reports agora usa mesma resolução de escopo que
+opportunities (Chip 3a paralelo/disjunto). Fase 3 mergido resolve
+promessa "scope resolver central único" da spec §5.
+
+**Débitos residuais (escopo Fase 3a + Fase 4):**
+- **Fase 3a** (paralelo a este chip): opportunities.ts
+  `visibilityWhere` migra pro `resolveOpportunityScope`; script
+  backfill A2 read_others → read_team/read_all
+- **Fase 4**: UI `/admin/commercial-structure` (CRUD tipos, árvore
+  drag-drop, membros), seed de demonstração 3 níveis, cenários
+  QA `Roteiro_QA_Homologacao_Staging.md` §2 novo bloco
+
+**Rollback:** reverter 2 arquivos
+(`src/server/trpc/routers/reports.ts` + apagar
+`tests/unit/reports-visibility-scope.test.ts`). Sem migration, sem
+UI, sem lock-in — chip totalmente reversível.
+
+---
+
 ## 🚀 Roadmap médio prazo (Sprints 16–20)
 
 ### Sprint 16 — Hardening de Produção

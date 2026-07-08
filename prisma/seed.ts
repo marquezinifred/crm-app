@@ -38,6 +38,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import { runAsSystem } from '../src/server/db/tenant-context';
+import { seedCommercialStructure } from './seed-commercial-structure';
 
 faker.seed(20260101);
 faker.setDefaultRefDate('2026-06-27T12:00:00Z');
@@ -445,6 +446,13 @@ async function seedTenant(tenantSpec: (typeof TENANTS)[number]): Promise<void> {
   }
 
   console.log(`   ✅ ${tenantSpec.name}: ${users.length} users, ${companies.length} companies, ${contacts.length} contacts, 30 opps`);
+
+  // Sprint 15G Fase 4c — só no tenant demo (acme-tech) pra não inflar seed.
+  if (tenantSpec.slug === 'acme-tech') {
+    console.log('   🏛️  Semeando estrutura comercial (Sprint 15G Fase 4c)...');
+    await seedCommercialStructure(prisma, tenant.id, users[0]!, users);
+    console.log('      ✅ 3 tipos, 4 units + vínculos por role');
+  }
 }
 
 async function main(): Promise<void> {

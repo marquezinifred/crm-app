@@ -31,6 +31,14 @@ export interface OpportunityCardData {
   daysInStage?: number | null;
   followUpUrgency?: 'ok' | 'soon' | 'overdue';
   aiScorePct?: number | null;
+  /**
+   * Sprint 15G Fase 4b — nome da unidade primária do owner (equipe/regional
+   * onde ele opera). Quando presente, é renderizado como badge subtle no
+   * footer pra dar contexto de "de qual equipe essa opp veio". Deixe
+   * `undefined` até o backend `opportunities.list` incluir
+   * `owner.primaryUnit.name` (débito Sprint 15H).
+   */
+  ownerUnitName?: string | null;
 }
 
 export function OpportunityCard({
@@ -93,6 +101,17 @@ export function OpportunityCard({
         <div className="flex items-center gap-1.5 min-w-0">
           <Avatar name={card.ownerName} src={card.ownerAvatarUrl} size="xs" />
           <span className="text-caption text-text-2 truncate">{card.ownerName}</span>
+          {card.ownerUnitName && (
+            <Badge
+              variant="default"
+              title={`Unidade: ${card.ownerUnitName}`}
+              aria-label={`Unidade: ${card.ownerUnitName}`}
+              className="max-w-[120px] truncate"
+              data-testid="opp-card-owner-unit"
+            >
+              {card.ownerUnitName}
+            </Badge>
+          )}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           {typeof card.aiScorePct === 'number' && (

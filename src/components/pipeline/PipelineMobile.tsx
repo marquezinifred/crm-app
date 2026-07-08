@@ -11,12 +11,20 @@ import type { OpportunityStage } from '@prisma/client';
 interface Props {
   onCardClick?: (id: string) => void;
   onAdvanceError?: (msg: string, opportunityId: string) => void;
+  /**
+   * Sprint 15G Fase 4b — filtro `ownerId` opcional aplicado por cima do
+   * escopo servidor (ScopeSwitcher grava aqui `currentUser.id` quando
+   * "Minhas oportunidades"). Undefined = usa escopo servidor puro.
+   */
+  ownerFilter?: string;
 }
 
-export function PipelineMobile({ onCardClick, onAdvanceError }: Props) {
+export function PipelineMobile({ onCardClick, onAdvanceError, ownerFilter }: Props) {
   const utils = trpc.useUtils();
   const [active, setActive] = useState<OpportunityStage>('PROSPECT');
-  const { data, isLoading, error } = trpc.opportunities.kanban.useQuery({});
+  const { data, isLoading, error } = trpc.opportunities.kanban.useQuery(
+    ownerFilter ? { ownerId: ownerFilter } : {},
+  );
   const advance = trpc.opportunities.advanceStage.useMutation({
     onSuccess: () => utils.opportunities.kanban.invalidate(),
     onError: (err, vars) => onAdvanceError?.(friendlyTrpcError(err), vars.id),

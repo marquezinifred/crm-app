@@ -2,13 +2,24 @@
 
 import { useState } from 'react';
 import { useIsMobile } from '@/lib/utils/hooks';
+import { trpc } from '@/lib/trpc/client';
 import { PipelineKanban } from '@/components/pipeline/PipelineKanban';
 import { PipelineMobile } from '@/components/pipeline/PipelineMobile';
 import { PageHeader } from '@/components/layout/PageHeader';
+import {
+  ScopeSwitcher,
+  type PipelineScopePreference,
+} from '@/components/pipeline/ScopeSwitcher';
 
 export default function PipelinePage() {
   const isMobile = useIsMobile();
+  const meQ = trpc.users.me.useQuery(undefined, { staleTime: 60_000 });
   const [advanceError, setAdvanceError] = useState<{ msg: string; oppId: string } | null>(null);
+  const [scopePreference, setScopePreference] =
+    useState<PipelineScopePreference | null>(null);
+
+  const ownerFilter =
+    scopePreference === 'MINE' && meQ.data?.id ? meQ.data.id : undefined;
 
   return (
     <main className="min-h-screen p-4 md:p-6">
@@ -25,15 +36,21 @@ export default function PipelinePage() {
         }
       />
 
+      <div className="mb-4 flex justify-end">
+        <ScopeSwitcher onChange={setScopePreference} />
+      </div>
+
       {isMobile ? (
         <PipelineMobile
           onCardClick={(id) => (window.location.href = `/pipeline/${id}`)}
           onAdvanceError={(msg, oppId) => setAdvanceError({ msg, oppId })}
+          ownerFilter={ownerFilter}
         />
       ) : (
         <PipelineKanban
           onCardClick={(id) => (window.location.href = `/pipeline/${id}`)}
           onAdvanceError={(msg, oppId) => setAdvanceError({ msg, oppId })}
+          ownerFilter={ownerFilter}
         />
       )}
 

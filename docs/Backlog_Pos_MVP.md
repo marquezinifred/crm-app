@@ -3149,6 +3149,124 @@ sem backend novo, sem lock-in — chip totalmente reversível.
 
 ---
 
+### Sprint 15G Fase 4b — Scope switcher no pipeline + badge de unidade ✅ FECHADO 2026-07-08
+Spec: `docs/chip-prompts/Sprint_15G_estrutura_comercial.md` §9.2 +
+§9.3 (via prompt do chip). Modo B disjunto do Fase 4a (admin UI) e
+Fase 4c (seed + roteiro). Consome `trpc.salesStructure.myScope`
+entregue no Fase 2b — zero backend novo.
+
+**Escopo cirúrgico (Fase 4b — só UI do /pipeline):**
+- `src/components/pipeline/ScopeSwitcher.tsx` novo — Select condicional:
+  * `scope.type = OWN | PARTNER | NONE` → retorna `null` (sem UI porque
+    só há um escopo possível — evita ruído visual)
+  * `scope.type = TEAM` → Select com 2 opções: "Minhas oportunidades"
+    (filter local `ownerId = currentUser.id`) e "Minha equipe (N)"
+    onde N vem de `scope.teamSize`
+  * `scope.type = ALL` → Select com 2 opções: "Minhas oportunidades"
+    e "Toda a empresa". **Nunca inclui "Minha equipe"** — usuário ALL
+    não passa pelo path TEAM do resolver e não tem `teamSize` na
+    resposta (decisão registrada no test case 5)
+  * Persiste em `localStorage` chave `pipeline:scope-preference:{userId}`
+    (namespaced por userId — evita sujeira entre logins na mesma
+    máquina). Default sem valor persistido = opção mais ampla
+    disponível (TEAM em scope TEAM; ALL em scope ALL)
+  * Sanitização de stale: valor `TEAM` no storage quando scope atual
+    é `ALL` (admin rebaixou) → cai no default sem quebrar
+- `src/components/crm/OpportunityCard.tsx` estendido com prop
+  opcional `ownerUnitName?: string | null`. Quando presente renderiza
+  Badge subtle (`variant="default"` — não existe `ghost` no design
+  system; `default` já dá o visual subtle `bg-hover text-text-2`) no
+  footer com `max-w-[120px] truncate`, `title` + `aria-label`
+  acessíveis (`Unidade: {name}`), `data-testid="opp-card-owner-unit"`.
+  Callers atuais **não passam** a prop — aguardando débito Sprint 15H
+- `src/app/pipeline/page.tsx` monta `ScopeSwitcher` acima do
+  Kanban/Mobile e propaga a preferência via `ownerFilter` (só quando
+  `MINE`, resolvido pra `currentUser.id` via `trpc.users.me`)
+- `PipelineKanban` + `PipelineMobile` ganharam prop opcional
+  `ownerFilter?: string` que compõe o input do `kanban.useQuery`
+  (`ownerFilter ? { ownerId: ownerFilter } : {}`) — TanStack Query
+  troca de cache-key automaticamente quando o input muda, garantindo
+  refetch no toggle
+- **NÃO tocado:** `opportunities.list` backend (débito Sprint 15H —
+  precisa incluir `owner.primaryUnit.name` no `include`), UI
+  `/admin/commercial-structure` (Fase 4a), seed (Fase 4c),
+  `visibilityWhere` do router (Fase 3a fez), `resolveOpportunityScope`
+  do service (Fase 2a fez)
+
+**Guards obrigatórios verificados (§4 metodologia):**
+- Client-side only: chip só UI. Nada de RBAC/audit/tenant no service
+- Multi-tenancy §4.1: filtro `ownerId` compõe por cima do scope
+  filter server-side via Prisma `AND: [...]` — se user tentar filtrar
+  por outro owner via devtools, scope filter (ownerId subtree) ganha
+- Design system §Sprint 14: Select do `@/components/ui/input`, Badge
+  do design system, tokens Venzo (`text-caption`, `text-text-2`)
+- localStorage namespaced por userId: pattern replica
+  `venzo:sidebar-collapsed` do AppShell (Sprint 13)
+- A11y: `<label htmlFor>` + `aria-label` no Select; `title` +
+  `aria-label` no Badge para screen reader e tooltip
+
+**Testes:** **+14 novos** (10 scope-switcher + 4 badge):
+- `tests/component/scope-switcher.test.tsx` (10 casos):
+  1. Scope OWN → não renderiza + onChange não chamado
+  2. Scope PARTNER → não renderiza + onChange não chamado
+  3. Scope NONE → não renderiza (PARCEIRO órfão)
+  4. Scope TEAM → Select 2 opções, "Minha equipe (7)" com contagem
+  5. Scope ALL → Select 2 opções, "Toda a empresa"; **nunca
+     inclui TEAM** (decisão registrada — usuário ALL não tem teamSize)
+  6. Valor persistido em localStorage carrega no mount + onChange
+     dispara com valor persistido
+  7. Sem persistência: default TEAM em scope TEAM (não grava no
+     storage por default — só quando user troca)
+  8. Sem persistência: default ALL em scope ALL
+  9. Trocar de opção grava no localStorage + onChange
+  10. Valor stale (`TEAM` quando scope agora é `ALL`) cai no default
+      sem quebrar
+- `tests/component/opportunity-card-unit-badge.test.tsx` (4 casos):
+  1. Sem prop → badge não renderiza
+  2. Com prop → badge renderiza + `title` + `aria-label`
+  3. Nome longo → `truncate` + `max-w-[120px]` visível
+  4. `null` e `undefined` ambos escondem badge
+
+Padrão de mock (Testing Library como no `pipeline-new.test.tsx`
+piloto P-53): `vi.mock('@/lib/trpc/client')` com stubs de
+`salesStructure.myScope.useQuery` e `users.me.useQuery`. Polyfill
+Map-based de `localStorage` no `beforeAll` (Node 22 + jsdom podem
+não expor o global sem `--localstorage-file`).
+
+**Baseline (worktree):** pré-chip = 1055 passing / 0 failing / 174
+skipped (1229 total). Pós-chip = **1069 passing (+14 novos) / 0
+failing / 174 skipped (1243 total)**. Zero regressão confirmada
+(baseline pré medido com `cp .env.example .env` para ativar tests
+env-dependentes). Type-check zero. Lint zero.
+
+**Débitos residuais registrados:**
+- **Sprint 15H — estender `opportunities.list/kanban` include para
+  incluir `owner.primaryUnit.name`**: sem isso, prop
+  `ownerUnitName` do OpportunityCard fica sempre `undefined` e o
+  badge nunca aparece. Trabalho backend estimado ~0.5 dia:
+  (1) `SalesUnitRepository.getPrimaryUnitByUserId(userId, tenantId)`
+  ou include Prisma equivalente; (2) map `owner.primaryUnit` no
+  procedure; (3) caller pass da prop no `PipelineKanban`/`Mobile`
+  wrappers; (4) fallback quando user não tem primary unit (skip
+  badge). Alternativa: expor via `myScope` batch ou
+  `opportunities.byId`. Decidir no início de 15H.
+- **Fase 4a** (paralelo a este chip): UI
+  `/admin/commercial-structure` (CRUD tipos, árvore drag-drop,
+  gerenciar membros por unit) — nada a ver com este chip
+- **Fase 4c** (paralelo a este chip): seed demo 3 níveis +
+  cenários QA `Roteiro_QA_Homologacao_Staging.md`
+- **Sprint 15H opcional** — quando `ownerUnitName` vier no backend,
+  também considerar mostrá-lo no header do `/pipeline/[id]`
+  (contextual pra donos de opp cross-unit)
+
+**Rollback:** reverter 4 arquivos (`pipeline/page.tsx`,
+`PipelineKanban.tsx`, `PipelineMobile.tsx`, `crm/OpportunityCard.tsx`)
++ apagar 3 novos (`ScopeSwitcher.tsx`, 2 tests). Zero migration,
+zero backend, zero lock-in. `myScope` procedure fica órfã de UI
+mas segue exposto pra reports/consumers futuros.
+
+---
+
 ## 🚀 Roadmap médio prazo (Sprints 16–20)
 
 ### Sprint 16 — Hardening de Produção

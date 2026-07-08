@@ -3056,6 +3056,97 @@ promessa "scope resolver central único" da spec §5.
 `tests/unit/reports-visibility-scope.test.ts`). Sem migration, sem
 UI, sem lock-in — chip totalmente reversível.
 
+### Sprint 15G Fase 4a — UI `/admin/commercial-structure` ✅ FECHADO 2026-07-08
+Spec: `docs/Sprint_15G_estrutura_comercial.md` §9.1 + `docs/Sprint_15G_amendments.md`
+A5/A7. Chip Modo B disjunto das Fases 4b (scope switcher pipeline) e 4c
+(seed + roteiro QA).
+
+**Escopo cirúrgico (só UI admin — zero backend, zero migração):**
+- `src/app/admin/commercial-structure/page.tsx` novo com PageHeader +
+  Tabs Radix (2 tabs: Níveis + Organograma) — 726 linhas
+- **Tab Níveis (`UnitTypesTab` inline)**: tabela do design system
+  (Table/TH/TR/TD) com colunas nome, level badge, cor (círculo +
+  hex), ícone; botão "+ Novo nível" no header; modal `UnitTypeModal`
+  create/edit (Field/Input/Select), level select 1-8 imutável em
+  edit; AlertDialog do design system pra exclusão (P-12 pattern,
+  não `confirm()` nativo); toast success + `friendlyTrpcError`
+  (P-21) em CONFLICT quando tipo em uso
+- **Tab Organograma (`OrgTreeTab` inline)**: árvore recursiva
+  reconstruída client-side do `getTree` flat (`buildTree` puro,
+  linkas 402-418); nós com toggle expand/collapse via state, cor +
+  ícone do tipo + chip contagem de membros; a11y
+  `role=tree`/`treeitem`/`aria-expanded`/`aria-selected`; botão
+  "+ Nova unidade" no header; modal `NewUnitModal` com Select
+  parentId permitindo "— (nó raiz)" (parentId opcional)
+- **`UnitDetailPanel` (Sheet variant `right`)**: abre ao click num
+  nó via `selectedUnitId` state; breadcrumb dos ancestrais no
+  header; seção membros com badges MANAGER/MEMBER + Primária + botão
+  × por row (AlertDialog); botão "Desativar unidade" danger com
+  AlertDialog (mostra CONFLICT se tem filhos ativos)
+- **`AddMemberModal`**: Select de usuários (via `trpc.users.list`
+  com `active: true`), Select role (MANAGER/MEMBER), Checkbox
+  `isPrimary` com hint text "substitui a primária atual"
+- **Sidebar** (`src/components/layout/Sidebar.tsx`): item novo
+  "Estrutura comercial" na seção Admin gated por `permission:
+  'sales_structure:read'` com `IconHierarchy` inline (SVG estilo
+  Tabler); botões "manage" gated client-side via
+  `hasPermissionByRole(role, 'sales_structure:manage')` como defesa
+  em profundidade (backend re-valida em `withPermission`)
+- Toast success/error com `friendlyTrpcError` em todas as 7 mutations
+  (createUnitType, updateUnitType, deleteUnitType, createUnit,
+  deactivateUnit, addMember, removeMember)
+- Invalidação de query cache correta em cada onSuccess
+  (listUnitTypes/getTree/getUnit conforme escopo do mutation)
+
+**Testes (`tests/component/admin-commercial-structure.test.tsx`):**
+- **14 casos** com Testing Library + userEvent (padrão P-53):
+  1. render + PageHeader
+  2. ambas as tabs visíveis
+  3. listUnitTypes vazio → EmptyState com CTA pro ADMIN
+  4. listUnitTypes populado → tabela renderiza nome/level/cor/ícone
+  5. botão "+ Novo nível" abre modal
+  6. submit UnitTypeModal happy → createUnitType chamado com args
+     corretos (name, level, color)
+  7. click "Editar" abre modal em edit mode com dados pré-preenchidos
+     e select de level suprimido (imutável)
+  8. delete unit type dispara AlertDialog + confirm chama deleteUnitType
+  9. deleteUnitType onError → toast via `friendlyTrpcError`
+  10. tab Organograma com tree vazio → EmptyState com CTA
+  11. tree flat com pai/filho → árvore hierárquica renderiza
+  12. click em nó abre Sheet detalhe com membros + badges
+  13. addMember happy path (mock captura onSuccess + toast +
+      invalidações)
+  14. createUnitType onSuccess dispara toast success + invalida query
+- Mock pattern: `vi.mock('@/lib/trpc/client')` capturando queries +
+  mutations; `ToastProvider` real; dispara handlers manualmente
+  (P-54 pattern)
+
+**Baseline:** **1069 passing (+14 novos) / 0 failing / 174 skipped
+(1243 total)** com env vars completo. Pré-chip main = 1055/0/174; delta
+exatamente = 14 testes novos. Type-check zero. Lint zero (warnings de
+`react-hooks/exhaustive-deps` e `aria-role treeitem` resolvidos).
+
+**Chip NÃO fez** (escopo Fases 4b/4c):
+- Zero mudança em `src/app/pipeline/*` (scope switcher UI é Fase 4b)
+- Zero mudança em `src/components/crm/OpportunityCard.tsx` (badge
+  unidade é Fase 4b)
+- Zero mudança em `prisma/seed.ts` (Fase 4c)
+- Zero mudança em `docs/Roteiro_QA_Homologacao_Staging.md` (Fase 4c)
+- Zero backend novo — só consome `salesStructure.*` router da Fase 2b
+
+**Débitos residuais (candidatos, sem ID atribuído):**
+- **Reorder de árvore**: mover nó com subárvore não suportado (spec
+  A6 aceito como fora do escopo). Se surgir demanda, sprint futuro.
+- **Bulk operations**: importar organograma de CSV, mover N membros
+  entre unidades — sem UI. Sprint futuro se marketing pedir.
+- **Preview role effect**: ao adicionar membro como MANAGER, mostrar
+  quantas opps ele passa a ver via `read_team`. Enhancement Sprint 15H.
+
+**Rollback:** reverter `src/components/layout/Sidebar.tsx` (1 item +
+1 ícone) + apagar `src/app/admin/commercial-structure/` e
+`tests/component/admin-commercial-structure.test.tsx`. Sem migration,
+sem backend novo, sem lock-in — chip totalmente reversível.
+
 ---
 
 ## 🚀 Roadmap médio prazo (Sprints 16–20)

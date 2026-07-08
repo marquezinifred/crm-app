@@ -69,6 +69,7 @@ const SECTIONS: Section[] = [
       { href: '/admin/users', label: 'Usuários', Icon: IconUserCog },
       { href: '/admin/products', label: 'Produtos', Icon: IconPackage },
       { href: '/admin/listas', label: 'Listas', Icon: IconSettings },
+      { href: '/admin/commercial-structure', label: 'Estrutura comercial', Icon: IconHierarchy, permission: 'sales_structure:read' },
       { href: '/admin/billing', label: 'Plano e cobrança', Icon: IconCard },
       { href: '/admin/branding', label: 'Identidade', Icon: IconPalette },
       { href: '/admin/ai', label: 'IA', Icon: IconSparkles },
@@ -269,3 +270,4 @@ function IconAt(p: { className?: string }) { return <I {...p}><circle cx="12" cy
 function IconFiles(p: { className?: string }) { return <I {...p}><path d="M9 3h7l5 5v11a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M16 3v5h5"/></I>; }
 function IconLock(p: { className?: string }) { return <I {...p}><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></I>; }
 function IconUpload(p: { className?: string }) { return <I {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5M12 3v12"/></I>; }
+function IconHierarchy(p: { className?: string }) { return <I {...p}><rect x="9" y="3" width="6" height="6" rx="1"/><rect x="3" y="15" width="6" height="6" rx="1"/><rect x="15" y="15" width="6" height="6" rx="1"/><path d="M12 9v3M6 15v-3h12v3"/></I>; }

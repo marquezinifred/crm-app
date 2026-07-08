@@ -558,6 +558,146 @@ export SECRET="<cole-o-secret-daqui>"
 
 **Bloqueia release se:** V1 quebra (feature morta) ou V6 quebra (navegação por teclado é acessibilidade obrigatória — AC-P16-06). V2, V3, V8 são polish e valem regressão registrar como P-XX.
 
+### 2.7. Estrutura Comercial (~15min — Sprint 15G)
+
+6 cenários derivados do código real (`prisma/seed.ts` seed demo,
+`src/server/db/repositories/sales-unit.repository.ts` A7,
+`src/server/services/sales-structure.service.ts` A4/A5/kill-switch,
+`src/server/trpc/routers/sales-structure.ts`). Cobre CRUD de tipos e
+units, alocação de membros, `resolveOpportunityScope` respeitando
+role + subtree + PARCEIRO row-level.
+
+**Pré-requisito:** seed rodado (`npm run db:seed` OU
+`npx prisma migrate reset` inclui seed automático). Tenant
+`acme-tech` traz 3 tipos ("Diretoria", "Regional", "Equipe") + 4
+units ("Diretoria Sul", "Regional SP", "Equipe Enterprise",
+"Equipe Mid-Market") + membros por role vinculados via
+`SalesStructureService.addMember`. `SALES_STRUCTURE_ENABLED=true`
+em staging pra exercitar o path novo.
+
+1. **V1 — Admin cria tipo de unidade**
+   - Login: ADMIN do tenant `acme-tech`.
+   - Navegar: `/admin/commercial-structure` → aba "Tipos".
+   - Clicar "+ Novo nível" → preencher `name="Filial"`, `level=4`,
+     `color="#EC4899"`, `icon="briefcase"`. Salvar.
+   - **Passa se:** linha nova na tabela + toast "Nível criado" +
+     badge de level "4" com a cor rosa aplicada.
+   - **Falha esperada:** repetir com `level=1` → CONFLICT
+     (`UNIQUE(tenant, level)` da migration 0031 §A1); friendlyTrpcError
+     mostra "Já existe um tipo neste nível.".
+
+2. **V2 — Admin cria unidade raiz (respeitando A7)**
+   - Continuando V1. Aba "Organograma" → "+ Nova unidade".
+   - Selecionar `typeId="Filial"`, `name="Filial Nordeste"`,
+     `parentId="(nenhum — nó raiz)"`. Salvar.
+   - **Passa se:** nó "Filial Nordeste" aparece na árvore com badge
+     "Filial" cor rosa; `path` no banco começa com `root.<shortId>`;
+     `depth=1`.
+   - **Falha esperada:** parentId de outro tenant → NOT_FOUND (defesa
+     cross-tenant do Repository). Tenta INSERT direto via Prisma (sem
+     Repository) → CHECK `sales_units_path_not_empty` viola (A7).
+
+3. **V3 — Admin adiciona membro a uma unit (A5)**
+   - Continuando V2. Clicar em "Diretoria Sul" (do seed) → sheet lateral
+     abre com breadcrumb "Diretoria Sul".
+   - "+ Adicionar membro" → selecionar user `DIRETOR_COMERCIAL@acme-tech`
+     → role `MANAGER` → `isPrimary=true`. Salvar.
+   - **Passa se:** badge "1 gerente" no card + membro listado no sheet;
+     row antiga do backfill A1 em "Padrão" (se existia) tem `isPrimary`
+     virado pra `false` — transação A5 desmarca outras primary do user.
+   - **Verificação SQL de sanidade:**
+     ```sql
+     SELECT unit_id, is_primary FROM sales_unit_members
+     WHERE user_id = '<DIRETOR_COMERCIAL_id>'
+       AND tenant_id = '<tenant_id>';
+     ```
+     Só 1 row com `is_primary=true`. Partial UNIQUE
+     `sales_unit_members_one_primary_per_user` garante isso mesmo sob
+     write concorrente.
+   - **Falha esperada:** userId de outro tenant → NOT_FOUND (guard
+     cross-tenant do Service). Duplicar addMember mesma (user, unit) →
+     upsert atualiza role/isPrimary (não gera row duplicada).
+
+4. **V4 — GESTOR vê equipe no /pipeline (kill-switch ON, subtree)**
+   - `SALES_STRUCTURE_ENABLED=true` (config env do Vercel; ver Anexo A).
+   - Login: user `GESTOR@acme-tech` do seed (vinculado a "Regional SP"
+     como MANAGER pelo seedCommercialStructure).
+   - Navegar: `/pipeline`.
+   - **Passa se:** ScopeSwitcher aparece no topbar do pipeline com
+     opções "Minhas oportunidades" (default OWN) e "Minha equipe"
+     (TEAM). Trocar pra "Minha equipe" → lista mostra opps de TODOS
+     users em "Equipe Enterprise" + "Equipe Mid-Market" (subtree
+     descendente via ltree `<@`). Não mostra opps de outras
+     regionais/diretorias.
+   - **Verificação SQL de sanidade:**
+     ```sql
+     SELECT DISTINCT owner_id
+     FROM opportunities
+     WHERE tenant_id = '<tenant_id>'
+       AND owner_id IN (
+         SELECT user_id FROM sales_unit_members
+         WHERE tenant_id = '<tenant_id>'
+           AND unit_id IN (
+             SELECT id FROM sales_units
+             WHERE tenant_id = '<tenant_id>'
+               AND path <@ (
+                 SELECT path FROM sales_units
+                 WHERE name = 'Regional SP' AND tenant_id = '<tenant_id>'
+               )
+           )
+       );
+     ```
+     Bate 1:1 com o que aparece na UI.
+   - **Falha esperada:** mostra opps de outras regionais (bug de
+     `SalesUnitRepository.getSubtreeMemberIds` — falha no filtro `<@`).
+
+5. **V5 — DIRETOR_COMERCIAL vê tudo (ALL)**
+   - Login: user `DIRETOR_COMERCIAL@acme-tech` do seed (Fase 4c
+     vinculado a "Diretoria Sul" como MANAGER).
+   - Navegar: `/pipeline`.
+   - **Passa se:** ScopeSwitcher com "Toda a empresa" (ALL) default.
+     Lista mostra opps de TODO o tenant (todas regionais + diretorias
+     + times), independente de estrutura hierárquica. DIRETOR tem
+     `opportunity:read_all` — precede `read_team` no
+     `resolveOpportunityScope`.
+   - **Falha esperada:** DIRETOR_FINANCEIRO tem `read_all` mas NÃO
+     tem `read_team` (matriz Sprint 15G Fase 1b) — vê tudo do tenant
+     também mas não aparece o toggle "Minha equipe" (só 1 escopo).
+
+6. **V6 — PARCEIRO preservado (A4 — row-level rígido)**
+   - Login: user `PARCEIRO@acme-tech` do seed. Este user tem
+     `partnerCompanyId` seteado + engajamento aprovado numa
+     Opportunity específica.
+   - Navegar: `/pipeline`.
+   - **Passa se:** ScopeSwitcher NÃO aparece (early return no
+     `resolveOpportunityScope` — `scope.type === 'PARTNER'`, não
+     `TEAM`/`ALL`/`OWN`). Lista mostra APENAS opps onde:
+     `partnerCompanyId = user.partnerCompanyId` E existe
+     `PartnerEngagement` com status `APPROVED`.
+   - **Falha esperada:** vê opps sem engajamento aprovado, OU vê opps
+     de outras partnerCompanies (A4 quebrado — regressão do Sprint 7
+     debt closer). PARCEIRO sem `partnerCompanyId` cadastrado → `type='NONE'`
+     retorna filter `{id: '00000000-...', tenantId}` (sentinela) →
+     lista vazia sem erro.
+
+**Passa como bônus:**
+- Kill-switch runtime: setar `SALES_STRUCTURE_ENABLED=false` no
+  Vercel + redeploy → GESTOR volta pra fallback binário pré-15G
+  (qualquer permission `read_team|read_all` destrava visão tenant-wide).
+  Estrutura de units persiste no DB — flag OFF só ignora ela em
+  runtime, sem migração. Religar flag restaura visão hierárquica.
+- Seed idempotente: rodar `npm run db:seed` 2× seguidas sem erro
+  (Fase 4c usa pré-check por `UNIQUE(tenant, name)` em types + units).
+- Cross-tenant guard: tentar `salesStructure.createUnit` do tenant B
+  com `parentId` de tenant A → NOT_FOUND (cross-tenant defense do
+  Repository), não CONFLICT.
+
+**Bloqueia release se:** V4 mostra opps fora da subtree (vazamento
+horizontal via `<@` quebrado), V5 GESTOR consegue ver diretoria acima
+(escalação vertical), OU V6 PARCEIRO vê opps de outra partnerCompany
+(regressão A4). V1/V2/V3 são CRUD admin — bugs registrar como P-XX
+mas não bloqueiam release.
+
 ---
 
 ## 3. Cenários de segurança (bloqueia release se falhar)

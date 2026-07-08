@@ -3056,6 +3056,143 @@ promessa "scope resolver central único" da spec §5.
 `tests/unit/reports-visibility-scope.test.ts`). Sem migration, sem
 UI, sem lock-in — chip totalmente reversível.
 
+### Sprint 15G Fase 4c — Seed demonstração + QA scenarios ✅ FECHADO 2026-07-08
+Spec: `docs/chip-prompts/Sprint_15G_estrutura_comercial.md` §checklist
+"Seed de demonstração" +
+`docs/Sprint_15G_amendments.md` **A5 (transação isPrimary)** +
+**A7 (SalesUnit via Repository)**.
+Chip Modo B disjunto das Fases 4a (admin UI) e 4b (scope switcher no
+pipeline). Fecha promessa da spec §checklist "Seed de demonstração
+(3 níveis: Diretoria → Regional → Equipe)" + cenários pass/fail no
+Roteiro QA.
+
+**Escopo cirúrgico (Fase 4c — só seed + doc QA + testes):**
+- `prisma/seed-commercial-structure.ts` novo — função pura
+  `seedCommercialStructure(prisma, tenantId, admin, users)` extraída
+  do entry `prisma/seed.ts` pra permitir teste unitário isolado
+  (o entry seed tem side-effects — top-level `main()`). Cria:
+  * **3 tipos** de unit via `SalesStructureService.createUnitType`:
+    Diretoria (level 1, #6366F1, building-2), Regional (level 2,
+    #10B981, map-pin), Equipe (level 3, #F59E0B, users).
+  * **4 units** via `SalesUnitRepository.create` (A7 — path ltree
+    calculado no INSERT via $queryRaw): Diretoria Sul (raiz),
+    Regional SP (filha da Diretoria), Equipe Enterprise e
+    Equipe Mid-Market (filhas da Regional).
+  * **Vínculos por role** via `SalesStructureService.addMember`:
+    DIRETOR_COMERCIAL → Diretoria Sul MANAGER `isPrimary=true`;
+    1º GESTOR → Regional SP MANAGER isPrimary; ANALISTAs distribuídos
+    entre Enterprise (índices pares) e Mid-Market (índices ímpares)
+    MEMBER isPrimary; ADMIN → Diretoria Sul MEMBER SEM `isPrimary`
+    (evita conflitar com backfill A1 que já pode ter marcado ele em
+    "Padrão").
+  * A5 respeitado: `addMember({ isPrimary: true })` desmarca outras
+    primary do user em transação (updateMany + upsert atômico).
+- `prisma/seed.ts` — import de `seedCommercialStructure` + bloco
+  condicional `if (tenantSpec.slug === 'acme-tech')` no fim de
+  `seedTenant`. Só o 1º tenant (`acme-tech`) recebe estrutura pra
+  não inflar seed dos outros 2 tenants demo (`beta-consultoria` e
+  `gamma-industria`).
+- **Idempotência crítica** — seed roda 2× consecutivas sem erro:
+  * Pré-check por `(tenantId, level)` em `sales_unit_types.findFirst`
+    antes de `createUnitType`. `UNIQUE(tenant_id, level)` da migration
+    0031 seria a última linha, mas o pré-check evita o erro P2002
+    silencioso.
+  * Pré-check por `(tenantId, name)` em `sales_units.findFirst` antes
+    de `SalesUnitRepository.create`. Necessário porque o Repository
+    é INSERT puro (`$queryRaw`), sem upsert nativo — sem pré-check,
+    2ª rodada tentaria criar path duplicado.
+  * `addMember` já é upsert por `(userId, unitId)` via `salesUnitMember`
+    — seguro chamar de novo (Service faz update em vez de INSERT).
+
+**Roteiro QA — bloco §2.7 novo em `Roteiro_QA_Homologacao_Staging.md`:**
+6 cenários pass/fail derivados do código real cobrindo:
+- **V1** Admin cria tipo de unidade (level UNIQUE constraint)
+- **V2** Admin cria unidade raiz (Repository path ltree A7)
+- **V3** Admin adiciona membro (A5 transação — desmarca primary
+  anterior, partial UNIQUE sanity via SQL)
+- **V4** GESTOR vê equipe subtree no `/pipeline` (`resolveOpportunityScope`
+  path novo com `SalesUnitRepository.getSubtreeMemberIds`, verificação
+  SQL cruzada com `<@` ltree)
+- **V5** DIRETOR_COMERCIAL vê tudo (`read_all` precede `read_team`);
+  contraste com DIRETOR_FINANCEIRO (só `read_all`, sem toggle "Minha
+  equipe")
+- **V6** PARCEIRO preservado (A4 — early return `scope.type === 'PARTNER'`,
+  filtro row-level com `partnerEngagements APPROVED`)
+
+Cada cenário tem passos executáveis + pass/fail explícito.
+Bloqueia release quando: V4 mostra opps fora subtree (vazamento
+horizontal), V5 GESTOR sobe hierarquia (escalação vertical), OU V6
+regride A4 do Sprint 7. Bônus: kill-switch runtime (`SALES_STRUCTURE_ENABLED`),
+idempotência do seed, cross-tenant guard.
+
+**Guards obrigatórios verificados (§4 metodologia):**
+- Multi-tenancy §4.1: `SalesUnitRepository.create` passa `tenantId`
+  explícito no INSERT; `SalesStructureService.addMember` guarda
+  cross-tenant via findFirst com filtro `tenantId` antes do upsert
+- A7 §Sprint 15G amendments: seed usa `SalesUnitRepository.create` —
+  NUNCA `prisma.salesUnit.create` direto (path ltree)
+- A5 §Sprint 15G amendments: seed usa
+  `SalesStructureService.addMember` — respeita transação `isPrimary`
+- Backstop P-42 §4.10: preservado (seed cria via `.create` com
+  `tenantId` no data, bate com contexto)
+- Kill-switch runtime P-62: N/A (seed cria estrutura no DB;
+  `SALES_STRUCTURE_ENABLED` só afeta leitura em runtime — flag OFF
+  ignora estrutura, sem migração)
+
+**Testes:** **+5 novos** em
+`tests/unit/seed-commercial-structure.test.ts`:
+1. Cria 3 unit types com levels 1/2/3 na ordem canônica com args
+   corretos (nome, level, color, icon)
+2. Cria 4 units via `SalesUnitRepository.create` respeitando
+   hierarquia (Diretoria Sul raiz → Regional SP → 2 equipes),
+   propaga `typeId` correto
+3. `addMember` chama MANAGER pra DIRETOR/GESTOR e MEMBER pra
+   ANALISTA/ADMIN (6 chamadas total: 1 DIRETOR + 1 GESTOR + 3
+   ANALISTAs + 1 ADMIN); ADMIN entra sem `isPrimary`
+4. Idempotência — 2ª chamada não gera duplicatas (findFirst retorna
+   rows existentes, skip create); `addMember` continua sendo chamado
+   (upsert seguro)
+5. Sem DIRETOR_COMERCIAL nos users, `addMember` pula o vínculo sem
+   quebrar (nenhuma chamada MANAGER + Diretoria Sul); 5 chamadas em
+   vez de 6
+
+Padrão de mock (via `vi.hoisted()`): `mockPrisma` com
+`salesUnitType.findFirst` + `salesUnit.findFirst`, `createUnitTypeMock`,
+`createUnitMock`, `addMemberMock`. Vitest não roda o entry `seed.ts`
+(vitest exclude `prisma/**`) — testes importam `prisma/seed-commercial-structure`
+diretamente. IDs determinísticos por ordem de invocação
+(`mockResolvedValueOnce` em cascata).
+
+**Baseline (worktree sem `.env.local` completo):** pré-chip = 986
+passing / 4 pré-existentes por env vars ausentes em `field-encryption`
+(`TENANT_FIELD_ENCRYPTION_KEY`) / 174 skipped. Pós-chip = **991
+passing (+5 novos) / 4 pré-existentes idênticos / 174 skipped
+(1169 total)**. Zero regressão confirmada estruturalmente: `git diff`
+mostra que só código NOVO foi adicionado — `prisma/seed.ts` recebe
+1 import + 1 bloco condicional aditivo (não é importado por nenhum
+teste); `docs/Roteiro_QA_Homologacao_Staging.md` só documental;
+2 arquivos novos (`prisma/seed-commercial-structure.ts` +
+`tests/unit/seed-commercial-structure.test.ts`). Baseline main
+referência 1055/0/174 aplica com env vars completo. Type-check zero.
+Lint zero.
+
+**Débitos residuais (escopo Fase 4a + Fase 4b + outros):**
+- **Fase 4a** (paralelo a este chip): UI `/admin/commercial-structure`
+  com CRUD tipos + tabela de units drag-drop + sheet lateral pra
+  gerenciar membros
+- **Fase 4b** (paralelo a este chip): ScopeSwitcher no `/pipeline`
+  page + OpportunityCard mostra membro Unit em vez de só owner
+- Seed pode expandir pra criar opps com owners espalhados entre as
+  4 units — hoje o seed base do Sprint 0 usa `pickOne(users)` sem
+  respeitar estrutura. Não bloqueia Fase 4a/4b; melhora QA §2.7 V4/V5
+  quando cenário exigir opp de time X específico
+
+**Rollback:** reverter 2 arquivos modificados (`prisma/seed.ts` +
+`docs/Roteiro_QA_Homologacao_Staging.md`) + apagar 2 novos
+(`prisma/seed-commercial-structure.ts` +
+`tests/unit/seed-commercial-structure.test.ts`). Zero migração, zero
+UI tocada, zero lock-in — chip totalmente reversível.
+
 ---
 
 ## 🚀 Roadmap médio prazo (Sprints 16–20)

@@ -2,7 +2,6 @@ import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { router } from '@/server/trpc/trpc';
 import { withPermission } from '@/server/trpc/middlewares';
-import { hasPermission } from '@/server/services/permissions.service';
 import { prisma } from '@/server/db/client';
 import { audit } from '@/server/services/audit.service';
 import {
@@ -11,6 +10,7 @@ import {
   STAGE_ORDER,
   StageTransitionError,
 } from '@/server/services/opportunity-stage.service';
+import { SalesStructureService } from '@/server/services/sales-structure.service';
 import {
   opportunityCreateInput,
   opportunityUpdateInput,
@@ -21,7 +21,7 @@ import {
   opportunityTeamMemberInput,
 } from '@/lib/validators/opportunity';
 import { zUuid } from '@/lib/validators';
-import { Prisma } from '@prisma/client';
+import { Prisma, type UserRole } from '@prisma/client';
 
 const canRead = withPermission('opportunity:read');
 const canCreate = withPermission('opportunity:create');
@@ -30,60 +30,53 @@ const canAdvance = withPermission('opportunity:advance_stage');
 const canCancel = withPermission('opportunity:cancel');
 
 /**
- * Filtro de visibilidade — refatorado no Sprint 15E (§6.4 spec).
+ * Filtro de visibilidade — Sprint 15G Fase 3a delega ao
+ * `SalesStructureService.resolveOpportunityScope`.
  *
- * Antes: gate role-based hardcoded (ADMIN/DIRETOR/GESTOR viam tudo,
- * ANALISTA só própria, PARCEIRO row-level).
+ * O service resolve:
+ *  - PARCEIRO com partnerCompanyId → PARTNER (row-level + engagement APPROVED)
+ *  - PARCEIRO sem partnerCompanyId → NONE (uuid zero, zero rows)
+ *  - Kill-switch OFF (SALES_STRUCTURE_ENABLED=false) → fallback pré-15G binário
+ *  - read_all → ALL (tenant inteiro)
+ *  - read_team + subtree não-vazia → TEAM com ownerId IN (subtree)
+ *  - read_team + subtree vazia → OWN (fallback)
+ *  - Default → OWN (só as próprias)
  *
- * Sprint 15E: gate por permission única `opportunity:read_others`.
+ * O `scope.filter` retornado JÁ INCLUI `tenantId` (segunda barreira além
+ * da Prisma extension e RLS).
  *
- * Sprint 15G Fase 1b: `opportunity:read_others` foi removida e
- * substituída por duas permissions granulares — `opportunity:read_team`
- * (visão da equipe gerenciada) e `opportunity:read_all` (tenant inteiro).
- * Fase 3 vai wirar o filtro real por team (dependência de SalesUnit da
- * Fase 2). Nesta fase transitória o filtro segue binário: qualquer uma
- * das duas permissions destrava visão tenant-wide. Isso preserva
- * comportamento para ADMIN/DIRETOR_C/DIRETOR_O (têm ambas), DIRETOR_F
- * (só read_all) e GESTOR (só read_team). ANALISTA segue vendo só as
- * próprias — override individual pode conceder read_team ou read_all.
- * PARCEIRO segue com row-level filter (não é permission-based).
+ * ⚠️ IMPORTANTE: callers compõem via `AND: [scopeFilter, otherFilters]`,
+ * NÃO via spread. Motivo: scope filter pode declarar `ownerId: userId`
+ * (OWN) ou `ownerId: {in: subtree}` (TEAM) ou `partnerCompanyId: X`
+ * (PARTNER); usar spread com `input.ownerId` sobrescreveria essas chaves
+ * e escalaria visibilidade indevidamente. Prisma AND força intersecção:
+ * scope.filter é sempre respeitado, filtros de user compõem por cima
+ * sem conseguir revogá-lo.
  */
 async function visibilityWhere(
   userId: string,
-  role: string,
+  tenantId: string,
+  role: UserRole,
   partnerCompanyId: string | null,
 ): Promise<Prisma.OpportunityWhereInput> {
-  if (role === 'PARCEIRO') {
-    if (partnerCompanyId) {
-      return {
-        partnerCompanyId,
-        partnerEngagements: {
-          some: { partnerCompanyId, status: 'APPROVED' },
-        },
-      };
-    }
-    // PARCEIRO sem partnerCompany resolvido → nada
-    return { id: '00000000-0000-0000-0000-000000000000' };
-  }
-
-  const [canSeeTeam, canSeeAllTenant] = await Promise.all([
-    hasPermission(userId, 'opportunity:read_team'),
-    hasPermission(userId, 'opportunity:read_all'),
-  ]);
-  if (canSeeTeam || canSeeAllTenant) return {};
-  return {
-    OR: [
-      { ownerId: userId },
-      { team: { some: { userId } } },
-    ],
-  };
+  const scope = await SalesStructureService.resolveOpportunityScope(
+    { id: userId, role, partnerCompanyId },
+    tenantId,
+  );
+  return scope.filter;
 }
 
 export const opportunitiesRouter = router({
   list: canRead.input(opportunityListInput).query(async ({ input, ctx }) => {
+    const scopeFilter = await visibilityWhere(
+      ctx.user.id,
+      ctx.tenantId,
+      ctx.user.role,
+      ctx.user.partnerCompanyId,
+    );
     const where: Prisma.OpportunityWhereInput = {
+      AND: [scopeFilter],
       deletedAt: null,
-      ...(await visibilityWhere(ctx.user.id, ctx.user.role, ctx.user.partnerCompanyId)),
       ...(input.stage ? { stage: input.stage } : {}),
       ...(input.status ? { status: input.status } : {}),
       ...(input.ownerId ? { ownerId: input.ownerId } : {}),
@@ -120,10 +113,16 @@ export const opportunitiesRouter = router({
    * Inclui sumário (count + soma de valor) por coluna.
    */
   kanban: canRead.input(opportunityKanbanInput).query(async ({ input, ctx }) => {
+    const scopeFilter = await visibilityWhere(
+      ctx.user.id,
+      ctx.tenantId,
+      ctx.user.role,
+      ctx.user.partnerCompanyId,
+    );
     const where: Prisma.OpportunityWhereInput = {
+      AND: [scopeFilter],
       deletedAt: null,
       status: 'ACTIVE',
-      ...(await visibilityWhere(ctx.user.id, ctx.user.role, ctx.user.partnerCompanyId)),
       ...(input.ownerId ? { ownerId: input.ownerId } : {}),
       ...(input.segmentId ? { clientCompany: { segmentId: input.segmentId } } : {}),
       ...(input.territoryId ? { clientCompany: { territoryId: input.territoryId } } : {}),
@@ -154,11 +153,17 @@ export const opportunitiesRouter = router({
   }),
 
   byId: canRead.input(z.object({ id: zUuid })).query(async ({ input, ctx }) => {
+    const scopeFilter = await visibilityWhere(
+      ctx.user.id,
+      ctx.tenantId,
+      ctx.user.role,
+      ctx.user.partnerCompanyId,
+    );
     const opp = await prisma.opportunity.findFirst({
       where: {
+        AND: [scopeFilter],
         id: input.id,
         deletedAt: null,
-        ...(await visibilityWhere(ctx.user.id, ctx.user.role, ctx.user.partnerCompanyId)),
       },
       include: {
         clientCompany: true,

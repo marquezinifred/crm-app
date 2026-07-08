@@ -11,6 +11,132 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 ## Sprint atual
 
+> **Sprint 15G — Estrutura Comercial e Visibilidade Hierárquica:
+> ✅ CONCLUÍDO em 2026-07-08** (aguarda rollout prod)
+>
+> Spec: `docs/Sprint_15G_estrutura_comercial.md` + `docs/Sprint_15G_amendments.md`
+> (A1-A7 aprovados PO 2026-07-06). Estrutura organizacional multi-nível
+> configurável por tenant via `ltree` Postgres. Substitui `opportunity:read_others`
+> binário por `opportunity:read_team` (visão da equipe gerenciada — subárvore
+> ltree) + `opportunity:read_all` (visão tenant-wide). Fecha o gap do Sprint 15E:
+> GESTOR agora enxerga só as opportunities da subárvore que gerencia, não mais
+> "tudo" via `read_others`.
+>
+> **Entregue em 4 fases (12 chips + 4 QAs Modo B) em 3 dias:**
+>
+> **Fase 1 — Fundação schema + permissions** (commits `dbc193a` + `8b66bdc`):
+>  - Migration `0031_estrutura_comercial` — extensão `ltree` habilitada,
+>    3 tabelas novas (`sales_unit_types`, `sales_units` com path ltree +
+>    CHECK A7 path não-vazio, `sales_unit_members` com partial UNIQUE A5
+>    `is_primary WHERE is_primary=true`). Backfill A1 idempotente: 1 tipo
+>    "Unidade" + 1 unit "Padrão" + todos users como MEMBER (MANAGER se
+>    ADMIN/DIRETOR_*/GESTOR) por tenant existente. ON CONFLICT DO NOTHING.
+>  - Prisma schema — enum `UnitMemberRole` (MANAGER|MEMBER), 3 models novos
+>    (path como `Unsupported("ltree")` — nota SQL como fonte da verdade).
+>  - `SalesUnitRepository` novo — todas queries ltree via `$queryRaw`
+>    (getSubtreeMemberIds, getTree, create com cálculo de path, getAncestors,
+>    getChildren). Convenção A7 documentada — NUNCA `prisma.salesUnit.create` direto.
+>  - `SALES_STRUCTURE_ENABLED: envBoolean(false)` — kill-switch runtime.
+>  - `permissions-catalog.ts` — remove `opportunity:read_others`, adiciona
+>    `opportunity:read_team`, `opportunity:read_all`, `sales_structure:read`,
+>    `sales_structure:manage` (61→64 permissions). Nova category "commercial".
+>  - `rbac.ts` — matriz `ROLE_DEFAULT_PERMISSIONS` §6:
+>    ADMIN todas; DIRETOR_C/O read_team+read_all+sales_structure:read;
+>    DIRETOR_F só read_all+sales_structure:read; GESTOR read_team+read;
+>    ANALISTA só sales_structure:read; PARCEIRO nenhuma nova.
+>  - Script `npm run 15g:migrate-permissions` idempotente — migra overrides
+>    individuais existentes `read_others → read_team`. Backfill A2 com
+>    ON CONFLICT DO NOTHING + cache invalidation (`cached_permissions_at = NULL`).
+>  - QA Modo B verde: baseline 985 passing / 0 failing.
+>
+> **Fase 2 — Service central + Router tRPC** (commits `0668ac5` + `fc30588`):
+>  - `SalesStructureService` — `resolveOpportunityScope(user, tenantId)` com
+>    ordem canônica: (1) kill-switch OFF → fallback pré-15G binário; (2)
+>    PARCEIRO early-return (A4) via `partnerCompanyId + engagements APPROVED`;
+>    (3) `read_all` → ALL; (4) `read_team` + getSubtreeMemberIds → TEAM com
+>    teamSize (fallback OWN se subtree vazia); (5) default OWN. **Fecha P-73**
+>    — kill-switch runtime real com único leitor em `sales-structure.service.ts:71`.
+>  - CRUD helpers: `createUnitType` (valida level 1-8), `addMember` com A5
+>    preservado via `$transaction([updateMany desmarca primary, upsert])`,
+>    `removeMember` com deleteMany + `invalidateUserPermissionsCache`.
+>  - Router `salesStructure` — 11 procedures: listUnitTypes/createUnitType/
+>    updateUnitType/deleteUnitType/getTree/getUnit/createUnit (**A7 preservado**
+>    — router delega a Repository)/deactivateUnit/addMember/removeMember/myScope.
+>    Cross-tenant guard em todas mutations. Registrado em `_app.ts`.
+>  - QA Modo B verde: baseline 1034 passing / 0 failing. Coverage service
+>    98.8%/96.96%/100%, router 100%/100%/100%.
+>
+> **Fase 3 — Consumers migrados** (commits `7c29997` + `eac77c6`):
+>  - `opportunities.ts` `visibilityWhere` delega ao service (`list`/`kanban`/
+>    `byId` consomem `scope.filter` completo). PARCEIRO lógica duplicada
+>    removida do router. Composição via **AND wrapper** protege contra
+>    escalada (input.ownerId não sobrescreve scope.ownerId).
+>  - `reports.ts` `visibility` mesma delegação (emenda A3 cumprida).
+>    `loadOpps`/`loadInboundOpps` propagam tenantId. **Sprint 5 ANALISTA em
+>    `performanceByOwner` preservado** — só própria linha + média anônima.
+>  - QA Modo B verde: baseline 1055 passing / 0 failing.
+>
+> **Fase 4 — UI + seed + roteiro QA** (commits `02c2658` + `7fb4ca6` + `38049a3`):
+>  - `/admin/commercial-structure` — 2 tabs (Níveis + Organograma). CRUD tipos
+>    via UnitTypeModal. Árvore navegável consumindo `salesStructure.getTree`
+>    + Sheet lateral com membros. AlertDialog em ações destrutivas. Sidebar
+>    admin ganha item gated por `sales_structure:read`. **RBAC UI defesa em
+>    profundidade**: `hasPermissionByRole(role, 'sales_structure:manage')`
+>    controla botões destrutivos + backend re-valida via `withPermission`.
+>  - `ScopeSwitcher` no `/pipeline` consumindo `salesStructure.myScope`.
+>    Dropdown "Minhas oportunidades" / "Minha equipe (N)" / "Toda a empresa"
+>    conforme scope.type (OWN/PARTNER/NONE → não renderiza; TEAM/ALL →
+>    Select). localStorage persistência key namespaced por userId.
+>    `normalizePreference` descarta valor stale.
+>  - `OpportunityCard` badge `ownerUnitName` opcional (backend integration
+>    fica pra Sprint 15H — débito registrado).
+>  - Seed `seedCommercialStructure` idempotente — 3 níveis
+>    (Diretoria Sul → Regional SP → Equipe Enterprise/Mid-Market) usando
+>    SalesUnitRepository.create (A7) + SalesStructureService.addMember (A5).
+>  - `Roteiro_QA_Homologacao_Staging.md` §2.7 novo com 6 cenários V1-V6:
+>    admin cria tipo/unit, addMember (A5), GESTOR vê subtree, DIRETOR vê
+>    ALL, PARCEIRO row-level preservado (A4) + bonus (kill-switch,
+>    idempotência, cross-tenant).
+>  - QA Modo B verde: baseline **1088 passing / 0 failing / 174 skipped**.
+>    Coverage: seed 100%, admin UI 79.67% br, ScopeSwitcher 85.36% br,
+>    OpportunityCard 20% br (pré-existente, badge novo 100%).
+>
+> **Rollout ordenado prod** (spec `docs/ROLLOUT_Sprint_15G_Prod.md`):
+>  1. Deploy código com `SALES_STRUCTURE_ENABLED=false` (default schema)
+>  2. `npx prisma migrate deploy` (0031 backfill A1 idempotente)
+>  3. `npm run 15g:migrate-permissions` (backfill A2 idempotente)
+>  4. Ativar `SALES_STRUCTURE_ENABLED=true` (sem redeploy)
+>  5. Monitorar audit_logs + Sentry 24-48h
+>
+> **Rollback rápido:** setar flag `false` volta pro path binário legado.
+> Estrutura fica no DB inerte. Rollback reversível sem migração.
+>
+> **Testes:** 1088 passing (+134 desde pré-15G = 944). Type-check zero.
+> Lint zero. 4 test files novos (Fase 4): `admin-commercial-structure.test.tsx`,
+> `scope-switcher.test.tsx`, `opportunity-card-unit-badge.test.tsx`,
+> `seed-commercial-structure.test.ts`.
+>
+> **Segurança validada:**
+>  - A4 PARCEIRO early-return centralizado no service (0 duplicação nos routers)
+>  - A5 `$transaction` em addMember protege contra race condition de is_primary
+>  - A7 UI + Seed usam Repository (grep 0 matches de `prisma.salesUnit.create` fora dele)
+>  - P-42 backstop intocado (git log Fases 1-3 mostra `db/client.ts` vazio)
+>  - P-73 kill-switch runtime real fechado
+>  - RBAC UI defesa em profundidade (client + backend)
+>  - Guard anti-escalada §6.5 preservado (Sprint 15E)
+>  - Audit log em todas mutations com `tenantIdOverride`
+>
+> 🎉 **Sprint 15G fechado.** 4 fases, 12 chips, 4 QAs Modo B, 3 dias. Aguarda
+> rollout consolidado prod (ação humana Fred — guia executável em
+> `docs/ROLLOUT_Sprint_15G_Prod.md`).
+>
+> Próximo: **Sprint 15H — Metas por Unidade + Reconcile Approvals (P-77)** —
+> spec inicial em `docs/Sprint_15H_Metas_e_Approvals.md`. Aproveita infra
+> 15G. Bloco A: worker daily reconcile de approvals órfãs (fecha débito
+> arquitetural P-67/P-77). Bloco B: `sales_quotas` por unit + drill-down
+> dashboard. Bloco C: estende `opportunities.list` com owner.primaryUnit.name
+> (badge Fase 4b passa a ter dado). Aguarda rollout 15G estabilizar 48h.
+
 > **Sprint 15E — RBAC Granular (Permissões Configuráveis):
 > ✅ CONCLUÍDO em 2026-07-01**
 >

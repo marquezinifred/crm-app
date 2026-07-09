@@ -23,9 +23,17 @@
  */
 
 import { prisma } from '@/server/db/client';
+import { runAsSystem } from '@/server/db/tenant-context';
 import { computeAndCacheUserPermissions } from '@/server/services/permissions.service';
 
 async function main() {
+  // P-79 (2026-07-08) — extension em src/server/db/client.ts agora é
+  // fail-closed em test E dev. Scripts que rodam prisma sem contexto
+  // precisam envolver em runAsSystem() pra bypassar injeção legítimamente.
+  return runAsSystem(runMain);
+}
+
+async function runMain() {
   const start = Date.now();
   console.log('[rbac-backfill] iniciando...');
 

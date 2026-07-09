@@ -32,6 +32,7 @@
  */
 
 import { prisma } from '@/server/db/client';
+import { runAsSystem } from '@/server/db/tenant-context';
 import { audit } from '@/server/services/audit.service';
 
 export const LEGACY_PERMISSION = 'opportunity:read_others';
@@ -168,7 +169,10 @@ const invokedAsScript =
   /15g-migrate-permissions\.[tj]s$/.test(process.argv[1]);
 
 if (invokedAsScript) {
-  migrate15gPermissions()
+  // P-79 (2026-07-08) — extension em src/server/db/client.ts agora é
+  // fail-closed em test E dev. Wrap em runAsSystem() bypassa
+  // legítimamente a injeção de tenant (script cross-tenant por design).
+  runAsSystem(migrate15gPermissions)
     .catch((err) => {
       console.error('[15g-migrate] erro fatal:', err);
       process.exit(1);

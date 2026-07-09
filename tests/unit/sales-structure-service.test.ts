@@ -30,6 +30,7 @@ const {
     salesUnit: { findFirst: vi.fn() },
     user: { findFirst: vi.fn() },
     salesUnitMember: {
+      findUnique: vi.fn(async () => null),
       upsert: vi.fn(async () => ({})),
       updateMany: vi.fn(async () => ({ count: 0 })),
       deleteMany: vi.fn(async () => ({ count: 0 })),

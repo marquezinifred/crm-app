@@ -325,7 +325,7 @@ export const salesStructureRouter = router({
   addMember: canManageStructure
     .input(addMemberInput)
     .mutation(async ({ input, ctx }) => {
-      await SalesStructureService.addMember({
+      const result = await SalesStructureService.addMember({
         tenantId: ctx.tenantId,
         unitId: input.unitId,
         userId: input.userId,
@@ -333,7 +333,7 @@ export const salesStructureRouter = router({
         isPrimary: input.isPrimary,
         assignedBy: ctx.user.id,
       });
-      return { ok: true as const };
+      return { ok: true as const, ...result };
     }),
 
   removeMember: canManageStructure

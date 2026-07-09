@@ -187,7 +187,8 @@ export const SalesStructureService = {
     tenantId: string;
     assignedBy: string;
     isPrimary?: boolean;
-  }): Promise<void> {
+  }): Promise<{ created: boolean; roleChanged: boolean; primaryChanged: boolean }> {
+    // Duas validações distintas pra mensagens úteis pro usuário.
     const [unit, user] = await Promise.all([
       prisma.salesUnit.findFirst({
         where: { id: input.unitId, tenantId: input.tenantId, deletedAt: null },
@@ -198,14 +199,28 @@ export const SalesStructureService = {
         select: { id: true },
       }),
     ]);
-    if (!unit || !user) {
+    if (!unit) {
       throw new TRPCError({
         code: 'NOT_FOUND',
-        message: 'Unit ou usuário não encontrados neste tenant.',
+        message: 'Unidade não encontrada ou pertence a outro tenant.',
+      });
+    }
+    if (!user) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Usuário selecionado não pertence a este tenant.',
       });
     }
 
     const isPrimary = input.isPrimary ?? false;
+
+    // Lê membership existente pra detectar se é criação, mudança ou no-op.
+    const existing = await prisma.salesUnitMember.findUnique({
+      where: {
+        userId_unitId: { userId: input.userId, unitId: input.unitId },
+      },
+      select: { role: true, isPrimary: true },
+    });
 
     const upsertOp = prisma.salesUnitMember.upsert({
       where: {
@@ -246,6 +261,10 @@ export const SalesStructureService = {
       await upsertOp;
     }
 
+    const created = !existing;
+    const roleChanged = !!existing && existing.role !== input.role;
+    const primaryChanged = !!existing && existing.isPrimary !== isPrimary;
+
     await invalidateUserPermissionsCache(input.userId);
 
     await audit({
@@ -255,6 +274,8 @@ export const SalesStructureService = {
       tenantIdOverride: input.tenantId,
       after: { unitId: input.unitId, role: input.role, isPrimary },
     });
+
+    return { created, roleChanged, primaryChanged };
   },
 
   /**

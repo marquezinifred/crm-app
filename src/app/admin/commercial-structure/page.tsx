@@ -919,10 +919,19 @@ function AddMemberModal({
   }, [open]);
 
   const addMember = trpc.salesStructure.addMember.useMutation({
-    onSuccess: () => {
+    onSuccess: (result) => {
       utils.salesStructure.getUnit.invalidate();
       utils.salesStructure.getTree.invalidate();
-      toast({ kind: 'success', title: 'Membro adicionado.' });
+      // Mensagem contextual: distingue criação, mudança e no-op.
+      let title = 'Membro adicionado.';
+      if (!result.created) {
+        if (result.roleChanged || result.primaryChanged) {
+          title = 'Vinculação atualizada.';
+        } else {
+          title = 'Sem alterações — o usuário já era membro com essa configuração.';
+        }
+      }
+      toast({ kind: 'success', title });
       onClose();
     },
     onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),

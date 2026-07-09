@@ -1,14 +1,26 @@
 'use client';
 
 import * as React from 'react';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { cn } from '@/lib/utils/cn';
 
 /**
- * Modal Venzo — Sprint 14.
+ * Modal Venzo — Sprint 15G refactor.
  *
- * `role="dialog"` + `aria-modal="true"` + focus trap simples (Tab cicla
- * dentro). Escape fecha. Ação destrutiva (`tone="danger"`) usa botão
- * danger — nunca primary. Ordem de botões: Cancelar antes de Confirmar.
+ * Antes: implementação custom com backdrop + `onClick={stopPropagation}` +
+ * focus trap manual. Problema descoberto no Sprint 15G Fase 4a: quando o
+ * Modal era aberto em cima de um `<Sheet>` (Radix Dialog), o Radix
+ * detectava pointerdown/focus "fora" do Content da Sheet e a fechava —
+ * o Modal (renderizado condicional) desaparecia junto.
+ *
+ * Agora: usa `@radix-ui/react-dialog` internamente. Radix suporta
+ * dialogs empilhados nativamente (o de cima "gancha" os eventos e o
+ * de baixo não fecha). API pública mantida idêntica pra evitar
+ * refactor em todos os callers (12+ modais).
+ *
+ * P-12 (foco roubado a cada keystroke) fica resolvido "de graça" —
+ * Radix não tem esse bug porque o focus manager dele não depende de
+ * closure identity dos props.
  */
 
 export function Modal({
@@ -26,99 +38,69 @@ export function Modal({
   children: React.ReactNode;
   size?: 'sm' | 'md' | 'lg';
 }) {
-  const titleId = React.useId();
-  const descId = React.useId();
-  const dialogRef = React.useRef<HTMLDivElement>(null);
-  const previouslyFocused = React.useRef<HTMLElement | null>(null);
-
-  // P-12 — `onClose` é capturado por ref pra que o effect de focus/listener
-  // dependa SÓ de `open`. Sem isso, callers que passam `onClose={() => ...}`
-  // inline geravam nova função a cada render e disparavam o effect a cada
-  // keystroke, roubando foco pro primeiro input do modal.
-  const onCloseRef = React.useRef(onClose);
-  React.useEffect(() => {
-    onCloseRef.current = onClose;
-  });
-
-  React.useEffect(() => {
-    if (!open) return;
-    previouslyFocused.current = document.activeElement as HTMLElement | null;
-    const focusables = dialogRef.current?.querySelectorAll<HTMLElement>(
-      'a, button, input, select, textarea, [tabindex]:not([tabindex="-1"])',
-    );
-    focusables?.[0]?.focus();
-
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onCloseRef.current();
-      if (e.key === 'Tab' && focusables && focusables.length > 0) {
-        const first = focusables[0]!;
-        const last = focusables[focusables.length - 1]!;
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault();
-          last.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault();
-          first.focus();
-        }
-      }
-    }
-    document.addEventListener('keydown', onKey);
-    document.documentElement.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.documentElement.style.overflow = '';
-      previouslyFocused.current?.focus();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- onClose intencional via ref (P-12)
-  }, [open]);
-
-  if (!open) return null;
-
   const maxW =
     size === 'sm' ? 'max-w-md' : size === 'lg' ? 'max-w-2xl' : 'max-w-lg';
 
   return (
-    <div
-      role="presentation"
-      onClick={onClose}
-      className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4 animate-fade-in"
+    <DialogPrimitive.Root
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
     >
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={description ? descId : undefined}
-        onClick={(e) => e.stopPropagation()}
-        className={cn(
-          'bg-card border border-border rounded-lg w-full p-6 shadow-2xl',
-          // Sprint 15C — modais altos passam a rolar internamente em vez
-          // de escapar a viewport e esconder o footer com Salvar.
-          'max-h-[90vh] overflow-y-auto',
-          maxW,
-        )}
-      >
-        <header className="flex items-start justify-between gap-3 mb-4">
-          <div className="min-w-0">
-            <h2 id={titleId} className="text-h3 text-text-1">{title}</h2>
-            {description && (
-              <p id={descId} className="text-body text-text-2 mt-1">{description}</p>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Fechar"
-            className="shrink-0 text-text-2 hover:text-text-1 hover:bg-hover p-1 rounded"
-          >
-            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
-            </svg>
-          </button>
-        </header>
-        {children}
-      </div>
-    </div>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay
+          className={cn(
+            'fixed inset-0 z-[70] bg-black/60',
+            'data-[state=open]:animate-in data-[state=closed]:animate-out',
+            'data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0',
+            'data-[state=open]:duration-200 data-[state=closed]:duration-150',
+          )}
+        />
+        <DialogPrimitive.Content
+          className={cn(
+            'fixed left-1/2 top-1/2 z-[80] w-full -translate-x-1/2 -translate-y-1/2',
+            'bg-card border border-border rounded-lg p-6 shadow-2xl',
+            'max-h-[90vh] overflow-y-auto',
+            'focus-visible:outline-none',
+            'data-[state=open]:animate-in data-[state=closed]:animate-out',
+            'data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0',
+            'data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95',
+            'data-[state=open]:duration-200 data-[state=closed]:duration-150',
+            maxW,
+          )}
+        >
+          <header className="flex items-start justify-between gap-3 mb-4">
+            <div className="min-w-0">
+              <DialogPrimitive.Title className="text-h3 text-text-1">
+                {title}
+              </DialogPrimitive.Title>
+              {description && (
+                <DialogPrimitive.Description className="text-body text-text-2 mt-1">
+                  {description}
+                </DialogPrimitive.Description>
+              )}
+            </div>
+            <DialogPrimitive.Close
+              aria-label="Fechar"
+              className="shrink-0 text-text-2 hover:text-text-1 hover:bg-hover p-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                aria-hidden="true"
+              >
+                <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
+              </svg>
+            </DialogPrimitive.Close>
+          </header>
+          {children}
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }
 

@@ -606,7 +606,8 @@ describe('/admin/commercial-structure (Sprint 15G Fase 4a)', () => {
     });
 
     await act(async () => {
-      captured.addMember!.onSuccess!();
+      // Simula retorno pós-P-79 do addMember: distingue created vs update vs no-op.
+      captured.addMember!.onSuccess!({ ok: true, created: true, roleChanged: false, primaryChanged: false });
     });
 
     await waitFor(() => {

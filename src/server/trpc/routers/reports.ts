@@ -182,7 +182,7 @@ export const reportsRouter = router({
       return {} as ReturnType<typeof avgDaysPerStage>;
     }
     const history = await prisma.opportunityStageHistory.findMany({
-      where: { opportunityId: { in: oppIds } },
+      where: { tenantId: ctx.tenantId, opportunityId: { in: oppIds } },
       select: { opportunityId: true, fromStage: true, toStage: true, at: true },
     });
     return avgDaysPerStage(history);

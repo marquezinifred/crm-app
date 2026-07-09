@@ -53,8 +53,13 @@ export const usersRouter = router({
         })
         .default({}),
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      // P-79 defesa em profundidade — sempre filtra por tenantId
+      // explícito. O extension já injeta (route handler fixado 2026-07-08),
+      // mas dupla proteção evita vazamento se algum bug futuro no route
+      // handler ou extension escapar.
       const where: Prisma.UserWhereInput = {
+        tenantId: ctx.tenantId,
         deletedAt: null,
         ...(input.role ? { role: input.role } : {}),
         ...(typeof input.active === 'boolean' ? { active: input.active } : {}),

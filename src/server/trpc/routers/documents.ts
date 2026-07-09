@@ -131,9 +131,10 @@ export const documentsRouter = router({
 
   listByOpportunity: canRead
     .input(z.object({ opportunityId: zUuid }))
-    .query(({ input }) =>
+    .query(({ input, ctx }) =>
       prisma.document.findMany({
         where: {
+          tenantId: ctx.tenantId,
           deletedAt: null,
           relatedEntityType: 'opportunity',
           relatedEntityId: input.opportunityId,

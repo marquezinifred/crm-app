@@ -18,8 +18,9 @@ const canUpdate = withPermission('company:update');
 const canDelete = withPermission('company:delete');
 
 export const companiesRouter = router({
-  list: canRead.input(companyListInput).query(async ({ input }) => {
+  list: canRead.input(companyListInput).query(async ({ input, ctx }) => {
     const where: Prisma.CompanyWhereInput = {
+      tenantId: ctx.tenantId,
       deletedAt: null,
       ...(input.type ? { type: input.type } : {}),
       ...(input.territoryId ? { territoryId: input.territoryId } : {}),
@@ -46,13 +47,14 @@ export const companiesRouter = router({
     return { rows, total, page: input.page, pageSize: input.pageSize };
   }),
 
-  byId: canRead.input(z.object({ id: zUuid })).query(async ({ input }) => {
+  byId: canRead.input(z.object({ id: zUuid })).query(async ({ input, ctx }) => {
     const company = await prisma.company.findFirst({
-      where: { id: input.id, deletedAt: null },
+      where: { id: input.id, tenantId: ctx.tenantId, deletedAt: null },
     });
     if (!company) throw new TRPCError({ code: 'NOT_FOUND' });
     const importantDates = await prisma.importantDate.findMany({
       where: {
+        tenantId: ctx.tenantId,
         deletedAt: null,
         entityType: ImportantDateEntityType.COMPANY,
         entityId: company.id,

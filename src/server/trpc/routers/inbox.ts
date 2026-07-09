@@ -21,17 +21,17 @@ export const inboxRouter = router({
         })
         .default({ status: 'PENDING' }),
     )
-    .query(({ input }) =>
+    .query(({ input, ctx }) =>
       prisma.incomingEmail.findMany({
-        where: { status: input.status, deletedAt: null },
+        where: { tenantId: ctx.tenantId, status: input.status, deletedAt: null },
         orderBy: { receivedAt: 'desc' },
         take: 100,
       }),
     ),
 
-  byId: canRead.input(z.object({ id: zUuid })).query(async ({ input }) => {
+  byId: canRead.input(z.object({ id: zUuid })).query(async ({ input, ctx }) => {
     const e = await prisma.incomingEmail.findFirst({
-      where: { id: input.id, deletedAt: null },
+      where: { id: input.id, tenantId: ctx.tenantId, deletedAt: null },
     });
     if (!e) throw new TRPCError({ code: 'NOT_FOUND' });
     return e;
@@ -45,7 +45,7 @@ export const inboxRouter = router({
     .input(z.object({ id: zUuid, opportunityId: zUuid }))
     .mutation(async ({ input, ctx }) => {
       const email = await prisma.incomingEmail.findFirst({
-        where: { id: input.id, status: IncomingEmailStatus.PENDING },
+        where: { id: input.id, tenantId: ctx.tenantId, status: IncomingEmailStatus.PENDING },
       });
       if (!email) throw new TRPCError({ code: 'NOT_FOUND' });
 

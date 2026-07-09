@@ -57,16 +57,16 @@ export const privacyRouter = router({
     return { ok: true, requestId: created.id, dueAt: created.dueAt };
   }),
 
-  listPending: adminOnlyProcedure.query(() =>
+  listPending: adminOnlyProcedure.query(({ ctx }) =>
     prisma.dataSubjectRequest.findMany({
-      where: { deletedAt: null, status: { in: ['PENDING', 'IN_PROGRESS'] } },
+      where: { tenantId: ctx.tenantId, deletedAt: null, status: { in: ['PENDING', 'IN_PROGRESS'] } },
       orderBy: { dueAt: 'asc' },
     }),
   ),
 
-  listAll: adminOnlyProcedure.query(() =>
+  listAll: adminOnlyProcedure.query(({ ctx }) =>
     prisma.dataSubjectRequest.findMany({
-      where: { deletedAt: null },
+      where: { tenantId: ctx.tenantId, deletedAt: null },
       orderBy: { submittedAt: 'desc' },
       take: 200,
     }),

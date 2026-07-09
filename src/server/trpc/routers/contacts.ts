@@ -21,8 +21,9 @@ const canUpdate = withPermission('contact:update');
 const canDelete = withPermission('contact:delete');
 
 export const contactsRouter = router({
-  list: canRead.input(contactListInput).query(async ({ input }) => {
+  list: canRead.input(contactListInput).query(async ({ input, ctx }) => {
     const where: Prisma.ContactWhereInput = {
+      tenantId: ctx.tenantId,
       deletedAt: null,
       ...(input.companyId ? { companyId: input.companyId } : {}),
       ...(input.approvalStatus ? { approvalStatus: input.approvalStatus } : {}),
@@ -47,13 +48,14 @@ export const contactsRouter = router({
     return { rows, total, page: input.page, pageSize: input.pageSize };
   }),
 
-  byId: canRead.input(z.object({ id: zUuid })).query(async ({ input }) => {
+  byId: canRead.input(z.object({ id: zUuid })).query(async ({ input, ctx }) => {
     const contact = await prisma.contact.findFirst({
-      where: { id: input.id, deletedAt: null },
+      where: { id: input.id, tenantId: ctx.tenantId, deletedAt: null },
     });
     if (!contact) throw new TRPCError({ code: 'NOT_FOUND' });
     const importantDates = await prisma.importantDate.findMany({
       where: {
+        tenantId: ctx.tenantId,
         deletedAt: null,
         entityType: ImportantDateEntityType.CONTACT,
         entityId: contact.id,
@@ -102,7 +104,7 @@ export const contactsRouter = router({
     // importantDates updates ficam em mutation dedicada (sprint posterior)
     const { id, importantDates: _ignored, ...data } = input;
     void _ignored;
-    const before = await prisma.contact.findFirst({ where: { id, deletedAt: null } });
+    const before = await prisma.contact.findFirst({ where: { id, tenantId: ctx.tenantId, deletedAt: null } });
     if (!before) throw new TRPCError({ code: 'NOT_FOUND' });
     const updated = await prisma.contact.update({
       where: { id },
@@ -123,7 +125,7 @@ export const contactsRouter = router({
 
   remove: canDelete.input(z.object({ id: zUuid })).mutation(async ({ input, ctx }) => {
     const before = await prisma.contact.findFirst({
-      where: { id: input.id, deletedAt: null },
+      where: { id: input.id, tenantId: ctx.tenantId, deletedAt: null },
     });
     if (!before) throw new TRPCError({ code: 'NOT_FOUND' });
     const updated = await prisma.contact.update({
@@ -148,6 +150,7 @@ export const contactsRouter = router({
       const before = await prisma.contact.findFirst({
         where: {
           id: input.id,
+          tenantId: ctx.tenantId,
           deletedAt: null,
           approvalStatus: ContactApprovalStatus.PENDING_APPROVAL,
         },

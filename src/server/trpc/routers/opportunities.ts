@@ -311,9 +311,9 @@ export const opportunitiesRouter = router({
     ),
   }),
 
-  history: canRead.input(z.object({ opportunityId: zUuid })).query(async ({ input }) =>
+  history: canRead.input(z.object({ opportunityId: zUuid })).query(async ({ input, ctx }) =>
     prisma.opportunityStageHistory.findMany({
-      where: { opportunityId: input.opportunityId },
+      where: { tenantId: ctx.tenantId, opportunityId: input.opportunityId },
       orderBy: { at: 'desc' },
       include: { movedBy: { select: { id: true, fullName: true } } },
     }),

@@ -17,9 +17,9 @@ const canApprove = withPermission('proposal:approve');
 export const proposalsRouter = router({
   listByOpportunity: canRead
     .input(z.object({ opportunityId: zUuid }))
-    .query(({ input }) =>
+    .query(({ input, ctx }) =>
       prisma.proposal.findMany({
-        where: { opportunityId: input.opportunityId, deletedAt: null },
+        where: { tenantId: ctx.tenantId, opportunityId: input.opportunityId, deletedAt: null },
         orderBy: { createdAt: 'desc' },
         include: {
           versions: {

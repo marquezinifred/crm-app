@@ -98,15 +98,27 @@ function createPrismaClient(): PrismaClient {
           const ctx = getTenantContext();
           const tenantId = ctx?.tenantId;
 
-          // Sem contexto: deixa o RLS bloquear no banco (fail-closed).
-          // Em testes isso explode com erro útil em vez de vazar dados.
+          // Sem contexto: fail-closed em test E dev pra pegar bugs
+          // silenciosos de vazamento cross-tenant (P-79, 2026-07-08 — o
+          // route handler tRPC deixava requests sem `x-tenant-id` rodar
+          // cru, e o extension caía aqui bypassando o filtro. Dropdown
+          // de users em /admin/commercial-structure retornava 33 users
+          // de 5 tenants em vez de 1). Em prod ainda fail-open pra
+          // não derrubar users legítimos por bug residual — mas log
+          // ERROR pra visibilidade no Sentry.
           if (!tenantId) {
-            if (process.env.NODE_ENV === 'test') {
+            if (
+              process.env.NODE_ENV === 'test' ||
+              process.env.NODE_ENV === 'development'
+            ) {
               throw new Error(
                 `Prisma call to ${model}.${operation} outside tenant context. ` +
-                  `Wrap in runWithTenant() or runAsSystem().`,
+                  `Wrap in runWithTenant() or runAsSystem() or runAsPlatform().`,
               );
             }
+            console.error(
+              `[tenant-isolation] Prisma call to ${model}.${operation} outside tenant context — potential cross-tenant leak.`,
+            );
             return query(args);
           }
 

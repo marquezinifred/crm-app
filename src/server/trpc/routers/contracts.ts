@@ -28,9 +28,10 @@ export const contractsRouter = router({
         })
         .default({}),
     )
-    .query(async ({ input }) =>
+    .query(async ({ input, ctx }) =>
       prisma.contract.findMany({
         where: {
+          tenantId: ctx.tenantId,
           deletedAt: null,
           ...(input.opportunityId ? { opportunityId: input.opportunityId } : {}),
           ...(input.search ? { number: { contains: input.search, mode: 'insensitive' } } : {}),
@@ -43,9 +44,9 @@ export const contractsRouter = router({
       }),
     ),
 
-  byId: canRead.input(z.object({ id: zUuid })).query(async ({ input }) => {
+  byId: canRead.input(z.object({ id: zUuid })).query(async ({ input, ctx }) => {
     const c = await prisma.contract.findFirst({
-      where: { id: input.id, deletedAt: null },
+      where: { id: input.id, tenantId: ctx.tenantId, deletedAt: null },
       include: { installments: { orderBy: { number: 'asc' } } },
     });
     if (!c) throw new TRPCError({ code: 'NOT_FOUND' });

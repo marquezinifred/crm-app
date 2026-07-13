@@ -1,33 +1,40 @@
 # Planejamento de Débitos Descobertos no Rollout Sprint 15G
 
-**Data:** 2026-07-10
+**Data:** 2026-07-10 (revisão 2 — 2026-07-11)
 **Origem:** Sessão de teste real em produção após rollout Sprint 15G (Estrutura Comercial e Visibilidade Hierárquica)
 **Destinatário:** PO
-**Autor:** Sessão Claude (gestão) + Fred Marquezini (validação)
+**Autor:** Sessão Claude (gestão) + Fred Marquezini (validação + revisão crítica)
 
 ---
 
 ## Sumário executivo
 
-Durante a validação em produção do Sprint 15G — com 6 roles reais logando e exercitando o fluxo de oportunidades — foram descobertos **10 débitos** de natureza variada (segurança, UX, arquitetura, setup). A distribuição:
+Durante a validação em produção do Sprint 15G — com 6 roles reais logando e exercitando o fluxo de oportunidades — foram descobertos **10 débitos**. A revisão do PO ajustou classificações e sequenciamento. A distribuição atualizada:
 
-- **3 débitos de severidade ALTA** que impactam usabilidade ou segurança em profundidade e devem entrar em sprint imediato.
-- **4 débitos de severidade MÉDIA** de natureza arquitetural/setup — não bloqueiam operação mas geram fragilidade se acumulados.
-- **3 débitos de severidade BAIXA** de UX cosmético ou documental — housekeeping.
+- **6 débitos de severidade ALTA** — impacto imediato em segurança, operação ou vendas B2B, exigem chip cirúrgico ou Sprint dedicado antes de qualquer feature nova.
+- **1 débito de severidade MÉDIA** — cenário de recuperação de incidente.
+- **3 débitos de severidade BAIXA** — housekeeping/documentação.
 
-**Recomendação de sequenciamento:**
-1. **Chip cirúrgico imediato (dia 1 do Sprint 15H):** P-88, P-89, P-86 — bugs pontuais com fix ≤ 1h cada.
-2. **Feature no Sprint 15H (Bloco C):** P-87 — delegação hierárquica de opportunities, integração natural com estrutura comercial.
-3. **Housekeeping paralelo:** P-83, P-84, P-81 — melhorias sem urgência.
-4. **Sprint 16 (Hardening):** P-80, P-82, P-85 — decisões arquiteturais que precisam análise dedicada.
+**Recomendação de sequenciamento revisada:**
 
-**Estimativa total agregada:** ~8-10 dias de trabalho (misto entre chips e features).
+| Quando | Itens | Observação |
+|--------|-------|------------|
+| **Dia 1 (paralelo, 4 chips walltime = 1 dia)** | P-88, P-89, P-86, P-80 | Arquivos disjuntos → paralelo real. P-80 sai de Sprint 16 pra cá. |
+| **Dia 2-3** | P-85 (Clerk Production instance) | Sem esperar domínio próprio — pode operar no domínio Vercel existente. |
+| **Sprint 15G.5 (2-3 dias)** | P-87 (writeScope + delegação hierárquica) | Antes do 15H (mini-sprint dedicado). |
+| **Sprint 15H (8-10 dias)** | Blocos A + B + C originais | Escopo intacto — P-87 sai fora. |
+| **Housekeeping (qualquer momento, paralelo)** | P-83, P-84, P-81 | Sem dependência entre si. |
+| **Sprint 16** | P-82 (loop 401 → tela dedicada) | Mantém — não é urgente. |
+
+**⚠️ Decisão em aberto pro PO:** o texto abaixo apresenta **duas opções** para P-87. A **Opção A (split em Sprint 15G.5)** foi adotada na tabela acima. Se preferir **Opção C (P-87 dentro do 15H, Metas empurra pra 15I)**, sinalizar antes do kickoff.
+
+**Estimativa total agregada revisada:** ~11-13 dias de trabalho até fim do 15H (contra 8-10 no plano original).
 
 ---
 
-## Débitos por prioridade
+## Débitos por prioridade (severidade revisada)
 
-### 🔴 ALTA — Chips imediatos
+### 🔴 ALTA — Chips Semana 1 (paralelos, 1 dia walltime)
 
 #### P-88 — Sidebar mostra itens Admin para roles sem permissão
 
@@ -35,287 +42,235 @@ Durante a validação em produção do Sprint 15G — com 6 roles reais logando 
 
 **Sintoma:** ANALISTA vê no menu lateral (seção ADMIN) os itens **Usuários**, **Produtos** e **Listas** — que ele não tem permissão para acessar. Ao clicar, o backend retorna FORBIDDEN corretamente, mas o menu não deveria oferecer a opção.
 
-**Root cause:** No `src/components/layout/Sidebar.tsx` linhas 69-71, esses 3 itens **não têm** a chave `permission:` configurada. Comparação com itens que **estão** protegidos:
-```
-{ href: '/admin/commercial-structure', ..., permission: 'sales_structure:read' }  ✅
-{ href: '/admin/email-inbound', ..., permission: 'inbound:configure' }             ✅
-{ href: '/imports', ..., permission: 'import:run' }                                ✅
-
-{ href: '/admin/users', ..., }         ❌ SEM permission
-{ href: '/admin/products', ..., }      ❌ SEM permission
-{ href: '/admin/listas', ..., }        ❌ SEM permission
-```
-
-Sprint 15E introduziu o padrão `permission:` no Sidebar mas não retroagiu nos itens antigos.
+**Root cause:** No `src/components/layout/Sidebar.tsx` linhas 69-71, esses 3 itens **não têm** a chave `permission:` configurada. Sprint 15E introduziu o padrão mas não retroagiu nos itens antigos.
 
 **Impacto:**
-- **Segurança:** dados **não vazam** (backend barra). Mas defesa em profundidade fica quebrada — se algum dia o backend tiver bug, o menu já expõe a rota.
-- **UX:** usuário confuso vê opções que não pode usar; ao clicar recebe erro 403 sem contexto.
-- **Impressão de produto:** parece bug técnico.
+- **Segurança:** dados **não vazam** (backend barra). Mas defesa em profundidade fica quebrada.
+- **UX:** usuário vê opções que não pode usar; ao clicar recebe erro 403 sem contexto.
 
 **Solução proposta:**
-Adicionar `permission:` em cada item:
 - `/admin/users` → `permission: 'user:read'`
 - `/admin/products` → `permission: 'product:read'`
 - `/admin/listas` → `permission: 'catalog:read'` (ou permissão equivalente do catálogo)
 
-**Testes a incluir:**
-- Component test do Sidebar renderizando com role ANALISTA → nenhum dos 3 itens aparece.
-- Idem GESTOR, PARCEIRO.
-- Sanity test com ADMIN → todos os itens aparecem.
+**Testes:** Component test do Sidebar renderizando com role ANALISTA / GESTOR / PARCEIRO → nenhum dos 3 itens aparece. Sanity com ADMIN → todos aparecem.
 
-**Estimativa:** 30-45min (fix + testes + code review).
-
-**Dependências:** Nenhuma.
-
-**Severidade:** ALTA (defesa em profundidade quebrada, alta visibilidade pro usuário).
+**Estimativa:** 30-45min. **Severidade:** ALTA.
 
 ---
 
 #### P-89 — `/pipeline/new` permite duplicação de oportunidade
 
-**Descoberto por:** Fred, criando oportunidade em produção. Após primeira criação bem-sucedida, o Sheet lateral abriu mostrando a opp. Ao fechar o Sheet, voltou para a tela do form ainda preenchido. Clicou novamente em Salvar e uma **segunda opp idêntica foi criada**.
+**Descoberto por:** Fred, criando opp em prod. Após primeira criação, Sheet lateral abriu mostrando a opp. Fechar o Sheet retornou ao form ainda preenchido; clicar Salvar novamente criou **segunda opp idêntica**.
 
-**Sintoma:** Fluxo natural do usuário permite duplicação acidental. Basta fechar o Sheet lateral após uma criação e clicar Salvar de novo.
+**Sintoma:** Fluxo natural do usuário permite duplicação. Basta fechar o Sheet lateral após uma criação e clicar Salvar de novo.
 
 **Root cause hipotético:**
-- Após submit bem-sucedido, o form não reseta seu state.
-- Fechar o Sheet lateral retorna à rota `/pipeline/new` com o form preenchido.
+- Form não reseta state após success.
+- Fechar o Sheet retorna à rota `/pipeline/new` com dados preenchidos.
 - Botão Salvar continua habilitado.
 
-**Impacto:**
-- **Dados:** oportunidades duplicadas no pipeline geram distorção em relatórios de conversão, previsão de receita e comissões.
-- **UX:** usuário nem sabe que criou duplicata (só vê depois no kanban).
-- **Operacional:** limpeza manual das duplicatas exige acesso admin ao banco.
+**Impacto:** Duplicatas em pipeline distorcem relatórios de conversão, previsão e comissões. Recovery exige acesso admin ao banco.
 
-**Solução proposta (3 camadas — defesa em profundidade):**
+**Solução proposta (defesa em camadas):**
 
-1. **Frontend imediato:** após `create` bem-sucedido, redirecionar para `/pipeline` (kanban) ou `/pipeline/[id]` full page (não Sheet). Form nunca fica pendurado com dados preenchidos.
+1. **Frontend imediato:** após `create` bem-sucedido, redirecionar para `/pipeline` (kanban). Form nunca fica pendurado.
+2. **UX complementar:** botão Salvar `disabled` durante mutation e após success.
+3. **Backend defensivo (opcional futuro):** idempotency por hash de payload + user_id + janela 5s.
 
-2. **UX complementar:** botão Salvar fica `disabled` durante mutation (`loading`) e permanece disabled após success. Segundo clique não dispara nada.
-
-3. **Backend defensivo (opcional futuro):** endpoint `opportunities.create` poderia ter idempotency por hash de payload + user_id + janela de 5 segundos. Retorna a opp já criada em vez de duplicar. Mais robusto mas invasivo.
-
-**Testes a incluir:**
-- Component test do form: submit dispara → mutation ativa → botão vira disabled + spinner.
-- Component test: submit success → dispara redirect (não permanece no form).
-- Backend idempotency (se implementar): 2 requests iguais em janela pequena → 1 create + 1 fetch da opp existente.
-
-**Estimativa:** 30min (camadas 1 e 2, sem backend idempotency) OU 3h (com camada 3 completa).
-
-**Dependências:** Nenhuma.
-
-**Severidade:** ALTA (duplicação de dados em fluxo normal).
+**Estimativa:** 30min (camadas 1+2) OU 3h (com camada 3). **Severidade:** ALTA.
 
 ---
 
-#### P-87 — Delegação hierárquica de oportunidade (feature)
+#### P-86 — `/admin/users` — dropdown Papel + botão Desativar sem persistência ⬆️ ELEVADO PARA ALTA
 
-**Descoberto por:** Fred, logado como ANALISTA, criando opp e atribuindo `ownerId` a um DIRETOR_COMERCIAL. Após criar, foi redirecionado para `/pipeline/<uuid>` e recebeu **NOT_FOUND** — porque o Sprint 15G escondeu corretamente da visão do ANALISTA a opp que ele criou mas não é dele.
+**Descoberto por:** Fred, testando manutenção de usuários em produção.
 
-**Sintoma real vs esperado:**
-- **Comportamento atual:** ANALISTA pode escolher qualquer usuário como responsável no form. Se escolher outro, cria a opp mas depois "perde" ela (não vê mais em nenhum lugar).
-- **Comportamento esperado:** ANALISTA só deveria poder atribuir opp para si mesmo ou para pares hierárquicos (outro ANALISTA da mesma unidade/nível). Delegar para cima na hierarquia (Gestor, Diretor) não faz sentido.
+**Sintoma:** Dropdown de Papel aparece editável e botão Desativar aparece clicável. Ao interagir, **nada persiste**.
 
-**Root cause:** Backend `opportunities.create` valida escopo de leitura via Sprint 15G, mas **não valida escopo de escrita** (quem pode ser owner). O form UI oferece dropdown com todos os usuários do tenant.
+**Justificativa de severidade ALTA (revisada pelo PO):** trocar role de usuário e desativar usuário são funções administrativas centrais **sem workaround equivalente**. `/admin/users/[id]/permissions` gerencia **overrides individuais de permissão** — não substitui o role padrão nem desativação. Admin operacionalmente impedido de gerenciar o sistema.
 
-**Regra de negócio proposta (validada com PO):**
-
-Caller pode definir `ownerId` diferente dele se:
-1. Owner é ele mesmo (sempre OK), OU
-2. Owner está na **subárvore que caller gerencia** (via ltree, mesmo pattern do `read_team`), OU
-3. Owner está no **mesmo nível hierárquico** do caller (par — pode ser gestor↔gestor, analista↔analista).
-
-**Traduzindo em regra concreta:**
-```
-Se caller.unit.level ≤ selectedOwner.unit.level (level 1 = mais alto) → OK
-Senão → FORBIDDEN "Você não pode delegar oportunidade para este usuário"
-```
-
-**Exemplos de aplicação:**
-
-| Caller | Owner escolhido | Level caller ≤ Level owner? | Permitido? |
-|--------|-----------------|----------------------------|------------|
-| Diretor | Qualquer usuário | Sim | ✅ |
-| Gestor Sul | Analista da Equipe Sul | Sim (subárvore) | ✅ |
-| Gestor Sul | Outro Gestor (Norte) | Sim (mesmo nível — par) | ✅ |
-| Gestor Sul | Diretor | Não (Gestor não sobe) | ❌ |
-| Analista SP | Outro Analista SP | Sim (mesmo nível) | ✅ |
-| Analista SP | Analista RJ (outra unidade) | Sim (mesmo nível) | ✅ |
-| Analista SP | Gestor Sul | Não (Analista não delega pra cima) | ❌ |
-
-**Impacto:**
-- **Modelo real de trabalho:** hoje representa manualmente. Gestores atribuem tarefas para vendedores da equipe (delegação vertical). Vendedores passam leads entre si (transferência horizontal).
-- **Sprint 15G contexto:** essa é a segunda metade da história — Sprint 15G cuidou de **visão** (quem vê o quê); essa feature cuida de **atribuição** (quem pode designar tarefa a quem).
+**Root cause hipotético:** UI construída antes do endpoint estar finalizado ou perdeu binding no meio.
 
 **Solução proposta:**
+- Auditar cada ação:
+  - Dropdown Papel → conectar a `users.updateRole` (com `withPermission('user:grant_permissions')` ou análogo).
+  - Botão Desativar → conectar a `users.deactivate` com `AlertDialog` de confirmação.
+  - Botão Permissões → navegar para `/admin/users/[id]/permissions` (esse já deve funcionar).
+- Toast de sucesso/erro em cada mutation.
+- Testes de integração para cada ação.
 
-**Backend:**
-1. `salesStructure.myScope` já retorna a subárvore. Extender com `writeScope` que devolve lista de user IDs delegáveis (subtree + pares do mesmo nível).
-2. `opportunities.create` valida `ownerId` contra `writeScope`. Se fora, throw FORBIDDEN.
-3. `opportunities.update` idem quando altera `ownerId` (transferência).
-
-**Frontend:**
-1. `/pipeline/new` filtra o dropdown "Responsável interno" pelos users que cabem na regra (`trpc.salesStructure.writeScope`).
-2. Se caller = ANALISTA e não tem pares na unidade → dropdown pré-preenchido com o próprio usuário e disabled.
-3. Se caller tem pares/subárvore → dropdown mostra opções permitidas.
-
-**Testes:**
-- Backend: 6 casos por role (ADMIN, DIRETOR, GESTOR, ANALISTA, PARCEIRO) × cada cenário da tabela acima.
-- Frontend: component test do form com role ANALISTA vs GESTOR — dropdown popula diferente.
-- E2E: analista tenta forçar payload com ownerId inválido → FORBIDDEN.
-
-**Estimativa:** 2-3 dias (backend + UI + testes + spec técnica).
-
-**Dependências:** Sprint 15G (base) — atendida. Idealmente encaixa no Sprint 15H como **Bloco C ampliado**.
-
-**Severidade:** ALTA (feature bloqueadora — o modelo de trabalho real depende disso).
+**Estimativa:** 3-4h. **Severidade:** ALTA.
 
 ---
 
-### 🟡 MÉDIA — Chips oportunistas
+#### P-80 — Vercel Production compartilha banco Neon com dev local ⬆️ ELEVADO PARA ALTA
 
-#### P-80 — Vercel Production compartilha banco Neon com dev local
+**Descoberto durante:** rollout Sprint 15G. `DATABASE_URL` de produção aponta para o mesmo branch Neon (`ep-dry-pine-ajwvil7q`) usado no `.env.local` do desenvolvedor.
 
-**Descoberto durante:** rollout Sprint 15G, ao rodar `vercel env pull` e verificar que o `DATABASE_URL` de produção aponta para o mesmo branch Neon (`ep-dry-pine-ajwvil7q`) usado no `.env.local` do desenvolvedor.
+**Sintoma:** `db:reset` local afeta produção. Script bugado local mexe em dados de usuários reais. Já ocorreu neste projeto: db:reset acidental exigiu recovery manual de 4 users pós-restore PITR.
 
-**Sintoma:** Um `db:reset` acidental no desenvolvimento local afeta produção. Um script de recovery ou correção mexe nos dados que usuários finais veem.
-
-**Impacto:**
-- **Segurança/estabilidade:** blast radius de erros de desenvolvimento aumenta drasticamente. Uma migração experimental ou script bugado afeta todo mundo.
-- **Compliance/LGPD:** ambientes prod e dev não são isolados; qualquer dado real fica exposto em qualquer script rodado localmente.
-- **Preços:** não tem impacto direto no Neon Free tier, mas se escalar para pago, o dev roda contra o mesmo compute pago da produção.
+**Justificativa de severidade ALTA (revisada pelo PO):**
+- Risco não é o dia normal — é o **próximo** db:reset acidental, migração experimental ou script mal rodado.
+- Blast radius **existencial** para o produto.
+- **LGPD exige isolamento de ambientes** — compliance/auditoria formal.
 
 **Solução proposta:**
-1. Criar branch Neon separado para produção (ex: `production` ou `prod-main`) a partir do estado atual do `staging`.
-2. Atualizar env var `DATABASE_URL` no Vercel production para apontar para o novo branch.
-3. Documentar em runbook que o desenvolvimento local **nunca** aponta para o branch de produção — apenas para staging/dev.
-4. Configurar branch de staging separado se necessário (opcional, já temos o modelo staging).
+1. Criar branch Neon separado para produção (ex: `production-live`) a partir do estado atual do `staging`.
+2. Atualizar `DATABASE_URL` no Vercel production apontando para o novo branch.
+3. Documentar em runbook que desenvolvimento local **nunca** aponta para produção.
 
-**Estimativa:** 2-3h (criar branch Neon, testar migration em cima, cutover Vercel env, monitorar 24h).
-
-**Dependências:** Rollout Sprint 15G estabilizado (feito).
-
-**Severidade:** MÉDIA (não bloqueia, mas fragiliza).
+**Estimativa:** 2-3h (criar branch, cutover env, monitorar 24h). **Severidade:** ALTA.
 
 ---
 
-#### P-82 — Loop 401 quando `clerkId` chega sem row local correspondente
+### 🔴 ALTA — Dias 2-3
 
-**Descoberto por:** Fred logando com `fredmarquezini@hotmail.com` após restore Neon PITR — a conta Clerk existia mas o row local no banco havia sido apagado. Resultado: dashboard entra em loop de reload infinito.
+#### P-85 — Vercel Production aponta para Clerk **Development** instance ⬆️ ELEVADO PARA ALTA
 
-**Sintoma:** Sessão Clerk válida + `public_metadata.tenantId` populado + user não existe no banco = 401 em qualquer tRPC call → session-guard força reload → mesmo estado → loop infinito.
+**Descoberto por:** Fred, email de verification code com `[Development]` no assunto vindo de `notifications@accounts.dev`.
 
-**Root cause:** O session-guard (`src/lib/trpc/session-guard.ts`) reage a 401 fazendo reload da página assumindo que a sessão expirou. Não distingue "cookie expirado" de "usuário não conhecido pelo backend".
+**Sintoma:** Instância Clerk que autentica usuários em produção é a de **desenvolvimento** (`guiding-bobcat-23.clerk.accounts.dev`). Emails vêm com "[Development]" no subject.
 
-**Impacto:**
-- **UX crítica:** usuário fica travado sem entender o que aconteceu. Precisa suporte técnico.
-- **Recovery:** só via edição manual de banco/Clerk metadata.
-- **Recorrência:** acontece a cada restore, cada db:reset, cada migração destrutiva.
+**Justificativa de severidade ALTA (revisada pelo PO):**
+- Emails com "[Development]" **já foram vistos por usuários reais** (não hipotético).
+- Instância dev do Clerk tem **limites de rate menores** e **políticas de segurança mais permissivas** (aceita sign-up livre, aceita qualquer email sem verificação de domínio).
+- **Bloqueador de vendas B2B** — apresentar CRM pra cliente enterprise com email "[Development]" é inviável.
+- Não é problema de percepção, é problema de venda.
 
-**Solução proposta:**
-1. Backend `users.me` deve retornar código de erro diferenciado quando `clerkId` presente mas row local ausente: `USER_NOT_PROVISIONED` (não `UNAUTHORIZED`).
-2. Session-guard distingue os códigos e:
-   - `UNAUTHORIZED` → reload (comportamento atual).
-   - `USER_NOT_PROVISIONED` → redirecionar para tela dedicada `/account-not-found` com contexto: "Sua conta Clerk existe mas não está associada a nenhum tenant. Peça ao admin do seu tenant para te convidar."
-3. Botão "Sign out" nessa tela para o usuário poder trocar de conta.
-
-**Estimativa:** 4-6h (backend + tela nova + tests).
-
-**Dependências:** Nenhuma.
-
-**Severidade:** MÉDIA (recuperação de incidente).
-
----
-
-#### P-85 — Vercel Production aponta para Clerk **Development** instance
-
-**Descoberto por:** Fred, ao ver que o email de verification code enviado pelo Clerk tinha `[Development]` no assunto e vinha de `notifications@accounts.dev`.
-
-**Sintoma:** A instância Clerk que autentica os usuários em produção (`crm-app-pi-eight.vercel.app`) é a de **desenvolvimento** (`guiding-bobcat-23.clerk.accounts.dev`). Emails vêm do domínio `accounts.dev` com marca "Development".
-
-**Impacto:**
-- **Imagem de produto:** usuário real vê "[Development]" no email do próprio produto. Impressão de amadorismo.
-- **Segurança:** instâncias dev do Clerk têm limites reduzidos (rate limits, session lifetime) e políticas mais permissivas (aceita qualquer email para sign-up sem verificação de domínio).
-- **Escala:** instância dev tem quota limitada de usuários (Clerk Free tier — 10k MAU no dev, com features restritas). Chegando ao limite, produção quebra.
+**Correção de escopo (revisada pelo PO):**
+Instalação da **Clerk Production instance pode ser feita imediatamente** e operar no **domínio Vercel existente** (`crm-app-pi-eight.vercel.app`). Domínio customizado (ex: `accounts.venzo.com.br`) é **opcional futuro** — não é dependência bloqueante. Isso libera a tarefa pra ser feita agora.
 
 **Solução proposta:**
 1. Criar Clerk **Production instance** no Dashboard.
-2. Configurar domain custom (ex: `accounts.venzo.com.br` ou similar).
-3. Migrar usuários existentes da dev para prod (Clerk oferece feature de user migration).
-4. Atualizar `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` e `CLERK_SECRET_KEY` no Vercel production.
-5. Reconfigurar JWT template no novo instance.
-6. Reconfigurar webhook endpoint apontando para nova instance.
-7. Documentar procedimento no runbook de rollout.
+2. Configurar JWT template idêntico ao dev (claims `public.tenantId`, `public.role`, `public.platformRole`).
+3. Reconfigurar webhook endpoint apontando pra `crm-app-pi-eight.vercel.app/api/clerk/webhook`.
+4. Migrar usuários existentes (Clerk oferece user migration API).
+5. Atualizar `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` e `CLERK_SECRET_KEY` no Vercel Production (`pk_live_...` e `sk_live_...`).
+6. Comunicar usuários existentes (magic links reenviados uma vez).
+7. Domínio custom `accounts.venzo.com.br` — pode ficar pra Sprint 16 ou depois.
 
-**Estimativa:** 1-2 dias (config + migration + testes + rollout gradual).
-
-**Dependências:**
-- Domínio próprio para Venzo (compra + DNS).
-- Comunicação com usuários existentes se sessões forem invalidadas.
-
-**Severidade:** MÉDIA (bloqueador de percepção de produto para venda a cliente).
+**Estimativa:** 1-2 dias (setup + migration + rollout gradual + monitoramento 24h). **Severidade:** ALTA.
 
 ---
 
-#### P-86 — `/admin/users` — dropdown Papel e botões Permissões/Desativar sem persistência
+### 🔴 ALTA — Sprint dedicado
 
-**Descoberto por:** Fred, testando manutenção de usuários em produção após rollout.
+#### P-87 — Delegação hierárquica de oportunidade
 
-**Sintoma:** Na página `/admin/users`, o dropdown de Papel aparece editável e os botões "Permissões" e "Desativar" aparecem clicáveis. Mas ao interagir, **nada persiste** (ou persiste sem feedback visual).
+**Descoberto por:** Fred, logado como ANALISTA, criando opp e atribuindo `ownerId` a DIRETOR_COMERCIAL. Recebeu **NOT_FOUND** ao ser redirecionado — Sprint 15G escondeu corretamente a opp que ele não pode ver.
 
-**Root cause hipotético:** UI foi construída antes do endpoint backend estar finalizado, ou perdeu o binding no meio do caminho.
+**Sintoma real:** ANALISTA pode escolher qualquer usuário como responsável no form. Se escolher outro, cria a opp mas "perde" ela (não vê mais em nenhum lugar).
 
-**Impacto:**
-- **UX:** admin tenta trocar papel de user, nada acontece, admin fica sem saber se foi ou não. Refresh da página confirma que não foi.
-- **Operacional:** admin tem que ir no `/admin/users/[id]/permissions` (que funciona corretamente) para fazer mudanças.
+**Root cause:** Backend `opportunities.create` valida escopo de **leitura** via Sprint 15G, mas **não valida escopo de escrita** (quem pode ser owner).
+
+**Regra de negócio proposta (validada com PO — versão 2 após refinamento):**
+
+Caller pode definir `ownerId` diferente dele se:
+1. Owner é **ele mesmo** (sempre OK), OU
+2. Owner está na **subárvore que caller gerencia** (ltree, mesmo pattern `read_team`), OU
+3. Owner está no **mesmo nível hierárquico** do caller (par) — **com refinamento pendente de decisão do PO** (ver quadro abaixo).
+
+**⚠️ Decisão em aberto pro PO — refinamento da regra "par no mesmo nível":**
+
+| Delegação | Regra atual | Refinamento proposto | Nota |
+|-----------|-------------|----------------------|------|
+| Analista → analista **mesma unidade** | ✅ OK | ✅ OK | Sem controvérsia |
+| Analista → analista **unidade irmã** (mesmo gestor) | ✅ permitido | ✅ permitido | Faz sentido — mesmo time expandido |
+| Analista → analista **unidade diferente** (outro branch, outro gestor) | ✅ permitido | ⚠️ **PO decide** | Ver problema abaixo |
+| Analista → gestor acima | ❌ bloqueado | ❌ bloqueado | Sem controvérsia |
+
+**Problema com a regra atual (sem refinamento):**
+
+Se Analista SP transfere opp para Analista RJ (equipes diferentes sob gestores diferentes), o **Gestor de RJ passa a ver essa opp** via `read_team` (a opp cai na subárvore que ele gerencia). Isso significa que o Analista SP está efetivamente **expondo dados** pra um gestor de outra equipe. Provavelmente não é a intenção — é side effect.
+
+**Pergunta pro PO:** um vendedor de SP pode transferir um lead pra um vendedor do RJ mesmo sendo equipes diferentes sob gestores diferentes?
+- **Se SIM:** regra atual está certa. Documentar side effect ("Gestor RJ verá a opp").
+- **Se NÃO:** condição "mesmo nível" precisa virar "mesma unidade" ou "unidade irmã" (mesma subárvore de um gestor comum).
+
+---
+
+**Solução técnica (independente da decisão do refinamento):**
+
+**Backend:**
+1. **Consolidar em uma única query:** `salesStructure.myScopes` retornando `{ readScope, writeScope }` numa chamada só (ver ponto técnico abaixo).
+2. `opportunities.create` valida `ownerId` contra `writeScope`. Se fora, throw FORBIDDEN.
+3. `opportunities.update` idem quando altera `ownerId` (transferência).
+4. **Audit log obrigatório** — quando `create.ownerId != callerId` OU `update.ownerId` muda, gravar entry:
+   ```
+   action: 'opportunity.owner_changed'
+   metadata: { fromOwnerId, toOwnerId, callerId, opportunityId, reason }
+   ```
+
+**Frontend:**
+1. `/pipeline/new` filtra dropdown "Responsável interno" pelos users em `writeScope`.
+2. Se caller = ANALISTA sem pares na unidade → dropdown pré-preenchido com o próprio + disabled.
+3. `salesStructure.myScopes` cacheado por sessão (React Query — invalidação só em `sales_structure:*` mutations).
+
+**Testes:**
+- Backend: 6 casos por role × cenários da tabela acima (ADMIN/DIRETOR/GESTOR/ANALISTA/PARCEIRO).
+- Frontend: component test do form com role ANALISTA vs GESTOR — dropdown popula diferente.
+- E2E: analista tenta forçar payload com ownerId inválido → FORBIDDEN + audit log NÃO grava (bloqueio antes).
+- E2E: transferência legítima → audit log grava com `action: 'opportunity.owner_changed'`.
+
+**Estimativa:** 2-3 dias.
+
+**Dependências:** Sprint 15G (base) — atendida.
+
+**Severidade:** ALTA (feature bloqueadora do modelo real de trabalho).
+
+**Decisão em aberto pro PO — SPRINT ORGANIZATION:**
+
+| Opção | Descrição | Impacto |
+|-------|-----------|---------|
+| **Opção A (adotada na tabela executiva)** | **Sprint 15G.5 dedicado (2-3 dias)** antes do 15H | 15H mantém escopo original 8-10 dias. Total: 15G.5 (3d) + 15H (10d) = 13d |
+| Opção C | P-87 dentro do 15H, Bloco B (Metas) escorrega pro 15I | 15H fica 10-12d, Metas atrasa ~4d |
+
+**PO precisa decidir antes do kickoff.**
+
+---
+
+### 🟡 MÉDIA — Sprint 16
+
+#### P-82 — Loop 401 quando `clerkId` chega sem row local correspondente
+
+**Descoberto por:** Fred, logando com `fredmarquezini@hotmail.com` após restore Neon PITR — a conta Clerk existia mas o row local havia sido apagado. Dashboard entrou em loop de reload infinito.
+
+**Sintoma:** Sessão Clerk válida + `public_metadata.tenantId` populado + user não existe no banco = 401 em qualquer tRPC call → session-guard força reload → mesmo estado → loop infinito.
+
+**Root cause:** Session-guard (`src/lib/trpc/session-guard.ts`) reage a 401 assumindo cookie expirado. Não distingue "cookie expirado" de "usuário não conhecido pelo backend".
 
 **Solução proposta:**
-- Auditar cada ação da tabela `/admin/users`:
-  - Dropdown Papel → conecta a `users.updateRole` (existe? funciona?).
-  - Botão Permissões → navega para `/admin/users/[id]/permissions` (isso já deve funcionar).
-  - Botão Desativar → conecta a `users.deactivate` com `AlertDialog` de confirmação.
-- Adicionar toast de sucesso/erro em cada mutation.
-- Testes de integração para cada ação.
+1. Backend `users.me` retorna código de erro diferenciado quando `clerkId` presente mas row local ausente: `USER_NOT_PROVISIONED`.
+2. Session-guard distingue:
+   - `UNAUTHORIZED` → reload (comportamento atual).
+   - `USER_NOT_PROVISIONED` → redirect pra tela dedicada `/account-not-found` com contexto.
+3. Botão "Sign out" na tela dedicada para o usuário trocar de conta.
 
-**Estimativa:** 3-4h (auditoria + fix + testes).
-
-**Dependências:** Nenhuma.
-
-**Severidade:** MÉDIA (bug de features expostas mas quebradas).
+**Estimativa:** 4-6h. **Severidade:** MÉDIA (recuperação de incidente — não urgente).
 
 ---
 
-### 🟢 BAIXA — Housekeeping
+### 🟢 BAIXA — Housekeeping (paralelo)
 
 #### P-81 — Runbook de recovery pós-restore Neon PITR
 
-**Descoberto durante:** o próprio processo de recuperação após o `db:reset` acidental. Precisamos recriar manualmente 4 usuários (hotmail, Antonio, yahoo, jaupartners) via SQL direto porque o restore PITR trouxe o estado antigo do banco sem esses usuários criados após a data do snapshot.
-
-**Sintoma:** Não existia procedimento documentado para o cenário "restore Neon apagou N dias de usuários criados". Cada passo foi improvisado.
+**Descoberto durante:** próprio processo de recuperação de 4 users pós-restore acidental. Cada passo foi improvisado.
 
 **Solução proposta:**
-Criar `docs/Runbook_Recovery_Pos_Neon_Restore.md` com:
-1. **Detecção:** como identificar quais users existem no Clerk mas não no banco (script de diff).
-2. **Recuperação seletiva:** template SQL para reinserir user por user preservando role/tenant do Clerk metadata.
+`docs/Runbook_Recovery_Pos_Neon_Restore.md` com:
+1. **Detecção:** script de diff Clerk vs banco.
+2. **Recuperação seletiva:** template SQL para reinserir user preservando role/tenant do Clerk metadata.
 3. **Cache RBAC:** re-executar `rbac:backfill-cache` obrigatório pós-recovery.
 4. **Verificação:** checklist de teste (cada role recuperada faz sign-in e acessa dashboard sem loop).
 
-**Estimativa:** 2h (documento + template SQL + validação).
-
-**Dependências:** Nenhuma.
-
-**Severidade:** BAIXA (documental).
+**Estimativa:** 2h. **Severidade:** BAIXA.
 
 ---
 
 #### P-83 — Constraint UNIQUE `(tenant_id, email)` deveria ser PARTIAL
 
-**Descoberto por:** Fred, ao tentar reenviar convite via `/admin/users` para um email que havia sido soft-deleted anteriormente. O erro "Unique constraint failed" apareceu.
-
-**Sintoma:** Após soft-delete de um user, o email fica bloqueado permanentemente pelo constraint. Impossível reutilizar sem hard delete.
-
-**Root cause:** O índice `UNIQUE(tenant_id, email)` inclui rows soft-deleted (`deleted_at IS NOT NULL`), quando deveria filtrar (`WHERE deleted_at IS NULL`).
+**Descoberto por:** Fred, ao reenviar convite para email soft-deleted → erro Prisma "Unique constraint failed".
 
 **Solução proposta:**
 Migration:
@@ -326,83 +281,59 @@ CREATE UNIQUE INDEX users_tenant_id_email_active_key
   WHERE deleted_at IS NULL;
 ```
 
-**Impacto:**
-- Antes: erro Prisma cru "Unique constraint failed" quando reconvidar email soft-deleted.
-- Depois: reconvite funciona sem passo manual.
+**Estimativa:** 30min.
 
-**Estimativa:** 30min (migration + teste).
+**Dependência:** ~~P-84~~ **nenhuma** — corrigido pelo PO. P-83 e P-84 podem ser chips paralelos independentes.
 
-**Dependências:** Nenhuma.
-
-**Severidade:** BAIXA (contornável manualmente).
+**Severidade:** BAIXA.
 
 ---
 
 #### P-84 — `/admin/users` → Convidar não trata row soft-deleted
 
-**Descoberto:** Junto com P-83. Ao tentar reenviar convite para email soft-deleted, o erro Prisma vaza para a UI como mensagem crua e feia.
-
-**Sintoma:** Usuário vê "Invalid `prisma.user.create()` invocation: Unique constraint failed on the fields: (`tenant_id`, `email`)".
+**Descoberto:** ao tentar reenviar convite pra email soft-deleted, erro Prisma vaza pra UI como mensagem crua.
 
 **Solução proposta:**
 No procedure `users.invite`, antes de `prisma.user.create`:
 ```
 - findFirst incluindo deleted_at != null
 - Se existir row soft-deleted:
-    → oferecer reativar (UPDATE deleted_at=null, active=true) OU criar novo (após P-83)
+    → oferecer reativar (UPDATE deleted_at=null, active=true)
     → mensagem amigável: "Este email já foi convidado antes e foi desativado. Deseja reativar?"
 ```
 
-**Impacto:**
-- UX: mensagem clara em vez de erro técnico.
-- Fluxo de reconvite fica natural.
+**Nota:** funciona **sem** depender do P-83 — o UPDATE deleted_at=NULL não exige o partial UNIQUE.
 
-**Estimativa:** 2h (backend + UI feedback + testes).
-
-**Dependências:** P-83 (para poder criar novo email diretamente após soft-delete).
-
-**Severidade:** BAIXA (UX-only).
-
----
-
-## Recomendação de sequenciamento
-
-### Semana 1 (chips imediatos — 1-2 dias)
-
-- **P-88** (Sidebar RBAC) — 45min
-- **P-89** (duplicação em `/pipeline/new`) — 30min
-- **P-86** (dropdown Papel + botões admin/users) — 4h
-
-**Total:** ~1 dia de chip + QA Modo B (aprox 6h).
-
-### Sprint 15H (features — 4-6 dias)
-
-- **P-87** (Delegação hierárquica) — 2-3 dias, integrar como **Bloco C ampliado** do Sprint 15H já planejado.
-- Blocos A (P-77 reconcile approvals) + B (Metas por unidade) do Sprint 15H permanecem.
-
-### Housekeeping paralelo (opcional — 3-4h)
-
-- **P-83** (Partial UNIQUE) — 30min.
-- **P-84** (Convidar reativa soft-deleted) — 2h.
-- **P-81** (Runbook recovery) — 2h.
-
-### Sprint 16 — Hardening (2-3 dias)
-
-- **P-80** (Separar Neon prod de dev) — 2-3h + 24h monitoramento.
-- **P-82** (Loop 401 → tela dedicada) — 4-6h.
-- **P-85** (Clerk Production instance) — 1-2 dias (depende de domínio próprio).
+**Estimativa:** 2h. **Dependências:** nenhuma. **Severidade:** BAIXA.
 
 ---
 
 ## Métricas de sucesso pós-implementação
 
-Depois de encerrar os 3 chips imediatos e P-87:
+Depois de encerrar os chips da Semana 1 + P-85 + P-87:
 
-1. **P-88:** Sidebar de ANALISTA/GESTOR/PARCEIRO não mostra Usuários/Produtos/Listas — verificar em prod com cada role.
-2. **P-89:** Criar 10 opps em fluxo natural e nenhuma duplicata aparece no banco. Fluxo redireciona corretamente após sucesso.
-3. **P-87:** ANALISTA que tenta criar opp com owner=DIRETOR recebe FORBIDDEN legível. Dropdown mostra apenas pares/subárvore.
+1. **P-88:** Sidebar de ANALISTA/GESTOR/PARCEIRO não mostra Usuários/Produtos/Listas — verificado em prod com cada role.
+2. **P-89:** 10 opps criadas em fluxo natural, zero duplicatas no banco. Fluxo redireciona corretamente após sucesso.
+3. **P-86:** Admin troca role e desativa user com feedback visual imediato.
+4. **P-80:** Neon prod separado de dev. `psql` local não afeta `crm-app-pi-eight.vercel.app`.
+5. **P-85:** Email do Clerk chega sem "[Development]" no subject. Instância `pk_live_...` ativa.
+6. **P-87:** ANALISTA tenta criar opp com owner=DIRETOR → FORBIDDEN legível. Dropdown mostra apenas pares/subárvore. Audit log grava `opportunity.owner_changed` em delegações válidas.
 
-Todos os itens registrados no `Roteiro_QA_Homologacao_Staging.md` como cenários V-15G-N a partir de V-15G-7.
+Todos os cenários registrados no `Roteiro_QA_Homologacao_Staging.md` como V-15G-N a partir de V-15G-7.
+
+---
+
+## Mudanças desta revisão (v2 — 2026-07-11)
+
+Todas as observações do PO foram aceitas:
+
+- **P-80 elevado de MÉDIA → ALTA** e trazido pra Dia 1 (LGPD + blast radius existencial + custo baixo).
+- **P-85 elevado de MÉDIA → ALTA** e agendado pra Dias 2-3 (bloqueador de vendas B2B; dependência de domínio próprio removida — Clerk Production instance funciona no domínio Vercel existente).
+- **P-86 elevado de MÉDIA → ALTA** (sem workaround equivalente; `/admin/users/[id]/permissions` gerencia overrides individuais, não role padrão nem desativação).
+- **P-87 refinamento da regra** — pergunta explícita ao PO sobre transferência cross-branch (Analista SP → Analista RJ expõe opp ao Gestor RJ via `read_team`). Solução técnica ganhou `myScopes` unificado + audit log obrigatório.
+- **P-83 ↔ P-84** — dependência removida (P-84 funciona independentemente de P-83).
+- **Chips Semana 1** — reconhecidos como paralelizáveis (arquivos disjuntos → 1 dia walltime, não 2).
+- **Sprint organization P-87** — 2 opções explícitas (Opção A adotada / Opção C em aberto pra PO).
 
 ---
 

@@ -9,6 +9,8 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Table, THead, TBody, TH, TR, TD, TableEmpty } from '@/components/ui/table';
 import { useTableSort, type SortKey } from '@/lib/hooks/useTableSort';
+import { AlertDialog } from '@/components/ui/alert-dialog';
+import { useToast } from '@/components/ui/toast';
 
 const ROLE_LABEL: Record<UserRole, string> = {
   ADMIN: 'Admin',
@@ -41,6 +43,7 @@ const SORT_USER_STATUS: SortKey<UserRow> = 'active';
 
 export default function AdminUsersPage() {
   const utils = trpc.useUtils();
+  const { toast } = useToast();
   const me = trpc.users.me.useQuery();
   const list = trpc.users.list.useQuery({});
   const currentTenant = trpc.tenants.current.useQuery();
@@ -50,14 +53,30 @@ export default function AdminUsersPage() {
       setShowInvite(false);
       setInviteForm({ email: '', fullName: '', role: 'ANALISTA' });
       setInviteError(null);
+      toast({ kind: 'success', title: 'Convite enviado.' });
     },
     onError: (e) => setInviteError(friendlyTrpcError(e)),
   });
   const updateRole = trpc.users.updateRole.useMutation({
-    onSuccess: () => utils.users.list.invalidate(),
+    onSuccess: () => {
+      utils.users.list.invalidate();
+      setPendingRoleUserId(null);
+      toast({ kind: 'success', title: 'Papel atualizado.' });
+    },
+    onError: (e) => {
+      setPendingRoleUserId(null);
+      toast({ kind: 'error', title: friendlyTrpcError(e) });
+    },
   });
   const deactivate = trpc.users.deactivate.useMutation({
-    onSuccess: () => utils.users.list.invalidate(),
+    onSuccess: () => {
+      utils.users.list.invalidate();
+      setDeactivateTarget(null);
+      toast({ kind: 'success', title: 'Usuário desativado.' });
+    },
+    onError: (e) => {
+      toast({ kind: 'error', title: friendlyTrpcError(e) });
+    },
   });
 
   const [showInvite, setShowInvite] = useState(false);
@@ -67,6 +86,10 @@ export default function AdminUsersPage() {
     role: UserRole;
   }>({ email: '', fullName: '', role: 'ANALISTA' });
   const [inviteError, setInviteError] = useState<string | null>(null);
+  const [pendingRoleUserId, setPendingRoleUserId] = useState<string | null>(null);
+  const [deactivateTarget, setDeactivateTarget] = useState<
+    { id: string; fullName: string } | null
+  >(null);
 
   // Platform Owner é gerenciado em /platform/admins (Sprint 15A) — não
   // aparece nesta tela. Aqui todos os roles tenant-side são atribuíveis.
@@ -229,13 +252,16 @@ export default function AdminUsersPage() {
                     <select
                       id={`role-${u.id}`}
                       value={u.role}
-                      disabled={!canEditThisUser || updateRole.isPending}
-                      onChange={(e) =>
+                      disabled={
+                        !canEditThisUser || pendingRoleUserId === u.id
+                      }
+                      onChange={(e) => {
+                        setPendingRoleUserId(u.id);
                         updateRole.mutate({
                           id: u.id,
                           role: e.target.value as UserRole,
-                        })
-                      }
+                        });
+                      }}
                       className="border rounded px-2 py-1 text-xs bg-card focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-60"
                     >
                       {ALL_ROLES.map((r) => (
@@ -271,10 +297,14 @@ export default function AdminUsersPage() {
                       </Link>
                       {u.id !== me.data?.id && canEditThisUser && (
                         <button
-                          onClick={() => {
-                            if (confirm(`Desativar ${u.fullName}?`))
-                              deactivate.mutate({ id: u.id });
-                          }}
+                          type="button"
+                          onClick={() =>
+                            setDeactivateTarget({
+                              id: u.id,
+                              fullName: u.fullName,
+                            })
+                          }
+                          aria-label={`Desativar ${u.fullName}`}
                           className="px-2 py-1 text-xs rounded border text-danger hover:bg-danger-bg focus-visible:ring-2 focus-visible:ring-rose-500"
                         >
                           Desativar
@@ -288,6 +318,23 @@ export default function AdminUsersPage() {
           </TBody>
         </Table>
       </section>
+
+      <AlertDialog
+        open={deactivateTarget !== null}
+        onCancel={() => setDeactivateTarget(null)}
+        onConfirm={() => {
+          if (deactivateTarget) deactivate.mutate({ id: deactivateTarget.id });
+        }}
+        title="Desativar usuário?"
+        description={
+          deactivateTarget
+            ? `${deactivateTarget.fullName} perde acesso ao sistema imediatamente. Você pode reconvidá-lo depois.`
+            : undefined
+        }
+        confirmLabel="Desativar"
+        tone="danger"
+        loading={deactivate.isPending}
+      />
 
       <style jsx>{`
         .input {

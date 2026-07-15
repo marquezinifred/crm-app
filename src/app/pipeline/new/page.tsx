@@ -53,7 +53,12 @@ export default function NewOpportunityPage() {
         kind: 'success',
         title: `Oportunidade ${opp.title} criada no pipeline.`,
       });
-      router.push(`/pipeline/${opp.id}`);
+      // P-89: redirecionar pra /pipeline (kanban) em vez de /pipeline/<id>.
+      // Antes, o push abria intercepting Sheet lateral sobre /pipeline/new,
+      // deixando o form pendurado com dados preenchidos — ao fechar o Sheet
+      // (router.back), o usuário voltava pro form e podia clicar Salvar de
+      // novo, criando opp duplicata. Redirect pro kanban desmonta o form.
+      router.push('/pipeline');
     },
   });
 
@@ -222,7 +227,12 @@ export default function NewOpportunityPage() {
           <Button type="button" variant="ghost" onClick={() => router.back()}>
             Cancelar
           </Button>
-          <Button type="submit" variant="primary" loading={create.isLoading}>
+          <Button
+            type="submit"
+            variant="primary"
+            loading={create.isLoading}
+            disabled={create.isSuccess}
+          >
             Criar oportunidade
           </Button>
         </div>

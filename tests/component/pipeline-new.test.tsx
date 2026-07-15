@@ -251,7 +251,11 @@ describe('/pipeline/new (P-53 piloto Testing Library)', () => {
     expect(payload.estimatedValue).toBeUndefined();
   });
 
-  it('onSuccess dispara router.push para /pipeline/<id>', async () => {
+  it('onSuccess dispara router.push para /pipeline (P-89 fix duplicação)', async () => {
+    // Antes do P-89, o push era para /pipeline/<id> e abria intercepting
+    // Sheet sobre /pipeline/new. Ao fechar o Sheet, usuário voltava pro
+    // form ainda preenchido e podia clicar Salvar novamente, criando opp
+    // duplicata. Fix: redirect pro kanban desmonta o form.
     renderPage();
     expect(captured.create?.onSuccess).toBeTypeOf('function');
 
@@ -260,7 +264,7 @@ describe('/pipeline/new (P-53 piloto Testing Library)', () => {
     });
 
     await waitFor(() => {
-      expect(routerPush).toHaveBeenCalledWith('/pipeline/opp-42');
+      expect(routerPush).toHaveBeenCalledWith('/pipeline');
     });
   });
 

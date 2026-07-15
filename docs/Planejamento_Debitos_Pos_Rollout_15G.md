@@ -15,20 +15,20 @@ Durante a validação em produção do Sprint 15G — com 6 roles reais logando 
 - **1 débito de severidade MÉDIA** — cenário de recuperação de incidente.
 - **3 débitos de severidade BAIXA** — housekeeping/documentação.
 
-**Recomendação de sequenciamento revisada:**
+**Recomendação de sequenciamento revisada (v3):**
 
 | Quando | Itens | Observação |
 |--------|-------|------------|
 | **Dia 1 (paralelo, 4 chips walltime = 1 dia)** | P-88, P-89, P-86, P-80 | Arquivos disjuntos → paralelo real. P-80 sai de Sprint 16 pra cá. |
 | **Dia 2-3** | P-85 (Clerk Production instance) | Sem esperar domínio próprio — pode operar no domínio Vercel existente. |
-| **Sprint 15G.5 (2-3 dias)** | P-87 (writeScope + delegação hierárquica) | Antes do 15H (mini-sprint dedicado). |
-| **Sprint 15H (8-10 dias)** | Blocos A + B + C originais | Escopo intacto — P-87 sai fora. |
+| **Sprint 15G.5 (6-7 dias)** | P-87 (workflow de transferência de oportunidade) | Sprint dedicado — não é feature simples, é workflow completo com aprovação. |
+| **Sprint 15H (8-10 dias)** | Blocos A + B + C originais | Escopo intacto. |
 | **Housekeeping (qualquer momento, paralelo)** | P-83, P-84, P-81 | Sem dependência entre si. |
 | **Sprint 16** | P-82 (loop 401 → tela dedicada) | Mantém — não é urgente. |
 
-**⚠️ Decisão em aberto pro PO:** o texto abaixo apresenta **duas opções** para P-87. A **Opção A (split em Sprint 15G.5)** foi adotada na tabela acima. Se preferir **Opção C (P-87 dentro do 15H, Metas empurra pra 15I)**, sinalizar antes do kickoff.
+**Estimativa total agregada revisada:** ~16-18 dias de trabalho até fim do 15H (Dia 1 chips + Dias 2-3 Clerk + 15G.5 workflow + 15H completo).
 
-**Estimativa total agregada revisada:** ~11-13 dias de trabalho até fim do 15H (contra 8-10 no plano original).
+**Sprint organization confirmada pelo PO:** **Opção A** — Sprint 15G.5 dedicado antes do 15H. Opção C (embutir no 15H, empurrar Metas pra 15I) descartada porque o escopo do P-87 cresceu de "validação simples" pra "workflow completo com tabela dedicada + worker de timeout + 3 telas novas" — inviável sacrificar Bloco B (Metas) por completo.
 
 ---
 
@@ -156,77 +156,260 @@ Instalação da **Clerk Production instance pode ser feita imediatamente** e ope
 
 ### 🔴 ALTA — Sprint dedicado
 
-#### P-87 — Delegação hierárquica de oportunidade
+#### P-87 — Workflow de transferência de oportunidade cross-team
 
 **Descoberto por:** Fred, logado como ANALISTA, criando opp e atribuindo `ownerId` a DIRETOR_COMERCIAL. Recebeu **NOT_FOUND** ao ser redirecionado — Sprint 15G escondeu corretamente a opp que ele não pode ver.
 
-**Sintoma real:** ANALISTA pode escolher qualquer usuário como responsável no form. Se escolher outro, cria a opp mas "perde" ela (não vê mais em nenhum lugar).
+**Sintoma real:** ANALISTA pode escolher qualquer usuário como responsável no form. Se escolher outro, cria a opp mas "perde" ela (Sprint 15G escopo isola). Bug arquitetural: não existe fluxo formal de transferência de responsabilidade cross-team.
 
-**Root cause:** Backend `opportunities.create` valida escopo de **leitura** via Sprint 15G, mas **não valida escopo de escrita** (quem pode ser owner).
+**Root cause + evolução do escopo:**
 
-**Regra de negócio proposta (validada com PO — versão 2 após refinamento):**
-
-Caller pode definir `ownerId` diferente dele se:
-1. Owner é **ele mesmo** (sempre OK), OU
-2. Owner está na **subárvore que caller gerencia** (ltree, mesmo pattern `read_team`), OU
-3. Owner está no **mesmo nível hierárquico** do caller (par) — **com refinamento pendente de decisão do PO** (ver quadro abaixo).
-
-**⚠️ Decisão em aberto pro PO — refinamento da regra "par no mesmo nível":**
-
-| Delegação | Regra atual | Refinamento proposto | Nota |
-|-----------|-------------|----------------------|------|
-| Analista → analista **mesma unidade** | ✅ OK | ✅ OK | Sem controvérsia |
-| Analista → analista **unidade irmã** (mesmo gestor) | ✅ permitido | ✅ permitido | Faz sentido — mesmo time expandido |
-| Analista → analista **unidade diferente** (outro branch, outro gestor) | ✅ permitido | ⚠️ **PO decide** | Ver problema abaixo |
-| Analista → gestor acima | ❌ bloqueado | ❌ bloqueado | Sem controvérsia |
-
-**Problema com a regra atual (sem refinamento):**
-
-Se Analista SP transfere opp para Analista RJ (equipes diferentes sob gestores diferentes), o **Gestor de RJ passa a ver essa opp** via `read_team` (a opp cai na subárvore que ele gerencia). Isso significa que o Analista SP está efetivamente **expondo dados** pra um gestor de outra equipe. Provavelmente não é a intenção — é side effect.
-
-**Pergunta pro PO:** um vendedor de SP pode transferir um lead pra um vendedor do RJ mesmo sendo equipes diferentes sob gestores diferentes?
-- **Se SIM:** regra atual está certa. Documentar side effect ("Gestor RJ verá a opp").
-- **Se NÃO:** condição "mesmo nível" precisa virar "mesma unidade" ou "unidade irmã" (mesma subárvore de um gestor comum).
+Inicialmente pareceu problema simples de validação de escopo de escrita (2-3 dias). Após simulação de casos reais com o PO, ficou claro que o modelo de negócio exige um **workflow completo de aprovação de transferência**, não apenas delegação direta. O escopo cresceu pra Sprint dedicado (6-7 dias).
 
 ---
 
-**Solução técnica (independente da decisão do refinamento):**
+**Modelo de negócio (validado com PO):**
 
-**Backend:**
-1. **Consolidar em uma única query:** `salesStructure.myScopes` retornando `{ readScope, writeScope }` numa chamada só (ver ponto técnico abaixo).
-2. `opportunities.create` valida `ownerId` contra `writeScope`. Se fora, throw FORBIDDEN.
-3. `opportunities.update` idem quando altera `ownerId` (transferência).
-4. **Audit log obrigatório** — quando `create.ownerId != callerId` OU `update.ownerId` muda, gravar entry:
-   ```
-   action: 'opportunity.owner_changed'
-   metadata: { fromOwnerId, toOwnerId, callerId, opportunityId, reason }
-   ```
+**Casos de uso reais:**
+1. Vendedor sai da empresa → Gestor redistribui as opps dele (interno ou envia pra outro time)
+2. Cliente muda de região → Gestor SP envia opp pra Gestor RJ
+3. Balanceamento de carga → Gestor detecta sobrecarga em um analista e transfere pra outro
+4. Diretor intervém em opp específica que exige atenção especial
 
-**Frontend:**
-1. `/pipeline/new` filtra dropdown "Responsável interno" pelos users em `writeScope`.
-2. Se caller = ANALISTA sem pares na unidade → dropdown pré-preenchido com o próprio + disabled.
-3. `salesStructure.myScopes` cacheado por sessão (React Query — invalidação só em `sales_structure:*` mutations).
+**Regras cardinais:**
 
-**Testes:**
-- Backend: 6 casos por role × cenários da tabela acima (ADMIN/DIRETOR/GESTOR/ANALISTA/PARCEIRO).
-- Frontend: component test do form com role ANALISTA vs GESTOR — dropdown popula diferente.
-- E2E: analista tenta forçar payload com ownerId inválido → FORBIDDEN + audit log NÃO grava (bloqueio antes).
-- E2E: transferência legítima → audit log grava com `action: 'opportunity.owner_changed'`.
+1. **Quem dispara:** apenas **ancestor da estrutura de vendas do dono** (Gestor, Diretor, Coordenador — qualquer nível acima do dono atual). Nunca o próprio dono. Nunca pares no mesmo nível. Nunca ADMIN plataforma (fora da estrutura de vendas).
+2. **Destinos permitidos:** o disparador enxerga como destinos possíveis:
+   - Pares no seu próprio nível (outros Gestores, outros Diretores)
+   - Seu superior direto (Diretor se caller é Gestor)
+   - **Nunca** subordinados (delegação interna é operação diferente, comportamento natural do Sprint 15G)
+3. **Destino recebe autoridade unilateral:** ao aceitar, o destinatário escolhe qual analista da sua equipe recebe a opp. Não precisa aprovação do analista destino.
+4. **Estágio preservado:** a opp mantém o estágio atual (não reseta pra Lead). Histórico completo preservado.
+5. **Durante pendência:** opp fica sob **gestão do disparador**. Dono original **continua vendo** com badge "Em transferência" mas fica em **modo read-only** — não pode editar, adicionar atividades, mover estágio.
+6. **Rejeição / cancelamento / timeout:** opp fica com o **disparador** indefinidamente até ação manual (redistribuir na própria equipe, reofertar pra outro destino, ou aceitar de volta pro dono original).
 
-**Estimativa:** 2-3 dias.
+**Delegação intra-equipe (fora do workflow):** Gestor SP atribuir opp de Analista SP1 para Analista SP2 (mesma subárvore) **NÃO passa por workflow** — é autoridade natural do Gestor sobre sua subárvore (comportamento Sprint 15G já existente). Workflow existe **apenas quando cross-team** (destino fora da subárvore do disparador).
 
-**Dependências:** Sprint 15G (base) — atendida.
+**Timeout parametrizável:** cada tenant configura em `TenantSettings.transferTimeoutHours` (default 72h = 3 dias). Cron worker verifica de hora em hora e auto-expira PENDING que passaram do limite.
+
+---
+
+**Modelo de dados novo:**
+
+**Migration 0032 — `opportunity_transfers`:**
+
+```sql
+CREATE TYPE "TransferStatus" AS ENUM (
+  'PENDING',
+  'APPROVED',
+  'REJECTED',
+  'TIMED_OUT',
+  'CANCELLED'
+);
+
+CREATE TABLE opportunity_transfers (
+  id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id           UUID NOT NULL REFERENCES tenants(id),
+  opportunity_id      UUID NOT NULL REFERENCES opportunities(id),
+  requested_by_id     UUID NOT NULL REFERENCES users(id),  -- Gestor A (disparador)
+  original_owner_id   UUID NOT NULL REFERENCES users(id),  -- Analista SP1 (dono no momento do disparo)
+  target_unit_id      UUID REFERENCES sales_units(id),     -- Unidade destino (opcional, ajuda auditoria)
+  target_manager_id   UUID NOT NULL REFERENCES users(id),  -- Gestor B (recebedor)
+  new_owner_id        UUID REFERENCES users(id),           -- Analista escolhido por Gestor B ao aceitar (NULL até APPROVED)
+  status              "TransferStatus" NOT NULL DEFAULT 'PENDING',
+  reason              TEXT,                                 -- Justificativa do disparador (opcional)
+  decision_reason     TEXT,                                 -- Justificativa do decisor (opcional)
+  decided_by_id       UUID REFERENCES users(id),           -- Quem decidiu (Gestor B, ou disparador em cancelamento)
+  requested_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  decided_at          TIMESTAMPTZ,
+  expires_at          TIMESTAMPTZ NOT NULL,                -- calculado a partir de TenantSettings.transferTimeoutHours
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_transfers_pending_target ON opportunity_transfers (target_manager_id, status)
+  WHERE status = 'PENDING';
+CREATE INDEX idx_transfers_pending_expiry ON opportunity_transfers (expires_at, status)
+  WHERE status = 'PENDING';
+CREATE UNIQUE INDEX idx_transfers_active_per_opp ON opportunity_transfers (opportunity_id)
+  WHERE status = 'PENDING';  -- 1 transferência PENDING por opp
+
+-- RLS obrigatório
+ALTER TABLE opportunity_transfers ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON opportunity_transfers
+  USING (tenant_id = current_tenant_id());
+```
+
+**Migration 0032b — flag em Opportunity:**
+
+```sql
+ALTER TABLE opportunities
+  ADD COLUMN current_transfer_id UUID REFERENCES opportunity_transfers(id);
+
+-- Quando != null, opp está em transferência PENDING (usado pra bloquear edição pelo dono original)
+```
+
+**Migration 0032c — config timeout:**
+
+```sql
+ALTER TABLE tenant_settings
+  ADD COLUMN transfer_timeout_hours INTEGER NOT NULL DEFAULT 72;
+```
+
+---
+
+**Backend — procedures novas em `opportunityTransfers` router:**
+
+1. **`request`** (disparo) — mutation:
+   - Input: `{ opportunityId, targetManagerId, reason? }`
+   - Valida caller é ancestor do owner atual da opp (via ltree)
+   - Valida targetManagerId é destino permitido (par mesmo nível ou superior direto de caller)
+   - Cria row `opportunity_transfers` com status PENDING
+   - Atualiza `opportunities.current_transfer_id = new_transfer.id`
+   - Dispara notificação (email + push) pro targetManager
+   - Dispara notificação pro dono original ("sua opp entrou em transferência")
+   - Audit log `opportunity_transfer.requested`
+
+2. **`cancel`** (disparador cancela antes de decisão) — mutation:
+   - Input: `{ transferId }`
+   - Valida caller é o `requested_by_id`
+   - Valida status == PENDING
+   - Atualiza status = CANCELLED, `decided_by_id = caller`, `decided_at = now()`
+   - Atualiza `opportunities.current_transfer_id = null`
+   - Opp fica sob gestão do disparador (não retorna pro dono original — Confirmação B do PO)
+   - Notifica dono original ("transferência cancelada, opp voltou pra Gestor X")
+   - Audit log `opportunity_transfer.cancelled`
+
+3. **`approve`** (destinatário aceita) — mutation:
+   - Input: `{ transferId, newOwnerId, decisionReason? }`
+   - Valida caller == `target_manager_id`
+   - Valida status == PENDING
+   - Valida `newOwnerId` é membro da subárvore que caller gerencia (via ltree)
+   - Atualiza status = APPROVED, `new_owner_id`, `decided_by_id`, `decided_at`
+   - Atualiza `opportunities.owner_id = newOwnerId` + `current_transfer_id = null`
+   - Grava `opportunityStageHistory` com marca especial (transfer approved, from → to)
+   - Notifica: disparador + dono original + novo owner
+   - Audit log `opportunity_transfer.approved` + `opportunity.owner_changed`
+
+4. **`reject`** (destinatário rejeita) — mutation:
+   - Input: `{ transferId, decisionReason? }`
+   - Valida caller == `target_manager_id`
+   - Valida status == PENDING
+   - Atualiza status = REJECTED, `decided_by_id`, `decided_at`
+   - Atualiza `opportunities.current_transfer_id = null`
+   - Opp fica sob gestão do disparador (Confirmação A do PO — mesmo comportamento de cancelamento/timeout)
+   - Notifica: disparador + dono original
+   - Audit log `opportunity_transfer.rejected`
+
+5. **`pendingForMe`** (fila do destinatário) — query:
+   - Retorna transfers PENDING onde caller == `target_manager_id`
+   - Includes: opportunity, requested_by, original_owner
+
+6. **`myOutgoing`** (o que o disparador enviou) — query:
+   - Retorna transfers PENDING onde caller == `requested_by_id`
+   - Includes: opportunity, target_manager
+
+7. **`historyForOpportunity`** — query:
+   - Todas as transferências (qualquer status) de uma opp específica
+   - Usado no detalhe da opp pra mostrar histórico completo
+
+**Worker cron novo:**
+
+`jobs/opportunity-transfer-timeout.ts` — roda de hora em hora:
+- Busca transfers PENDING onde `expires_at < now()`
+- Atualiza status = TIMED_OUT
+- Atualiza `opportunities.current_transfer_id = null`
+- Opp fica sob gestão do disparador (mesmo comportamento de reject/cancel)
+- Notifica: disparador + dono original ("timeout — opp voltou pra Gestor X")
+
+**Guard adicional na Opportunity update/write:**
+
+Toda operação de write em `opportunities.*` (update, delete, stage advance, activity add, task create, document upload) precisa checar `opportunities.current_transfer_id`:
+- Se != null (transferência PENDING) → allow apenas se caller == `requested_by_id` da transfer atual (disparador tem controle temporário)
+- Bloqueia dono original + qualquer outro user (mesmo do time)
+
+Isso implementa o **read-only pro dono original** durante pendência (Confirmação B).
+
+---
+
+**Frontend — 3 telas novas + integração em existentes:**
+
+1. **Botão "Transferir responsabilidade"** em `/pipeline/{id}` header:
+   - Visível apenas se caller é ancestor do owner atual (via `salesStructure.myScopes.canTransferOpportunity(oppId)`)
+   - Abre Modal com:
+     - Dropdown "Destino" (populado com pares no mesmo nível + superior direto)
+     - Textarea "Motivo (opcional)"
+     - Botões Cancelar / Solicitar transferência
+   - Se transferência já está PENDING (`opp.currentTransferId != null`) → botão vira "Cancelar transferência pendente"
+
+2. **Nova tela `/inbox/transferencias-recebidas`** — fila do destinatário:
+   - Lista de transferências PENDING (`opportunityTransfers.pendingForMe`)
+   - Cada card mostra: opp title/valor/empresa, disparador, dono original, motivo, "há X dias" (com destaque se próximo do timeout)
+   - Botões: **Aceitar** (abre sub-modal com dropdown pra escolher novo owner da própria equipe + textarea motivo) / **Rejeitar** (modal simples com textarea motivo)
+
+3. **Nova tela `/pipeline/transferencias-em-andamento`** — visibilidade do disparador:
+   - Lista de transferências PENDING/APPROVED/REJECTED/TIMED_OUT/CANCELLED disparadas por mim
+   - Filtro por status
+   - Botão "Cancelar" em cada PENDING
+
+4. **Integração em `/pipeline/{id}`:**
+   - Se opp está em transferência PENDING:
+     - Badge grande no header: "🔄 Em transferência para Gestor X (aguarda decisão)"
+     - Botões de edit disabled com tooltip "Opp em transferência, contate Gestor Y"
+   - Se opp foi transferida no passado (histórico):
+     - Aba "Histórico" mostra timeline com eventos de transferência
+
+5. **Notificação no Topbar:**
+   - Badge no ícone de sino quando há transferências pendentes pra mim (destinatário)
+   - Click leva pra `/inbox/transferencias-recebidas`
+
+---
+
+**Notificações (worker BullMQ existente):**
+
+Emails (templates novos):
+- `TRANSFER_REQUESTED` → destinatário: "Nova transferência de oportunidade aguardando sua decisão"
+- `TRANSFER_REQUESTED_ORIGINAL_OWNER` → dono original: "Sua oportunidade foi enviada pra transferência (edição bloqueada)"
+- `TRANSFER_APPROVED` → disparador + dono original: "Transferência aprovada, novo responsável: X"
+- `TRANSFER_APPROVED_NEW_OWNER` → novo owner: "Você recebeu uma nova oportunidade"
+- `TRANSFER_REJECTED` → disparador + dono original: "Transferência rejeitada, opp voltou pra Gestor X"
+- `TRANSFER_CANCELLED` → dono original + destinatário: "Transferência cancelada pelo disparador"
+- `TRANSFER_TIMED_OUT` → disparador + dono original: "Transferência expirou sem decisão, opp voltou pra Gestor X"
+
+Push notifications (VAPID já existe — Sprint 10):
+- Mesmos eventos que emails, versão resumida
+
+---
+
+**Testes (E2E crítico):**
+
+- Fluxo happy path completo: Gestor SP dispara → Gestor RJ aceita → owner muda + notificações OK
+- Fluxo timeout: dispara → aguarda expiração → worker roda → status TIMED_OUT + opp volta pro disparador
+- Fluxo cancelamento: dispara → cancela em 5min → status CANCELLED + opp fica com disparador
+- Fluxo rejeição: dispara → destinatário rejeita → status REJECTED + opp fica com disparador
+- **Read-only durante pendência:** dono original tenta editar opp em transferência → FORBIDDEN
+- **Guard escopo disparador:** Analista tenta disparar → FORBIDDEN
+- **Guard destino:** disparador tenta enviar pra subordinado → FORBIDDEN (subordinado não é destino válido, é delegação direta)
+- **Guard newOwner:** destinatário tenta atribuir pra user fora da sua subárvore → FORBIDDEN
+- **Concorrência:** 2 disparadores tentam iniciar transfer da mesma opp simultaneamente → 1 aceita, outro recebe CONFLICT (UNIQUE constraint)
+
+---
+
+**Estimativa detalhada — 6-7 dias:**
+
+- **Dia 1:** Modelo de dados (migrations 0032abc) + Prisma schema + specs
+- **Dia 2:** Backend procedures 1-4 (request, cancel, approve, reject) + guards de escopo
+- **Dia 3:** Backend procedures 5-7 (queries) + worker cron timeout + notificações
+- **Dia 4:** Frontend — botão de disparo + modal + integração no `/pipeline/{id}`
+- **Dia 5:** Frontend — tela `/inbox/transferencias-recebidas` + tela `/pipeline/transferencias-em-andamento`
+- **Dia 6:** Testes E2E completos + audit log validação + code review
+- **Dia 7:** QA Modo B + polish + docs + deploy
 
 **Severidade:** ALTA (feature bloqueadora do modelo real de trabalho).
 
-**Decisão em aberto pro PO — SPRINT ORGANIZATION:**
+**Sprint organization:** **Sprint 15G.5 dedicado** (6-7 dias) antes do 15H. Confirmado pelo PO. Opção C (embutir no 15H) descartada.
 
-| Opção | Descrição | Impacto |
-|-------|-----------|---------|
-| **Opção A (adotada na tabela executiva)** | **Sprint 15G.5 dedicado (2-3 dias)** antes do 15H | 15H mantém escopo original 8-10 dias. Total: 15G.5 (3d) + 15H (10d) = 13d |
-| Opção C | P-87 dentro do 15H, Bloco B (Metas) escorrega pro 15I | 15H fica 10-12d, Metas atrasa ~4d |
-
-**PO precisa decidir antes do kickoff.**
+**Dependências:** Sprint 15G (base ltree + Sales Units) — atendida.
 
 ---
 
@@ -323,17 +506,27 @@ Todos os cenários registrados no `Roteiro_QA_Homologacao_Staging.md` como V-15G
 
 ---
 
-## Mudanças desta revisão (v2 — 2026-07-11)
+## Mudanças desta revisão (v3 — 2026-07-11 tarde)
 
-Todas as observações do PO foram aceitas:
+Após simulação de casos reais com o PO, **P-87 evoluiu radicalmente**:
+
+- **P-87 não é "delegação simples"** — é **workflow completo de transferência com aprovação**. Modelo de dados dedicado (`opportunity_transfers`), 7 procedures novas, 3 telas novas, worker cron pra timeout, 7 templates de notificação.
+- **Regra cardinal:** apenas ancestor da estrutura de vendas pode disparar (nunca o dono). Destino é par no mesmo nível ou superior direto do disparador. Destinatário escolhe qual analista da sua equipe recebe.
+- **Durante pendência:** dono original vê a opp read-only (badge "Em transferência"). Disparador tem controle temporário.
+- **Rejeição/timeout/cancelamento:** opp fica com o disparador (não retorna automático ao dono original — confirmação B do PO).
+- **Estimativa P-87:** 2-3 dias → **6-7 dias**.
+- **Sprint 15G.5 confirmado como Sprint dedicado.** Opção C (embutir no 15H) descartada — sacrificaria Bloco B inteiro (Metas).
+- Timeout parametrizável em `TenantSettings.transferTimeoutHours` (default 72h).
+
+## Mudanças da revisão v2 (2026-07-11 manhã)
+
+Observações originais do PO aceitas:
 
 - **P-80 elevado de MÉDIA → ALTA** e trazido pra Dia 1 (LGPD + blast radius existencial + custo baixo).
 - **P-85 elevado de MÉDIA → ALTA** e agendado pra Dias 2-3 (bloqueador de vendas B2B; dependência de domínio próprio removida — Clerk Production instance funciona no domínio Vercel existente).
 - **P-86 elevado de MÉDIA → ALTA** (sem workaround equivalente; `/admin/users/[id]/permissions` gerencia overrides individuais, não role padrão nem desativação).
-- **P-87 refinamento da regra** — pergunta explícita ao PO sobre transferência cross-branch (Analista SP → Analista RJ expõe opp ao Gestor RJ via `read_team`). Solução técnica ganhou `myScopes` unificado + audit log obrigatório.
 - **P-83 ↔ P-84** — dependência removida (P-84 funciona independentemente de P-83).
 - **Chips Semana 1** — reconhecidos como paralelizáveis (arquivos disjuntos → 1 dia walltime, não 2).
-- **Sprint organization P-87** — 2 opções explícitas (Opção A adotada / Opção C em aberto pra PO).
 
 ---
 

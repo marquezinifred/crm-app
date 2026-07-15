@@ -66,9 +66,9 @@ const SECTIONS: Section[] = [
   {
     title: 'Admin',
     items: [
-      { href: '/admin/users', label: 'Usuários', Icon: IconUserCog },
-      { href: '/admin/products', label: 'Produtos', Icon: IconPackage },
-      { href: '/admin/listas', label: 'Listas', Icon: IconSettings },
+      { href: '/admin/users', label: 'Usuários', Icon: IconUserCog, permission: 'user:update' },
+      { href: '/admin/products', label: 'Produtos', Icon: IconPackage, permission: 'catalog:update' },
+      { href: '/admin/listas', label: 'Listas', Icon: IconSettings, permission: 'catalog:update' },
       { href: '/admin/commercial-structure', label: 'Estrutura comercial', Icon: IconHierarchy, permission: 'sales_structure:read' },
       { href: '/admin/billing', label: 'Plano e cobrança', Icon: IconCard },
       { href: '/admin/branding', label: 'Identidade', Icon: IconPalette },

@@ -153,3 +153,19 @@ cat docs/qa-sessions/auto-report-2026-07-11-chips-semana-1.md
 ---
 
 **Fim do dia 2026-07-11.** Aguarda ação humana pra deploy prod + P-80 + P-85 quando você voltar.
+
+---
+
+## Adendo 2026-07-17 — P-80 concluído + P-88b/P-91 em prod
+
+- **P-80 (Neon separation):** branch `production-live` criado (parent `staging`,
+  Never expires, endpoint `ep-rapid-fog-ajm1hdvb`). `DATABASE_URL` prod trocada
+  no Vercel. Deploy `crm-gapstndcf`. Health verde (warm ~122ms). Prod e dev
+  local agora ISOLADOS — `db:reset` local não atinge mais prod.
+  Lição Neon: branch com expiration não pode ter filhos; removida a expiration
+  do staging (permanente — staging nunca deveria expirar).
+- **P-88b + P-91 deployados em prod** no mesmo deploy (QA Modo B verde prévio).
+- Migrations futuras: aplicar nos DOIS branches (staging via dev flow;
+  production-live via rollout guide — `vercel env pull` já traz a string nova).
+- Próximos: P-85 (Clerk Production instance), P-92/P-94/P-95 (chips UX),
+  Sprint 15G.5 (P-87 workflow transferência).

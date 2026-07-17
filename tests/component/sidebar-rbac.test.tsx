@@ -4,25 +4,47 @@ import { render, screen, within } from '@testing-library/react';
 import type { UserRole } from '@prisma/client';
 
 /**
- * P-88 — Sidebar RBAC gate em Users/Products/Listas.
+ * P-88 + P-88b — Sidebar RBAC gate em items admin.
  *
+ * ## P-88 (original)
  * Antes do fix, 3 items da seção Admin (`/admin/users`, `/admin/products`,
  * `/admin/listas`) não tinham `permission:` configurada e apareciam para
  * ANALISTA/GESTOR/PARCEIRO no menu lateral em produção. Backend barra
  * com FORBIDDEN corretamente (usa `adminOnlyProcedure`), mas o menu
  * confundia o usuário.
  *
- * Fix adiciona:
+ * Adicionou:
  *  - /admin/users → permission: 'user:update'
  *  - /admin/products → permission: 'catalog:update'
  *  - /admin/listas → permission: 'catalog:update'
  *
- * Estes testes garantem:
- *  - ANALISTA/GESTOR/PARCEIRO não veem os itens (têm apenas catalog:read
- *    e não têm user:update).
- *  - ADMIN vê todos (tem user:update + catalog:update).
- *  - DIRETOR_COMERCIAL não vê os itens (não tem user:update nem
- *    catalog:update — apenas user:read + catalog:read).
+ * ## P-88b (residual)
+ * P-88 original ficou cirúrgico demais — cobriu apenas 3 items.
+ * ANALISTA reportou em prod que via/acessava /admin/conversion-rates
+ * (backend só bloqueia mutations; leitura da tela vazava).
+ *
+ * P-88b cobre os 10 items restantes da seção Admin + o único item da
+ * seção Parceiros:
+ *
+ *  - /admin/billing → permission: 'tenant:update' (ADMIN-only)
+ *  - /admin/branding → permission: 'tenant:update' (ADMIN-only)
+ *  - /admin/ai → permission: 'ai:configure_global' (ADMIN-only)
+ *  - /admin/alerts → permission: 'alert:configure' (ADMIN-only)
+ *  - /admin/approval-rules → permission: 'tenant:update' (ADMIN-only)
+ *  - /admin/contracts → permission: 'tenant:update' (ADMIN-only)
+ *  - /admin/conversion-rates → permission: 'tenant:update' (ADMIN-only)
+ *  - /admin/templates → permission: 'catalog:update' (ADMIN-only)
+ *  - /admin/privacy → permission: 'tenant:update' (ADMIN-only)
+ *  - /admin/partners → permission: 'partner:invite'
+ *    (ADMIN + DIRETOR_C + DIRETOR_O + GESTOR — únicos que operam com
+ *    parceiros; DIRETOR_F/ANALISTA/PARCEIRO ficam fora)
+ *
+ * Racional de escolha: cada gate escolhido baseado em
+ * ROLE_DEFAULT_PERMISSIONS. Prefere permission existente que só ADMIN
+ * tem por default. `tenant:update` (ADMIN-only) usado quando nenhuma
+ * permission mais específica alinha semanticamente — defesa em
+ * profundidade UI. Backend continua re-validando em cada procedure via
+ * adminOnlyProcedure.
  *
  * Padrão de mock replicado de `admin-commercial-structure.test.tsx`
  * (mock direto do `trpc.users.me.useQuery`).
@@ -178,5 +200,124 @@ describe('Sidebar RBAC gate — P-88', () => {
     expect(hasLink(/^Usuários$/)).toBe(true);
     expect(hasLink(/^Produtos$/)).toBe(true);
     expect(hasLink(/^Listas$/)).toBe(true);
+  });
+});
+
+/**
+ * P-88b — 10 items admin restantes.
+ *
+ * Cobre gates aplicados aos items que P-88 original deixou de fora.
+ * Tabela de decisão está no topo do arquivo.
+ *
+ * ADMIN vê todos; DIRETOR_* / GESTOR / ANALISTA / PARCEIRO seguem
+ * comportamento role-a-role documentado.
+ */
+
+const P88B_ADMIN_ONLY_LABELS = [
+  /^Plano e cobrança$/,
+  /^Identidade$/,
+  /^IA$/,
+  /^Alertas$/,
+  /^Regras de aprovação$/,
+  /^Config\. contratos$/,
+  /^Taxas de conversão$/,
+  /^Templates$/,
+  /^LGPD$/,
+];
+
+describe('Sidebar RBAC gate — P-88b (10 items admin restantes)', () => {
+  it('ADMIN vê todos os 10 items novos gated + Parceiros', () => {
+    currentRole = 'ADMIN';
+    renderSidebar();
+
+    for (const label of P88B_ADMIN_ONLY_LABELS) {
+      expect(hasLink(label)).toBe(true);
+    }
+    expect(hasLink(/^Parceiros$/)).toBe(true);
+  });
+
+  it('ANALISTA NÃO vê nenhum dos 10 items novos (sem tenant:update / ai:configure_global / alert:configure / catalog:update)', () => {
+    currentRole = 'ANALISTA';
+    renderSidebar();
+
+    for (const label of P88B_ADMIN_ONLY_LABELS) {
+      expect(hasLink(label)).toBe(false);
+    }
+    // ANALISTA não tem partner:invite → não vê Parceiros também
+    expect(hasLink(/^Parceiros$/)).toBe(false);
+    // Sanity: itens operacionais intactos
+    expect(hasLink(/^Dashboard$/)).toBe(true);
+    expect(hasLink(/^Pipeline$/)).toBe(true);
+  });
+
+  it('GESTOR NÃO vê itens ADMIN-only mas VÊ Parceiros (tem partner:invite)', () => {
+    currentRole = 'GESTOR';
+    renderSidebar();
+
+    for (const label of P88B_ADMIN_ONLY_LABELS) {
+      expect(hasLink(label)).toBe(false);
+    }
+    // GESTOR tem partner:invite (default do role) → vê Parceiros
+    expect(hasLink(/^Parceiros$/)).toBe(true);
+  });
+
+  it('PARCEIRO NÃO vê nada dos 10 items + Parceiros', () => {
+    currentRole = 'PARCEIRO';
+    renderSidebar();
+
+    for (const label of P88B_ADMIN_ONLY_LABELS) {
+      expect(hasLink(label)).toBe(false);
+    }
+    expect(hasLink(/^Parceiros$/)).toBe(false);
+  });
+
+  it('DIRETOR_COMERCIAL NÃO vê itens ADMIN-only mas VÊ Parceiros (tem partner:invite)', () => {
+    // DIRETOR_C não tem tenant:update / ai:configure_global / alert:configure /
+    // catalog:update — todos os 9 items ADMIN-only ficam escondidos.
+    // Tem partner:invite → vê /admin/partners.
+    currentRole = 'DIRETOR_COMERCIAL';
+    renderSidebar();
+
+    for (const label of P88B_ADMIN_ONLY_LABELS) {
+      expect(hasLink(label)).toBe(false);
+    }
+    expect(hasLink(/^Parceiros$/)).toBe(true);
+  });
+
+  it('DIRETOR_OPERACOES NÃO vê itens ADMIN-only mas VÊ Parceiros (tem partner:invite)', () => {
+    currentRole = 'DIRETOR_OPERACOES';
+    renderSidebar();
+
+    for (const label of P88B_ADMIN_ONLY_LABELS) {
+      expect(hasLink(label)).toBe(false);
+    }
+    expect(hasLink(/^Parceiros$/)).toBe(true);
+  });
+
+  it('DIRETOR_FINANCEIRO NÃO vê itens ADMIN-only NEM Parceiros (sem partner:invite)', () => {
+    // DIRETOR_F NÃO tem partner:invite — foco em financeiro/auditoria.
+    // Também não tem tenant:update / ai:configure_global / alert:configure /
+    // catalog:update. Fica sem nenhum item ADMIN-only nem Parceiros.
+    currentRole = 'DIRETOR_FINANCEIRO';
+    renderSidebar();
+
+    for (const label of P88B_ADMIN_ONLY_LABELS) {
+      expect(hasLink(label)).toBe(false);
+    }
+    expect(hasLink(/^Parceiros$/)).toBe(false);
+    // Sanity: DIRETOR_F ainda vê Relatórios (não gated) e Estrutura comercial
+    // (tem sales_structure:read por default)
+    expect(hasLink(/^Relatórios$/)).toBe(true);
+    expect(hasLink(/^Estrutura comercial$/)).toBe(true);
+  });
+
+  it('sem role carregado (loading state) mostra todos os itens novos (comportamento permissivo)', () => {
+    currentRole = undefined;
+    renderSidebar();
+
+    for (const label of P88B_ADMIN_ONLY_LABELS) {
+      expect(hasLink(label)).toBe(true);
+    }
+    expect(hasLink(/^Parceiros$/)).toBe(true);
   });
 });

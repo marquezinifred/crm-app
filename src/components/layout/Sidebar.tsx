@@ -60,7 +60,10 @@ const SECTIONS: Section[] = [
   {
     title: 'Parceiros',
     items: [
-      { href: '/admin/partners', label: 'Parceiros', Icon: IconUsersGroup },
+      // P-88b — `partner:invite` cobre ADMIN + DIRETOR_C + DIRETOR_O + GESTOR
+      // (roles que operacionalmente convidam/gerenciam parceiros).
+      // DIRETOR_F / ANALISTA / PARCEIRO ficam fora.
+      { href: '/admin/partners', label: 'Parceiros', Icon: IconUsersGroup, permission: 'partner:invite' },
     ],
   },
   {
@@ -70,17 +73,21 @@ const SECTIONS: Section[] = [
       { href: '/admin/products', label: 'Produtos', Icon: IconPackage, permission: 'catalog:update' },
       { href: '/admin/listas', label: 'Listas', Icon: IconSettings, permission: 'catalog:update' },
       { href: '/admin/commercial-structure', label: 'Estrutura comercial', Icon: IconHierarchy, permission: 'sales_structure:read' },
-      { href: '/admin/billing', label: 'Plano e cobrança', Icon: IconCard },
-      { href: '/admin/branding', label: 'Identidade', Icon: IconPalette },
-      { href: '/admin/ai', label: 'IA', Icon: IconSparkles },
-      { href: '/admin/alerts', label: 'Alertas', Icon: IconBell },
-      { href: '/admin/approval-rules', label: 'Regras de aprovação', Icon: IconShield },
-      { href: '/admin/contracts', label: 'Config. contratos', Icon: IconSettings },
-      { href: '/admin/conversion-rates', label: 'Taxas de conversão', Icon: IconPercent },
+      // P-88b — items de configuração tenant-wide gated por `tenant:update`
+      // (ADMIN-only). Backend re-valida em cada procedure via
+      // adminOnlyProcedure. Gate UI evita vazamento de item que ANALISTA/GESTOR/
+      // PARCEIRO/DIRETORES não deveriam ver no menu.
+      { href: '/admin/billing', label: 'Plano e cobrança', Icon: IconCard, permission: 'tenant:update' },
+      { href: '/admin/branding', label: 'Identidade', Icon: IconPalette, permission: 'tenant:update' },
+      { href: '/admin/ai', label: 'IA', Icon: IconSparkles, permission: 'ai:configure_global' },
+      { href: '/admin/alerts', label: 'Alertas', Icon: IconBell, permission: 'alert:configure' },
+      { href: '/admin/approval-rules', label: 'Regras de aprovação', Icon: IconShield, permission: 'tenant:update' },
+      { href: '/admin/contracts', label: 'Config. contratos', Icon: IconSettings, permission: 'tenant:update' },
+      { href: '/admin/conversion-rates', label: 'Taxas de conversão', Icon: IconPercent, permission: 'tenant:update' },
       { href: '/admin/email-inbound', label: 'E-mail inbound', Icon: IconAt, permission: 'inbound:configure' },
       { href: '/admin/inbound-rejected', label: 'Inbound rejeitados', Icon: IconInbox, permission: 'inbound:configure' },
-      { href: '/admin/templates', label: 'Templates', Icon: IconFiles },
-      { href: '/admin/privacy', label: 'LGPD', Icon: IconLock },
+      { href: '/admin/templates', label: 'Templates', Icon: IconFiles, permission: 'catalog:update' },
+      { href: '/admin/privacy', label: 'LGPD', Icon: IconLock, permission: 'tenant:update' },
       { href: '/imports', label: 'Importação', Icon: IconUpload, permission: 'import:run' },
     ],
   },

@@ -75,6 +75,7 @@ export default function AdminProductsPage() {
       utils.products.list.invalidate();
       toast({ kind: 'success', title: 'Produto desativado.' });
     },
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
 
   const rows = useMemo(() => list.data ?? [], [list.data]);

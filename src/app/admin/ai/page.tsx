@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { AIProvider } from '@prisma/client';
 import { trpc, type RouterOutputs } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
@@ -108,7 +109,7 @@ function CardConfigPadrao() {
       toast({ kind: 'success', title: 'Configuração salva.' });
     },
     onError: (e) => {
-      toast({ kind: 'error', title: 'Erro ao salvar', description: e.message });
+      toast({ kind: 'error', title: 'Erro ao salvar', description: friendlyTrpcError(e) });
     },
   });
 
@@ -440,7 +441,7 @@ function FeatureEditModal({
       onClose();
     },
     onError: (e) => {
-      toast({ kind: 'error', title: 'Erro ao salvar', description: e.message });
+      toast({ kind: 'error', title: 'Erro ao salvar', description: friendlyTrpcError(e) });
     },
   });
 
@@ -839,7 +840,7 @@ function CardAlertas() {
       toast({ kind: 'success', title: 'Circuit breaker limpo.' });
     },
     onError: (e) => {
-      toast({ kind: 'error', title: 'Erro', description: e.message });
+      toast({ kind: 'error', title: 'Erro', description: friendlyTrpcError(e) });
     },
   });
 

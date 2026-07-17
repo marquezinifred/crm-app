@@ -2,11 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/toast';
 
 export default function AdminContractsPage() {
   const utils = trpc.useUtils();
+  const { toast } = useToast();
   const { data, isLoading } = trpc.contractsConfig.getConfig.useQuery();
   const [handoffEmails, setHandoffEmails] = useState<string[]>([]);
   const [renewalDays, setRenewalDays] = useState<number[]>([]);
@@ -20,7 +23,11 @@ export default function AdminContractsPage() {
   }, [data]);
 
   const save = trpc.contractsConfig.updateConfig.useMutation({
-    onSuccess: () => utils.contractsConfig.getConfig.invalidate(),
+    onSuccess: () => {
+      utils.contractsConfig.getConfig.invalidate();
+      toast({ kind: 'success', title: 'Configurações de contratos salvas.' });
+    },
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
 
   if (isLoading || !data) return <main className="p-6">Carregando…</main>;

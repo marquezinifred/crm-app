@@ -2,14 +2,17 @@
 
 import { useEffect, useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/toast';
 import { STAGES, STAGE_LABELS } from '@/components/pipeline/types';
 import type { OpportunityStage } from '@prisma/client';
 
 export default function ConversionRatesPage() {
   const current = trpc.reports.conversionRates.useQuery();
   const utils = trpc.useUtils();
+  const { toast } = useToast();
   const [rates, setRates] = useState<Record<OpportunityStage, number> | null>(null);
   const [suggestion, setSuggestion] = useState<{
     source: string;
@@ -25,10 +28,13 @@ export default function ConversionRatesPage() {
     onSuccess: () => {
       utils.reports.conversionRates.invalidate();
       utils.reports.revenueProjection.invalidate();
+      toast({ kind: 'success', title: 'Taxas de conversão salvas.' });
     },
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
   const suggest = trpc.reports.suggestConversionRates.useMutation({
     onSuccess: (data) => setSuggestion(data),
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
 
   if (!rates) return <main className="p-6">Carregando…</main>;

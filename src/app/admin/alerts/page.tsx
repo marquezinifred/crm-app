@@ -5,10 +5,12 @@ import { trpc } from '@/lib/trpc/client';
 import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/toast';
 
 export default function AdminAlertsPage() {
   const { data, isLoading } = trpc.alerts.tenantConfig.useQuery();
   const utils = trpc.useUtils();
+  const { toast } = useToast();
   const [leadDays, setLeadDays] = useState<number[]>([]);
   const [centralEmail, setCentralEmail] = useState('');
   const [overdueDays, setOverdueDays] = useState(2);
@@ -22,7 +24,11 @@ export default function AdminAlertsPage() {
   }, [data]);
 
   const save = trpc.alerts.updateConfig.useMutation({
-    onSuccess: () => utils.alerts.tenantConfig.invalidate(),
+    onSuccess: () => {
+      utils.alerts.tenantConfig.invalidate();
+      toast({ kind: 'success', title: 'Configurações de alertas salvas.' });
+    },
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
 
   if (isLoading || !data) return <main className="p-6">Carregando…</main>;
@@ -100,10 +106,6 @@ export default function AdminAlertsPage() {
             className="w-32 rounded border px-3 py-2"
           />
         </label>
-
-        {save.error && (
-          <p className="rounded bg-red-50 p-2 text-sm text-danger">{friendlyTrpcError(save.error)}</p>
-        )}
 
         <Button type="submit" disabled={save.isLoading || leadDays.length === 0}>
           {save.isLoading ? 'Salvando…' : 'Salvar'}

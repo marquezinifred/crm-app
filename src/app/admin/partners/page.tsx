@@ -2,8 +2,10 @@
 
 import { useMemo, useState } from 'react';
 import { trpc, type RouterOutputs } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/toast';
 import { brl } from '@/lib/utils/hooks';
 import {
   compareSortValues,
@@ -133,6 +135,7 @@ export default function AdminPartnersPage() {
 
 function PartnerConfigForm({ partnerId }: { partnerId: string }) {
   const utils = trpc.useUtils();
+  const { toast } = useToast();
   const { data: tc } = trpc.partners.getTcText.useQuery({ partnerCompanyId: partnerId });
   const [commission, setCommission] = useState<string>('');
   const [tcVersion, setTcVersion] = useState('');
@@ -142,7 +145,9 @@ function PartnerConfigForm({ partnerId }: { partnerId: string }) {
     onSuccess: () => {
       utils.partners.listWithStats.invalidate();
       utils.partners.getTcText.invalidate({ partnerCompanyId: partnerId });
+      toast({ kind: 'success', title: 'Configuração do parceiro salva.' });
     },
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
 
   return (

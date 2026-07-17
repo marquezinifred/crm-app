@@ -53,16 +53,27 @@ export default function EmailInboundConfigPage() {
 
 function EmailTab() {
   const utils = trpc.useUtils();
+  const { toast } = useToast();
   const { data, isLoading } = trpc.adminEmail.getSlug.useQuery();
   const [slug, setSlug] = useState('');
   const setSlugMut = trpc.adminEmail.setSlug.useMutation({
     onSuccess: () => {
       setSlug('');
       utils.adminEmail.getSlug.invalidate();
+      toast({ kind: 'success', title: 'Endereço inbound criado.' });
     },
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
   const regenMut = trpc.adminEmail.regenerateSlug.useMutation({
-    onSuccess: () => utils.adminEmail.getSlug.invalidate(),
+    onSuccess: () => {
+      utils.adminEmail.getSlug.invalidate();
+      toast({
+        kind: 'success',
+        title: 'Endereço regenerado.',
+        description: 'Atualize o destino no seu provedor (Postmark, Resend).',
+      });
+    },
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
   const [regenOpen, setRegenOpen] = useState(false);
 
@@ -126,9 +137,6 @@ function EmailTab() {
             />
             <Button type="submit" disabled={setSlugMut.isPending}>Salvar</Button>
           </form>
-          {setSlugMut.error && (
-            <p className="mt-2 text-sm text-danger">{friendlyTrpcError(setSlugMut.error)}</p>
-          )}
         </section>
       )}
 

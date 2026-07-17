@@ -5,6 +5,7 @@ import { trpc } from '@/lib/trpc/client';
 import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/toast';
 import type { ThemeConfig } from '@/lib/theme/types';
 import { VENZO_DEFAULTS } from '@/lib/theme/types';
 import { POPULAR_GOOGLE_FONTS } from '@/lib/theme/google-fonts-popular';
@@ -20,6 +21,7 @@ interface ValidationFailure {
 
 export default function BrandingPage() {
   const utils = trpc.useUtils();
+  const { toast } = useToast();
   const themeQ = trpc.theme.get.useQuery();
   const planQ = trpc.theme.planInfo.useQuery();
   const palettesQ = trpc.theme.listCuratedPalettes.useQuery();
@@ -50,13 +52,17 @@ export default function BrandingPage() {
     onSuccess: () => {
       utils.theme.get.invalidate();
       setShowOverride(false);
+      toast({ kind: 'success', title: 'Tema publicado.' });
     },
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
   const publishOverride = trpc.theme.publishWithOverride.useMutation({
     onSuccess: () => {
       utils.theme.get.invalidate();
       setShowOverride(false);
+      toast({ kind: 'success', title: 'Tema publicado com override WCAG.' });
     },
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
 
   if (themeQ.isLoading || planQ.isLoading) return <main className="p-6">Carregando…</main>;
@@ -237,9 +243,6 @@ export default function BrandingPage() {
             >
               {update.isPending ? 'Publicando…' : 'Publicar tema'}
             </Button>
-            {update.error && (
-              <p className="rounded bg-red-50 p-2 text-xs text-danger">{friendlyTrpcError(update.error)}</p>
-            )}
             {isEnterprise && failures.length > 0 && (
               <Button
                 type="button"
@@ -289,9 +292,6 @@ export default function BrandingPage() {
                 {overrideForm.justification.length}/30
               </span>
             </label>
-            {publishOverride.error && (
-              <p className="mb-2 rounded bg-red-50 p-2 text-xs text-danger">{friendlyTrpcError(publishOverride.error)}</p>
-            )}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setShowOverride(false)}>
                 Cancelar

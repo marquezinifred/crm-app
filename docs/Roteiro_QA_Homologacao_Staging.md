@@ -765,6 +765,57 @@ de rede degradada).
 mostra JSON cru (P-95 é a promessa de que erro Zod nunca chega ao
 usuário em rota de operação).
 
+### 2.9. Feedback de erro nas telas /admin (~10min — P-92)
+
+Contexto: bug em prod (2026-07-17) — mutations admin falhando com
+FORBIDDEN sem nenhum feedback. Pior caso: `/admin/conversion-rates`
+aparentava salvar e os valores voltavam ao recarregar. Padrão canônico
+pós-P-92: **toda mutation admin tem toast de erro via
+`friendlyTrpcError` + toast de sucesso**.
+
+Pré-condição: usuário ANALISTA **sem** overrides de permission admin
+(um ANALISTA "cru" — o backend deve responder FORBIDDEN nas mutations
+abaixo).
+
+- [ ] **F1 — Conversion rates (o caso crítico original)**
+  Logado como ANALISTA, abrir `/admin/conversion-rates`, editar um
+  valor, clicar Salvar.
+  Esperado: toast vermelho com mensagem legível de permissão (ex:
+  "Perfil ANALISTA não tem acesso…"). **NUNCA** silêncio + aparência
+  de sucesso.
+- [ ] **F2 — Approval rules**
+  Como ANALISTA, tentar criar regra e desativar regra existente em
+  `/admin/approval-rules`.
+  Esperado: toast de erro em ambas. Como ADMIN: toasts "Regra criada."
+  / "Regra atualizada." / "Regra removida.".
+- [ ] **F3 — Sucesso vira toast (ADMIN)**
+  Como ADMIN, salvar em `/admin/conversion-rates` ("Taxas de conversão
+  salvas."), `/admin/alerts` ("Configurações de alertas salvas."),
+  `/admin/contracts` ("Configurações de contratos salvas.") e publicar
+  tema em `/admin/branding` ("Tema publicado.").
+  Esperado: toast de sucesso em cada; sair e voltar mostra valor
+  persistido.
+- [ ] **F4 — Banners inline improvisados removidos**
+  Forçar erro em `/admin/alerts` e `/admin/branding` (ex: como
+  ANALISTA). Esperado: feedback vem como toast — sem parágrafo
+  vermelho cru embutido no form (padrão antigo). Estados de UX
+  legítimos (preview de upload, aviso de override WCAG ativo)
+  continuam inline.
+- [ ] **F5 — Smoke demais telas**
+  1 mutation falhando em cada: `/admin/privacy` (rejeitar com
+  justificativa curta), `/admin/listas` (excluir item em uso),
+  `/admin/products` (desativar sem permissão), `/admin/templates`
+  (criar sem permissão), `/admin/email-inbound` (regenerar slug sem
+  permissão), `/admin/partners` (salvar config sem permissão),
+  `/admin/billing` (upgrade com Stripe indisponível).
+  Esperado: toast de erro legível em todas — zero silent failure.
+
+Automatizado: `tests/component/admin-error-feedback.test.tsx`
+(13 casos — 2 críticas a fundo + smoke alerts/contracts/privacy).
+
+**Bloqueia release se:** F1 ou F2 falham em silêncio (regressão do
+bug original). F3–F5 registrar como P-XX se divergirem, sem bloquear.
+
 ---
 
 ## 3. Cenários de segurança (bloqueia release se falhar)

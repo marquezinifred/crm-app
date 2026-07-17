@@ -113,9 +113,14 @@ function TerritoriesTab() {
       setName('');
       toast({ kind: 'success', title: 'Território criado.' });
     },
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
   const remove = trpc.territories.remove.useMutation({
-    onSuccess: () => utils.territories.list.invalidate(),
+    onSuccess: () => {
+      utils.territories.list.invalidate();
+      toast({ kind: 'success', title: 'Território excluído.' });
+    },
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
   const [name, setName] = useState('');
 
@@ -143,9 +148,14 @@ function SegmentsTab() {
       setName('');
       toast({ kind: 'success', title: 'Segmento criado.' });
     },
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
   const remove = trpc.segments.remove.useMutation({
-    onSuccess: () => utils.segments.list.invalidate(),
+    onSuccess: () => {
+      utils.segments.list.invalidate();
+      toast({ kind: 'success', title: 'Segmento excluído.' });
+    },
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
   const [name, setName] = useState('');
 
@@ -251,9 +261,11 @@ function LeadSourcesTab() {
       utils.leadSources.list.invalidate();
       toast({ kind: 'success', title: 'Origem criada.' });
     },
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
   const update = trpc.leadSources.update.useMutation({
     onSuccess: () => utils.leadSources.list.invalidate(),
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
   const remove = trpc.leadSources.remove.useMutation({
     onSuccess: () => {
@@ -264,6 +276,7 @@ function LeadSourcesTab() {
   });
   const reorder = trpc.leadSources.reorder.useMutation({
     onSuccess: () => utils.leadSources.list.invalidate(),
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
 
   return (
@@ -289,16 +302,22 @@ function IndustriesTab() {
       utils.industries.list.invalidate();
       toast({ kind: 'success', title: 'Setor criado.' });
     },
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
   const update = trpc.industries.update.useMutation({
     onSuccess: () => utils.industries.list.invalidate(),
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
   const remove = trpc.industries.remove.useMutation({
-    onSuccess: () => utils.industries.list.invalidate(),
+    onSuccess: () => {
+      utils.industries.list.invalidate();
+      toast({ kind: 'success', title: 'Setor desligado.' });
+    },
     onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
   const reorder = trpc.industries.reorder.useMutation({
     onSuccess: () => utils.industries.list.invalidate(),
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
 
   return (
@@ -324,16 +343,22 @@ function ContactRolesTab() {
       utils.contactRoles.list.invalidate();
       toast({ kind: 'success', title: 'Cargo criado.' });
     },
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
   const update = trpc.contactRoles.update.useMutation({
     onSuccess: () => utils.contactRoles.list.invalidate(),
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
   const remove = trpc.contactRoles.remove.useMutation({
-    onSuccess: () => utils.contactRoles.list.invalidate(),
+    onSuccess: () => {
+      utils.contactRoles.list.invalidate();
+      toast({ kind: 'success', title: 'Cargo desligado.' });
+    },
     onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
   const reorder = trpc.contactRoles.reorder.useMutation({
     onSuccess: () => utils.contactRoles.list.invalidate(),
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
 
   return (

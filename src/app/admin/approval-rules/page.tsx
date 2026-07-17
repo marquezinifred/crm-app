@@ -2,8 +2,10 @@
 
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/toast';
 import { ApprovalRuleCriteria } from '@prisma/client';
 
 const APPROVER_ROLES = [
@@ -21,6 +23,7 @@ const CRITERIA_LABELS: Record<ApprovalRuleCriteria, string> = {
 
 export default function ApprovalRulesPage() {
   const utils = trpc.useUtils();
+  const { toast } = useToast();
   const { data } = trpc.approvalRules.list.useQuery();
   const [form, setForm] = useState<{
     name: string;
@@ -38,13 +41,23 @@ export default function ApprovalRulesPage() {
     onSuccess: () => {
       setForm({ ...form, name: '', thresholdNumeric: '' });
       utils.approvalRules.list.invalidate();
+      toast({ kind: 'success', title: 'Regra criada.' });
     },
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
   const remove = trpc.approvalRules.remove.useMutation({
-    onSuccess: () => utils.approvalRules.list.invalidate(),
+    onSuccess: () => {
+      utils.approvalRules.list.invalidate();
+      toast({ kind: 'success', title: 'Regra removida.' });
+    },
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
   const toggle = trpc.approvalRules.update.useMutation({
-    onSuccess: () => utils.approvalRules.list.invalidate(),
+    onSuccess: () => {
+      utils.approvalRules.list.invalidate();
+      toast({ kind: 'success', title: 'Regra atualizada.' });
+    },
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
 
   return (

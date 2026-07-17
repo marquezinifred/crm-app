@@ -2,9 +2,11 @@
 
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 import { FileDropzone, type FileMetadata } from '@/components/ui/file-dropzone';
+import { useToast } from '@/components/ui/toast';
 import { DocumentCategory } from '@prisma/client';
 
 const CATEGORIES: DocumentCategory[] = [
@@ -48,6 +50,7 @@ async function fileToBase64(file: File): Promise<string> {
 
 export default function AdminTemplatesPage() {
   const utils = trpc.useUtils();
+  const { toast } = useToast();
   const { data } = trpc.templates.list.useQuery({ activeOnly: false });
 
   const [category, setCategory] = useState<DocumentCategory>('PROPOSTA_TECNICA');
@@ -56,7 +59,6 @@ export default function AdminTemplatesPage() {
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [pendingFilename, setPendingFilename] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const getUploadIntent = trpc.documents.getUploadIntent.useMutation();
   const uploadProxy = trpc.documents.uploadProxy.useMutation();
@@ -67,11 +69,12 @@ export default function AdminTemplatesPage() {
       setPendingKey(null);
       setPendingFilename(null);
       utils.templates.list.invalidate();
+      toast({ kind: 'success', title: 'Template adicionado.' });
     },
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
 
   async function handleFileSelected(meta: FileMetadata) {
-    setError(null);
     setUploading(true);
     try {
       const { storageKey } = await getUploadIntent.mutateAsync({
@@ -88,9 +91,11 @@ export default function AdminTemplatesPage() {
       setPendingKey(storageKey);
       setPendingFilename(meta.filename);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Falha ao enviar arquivo.',
-      );
+      const title =
+        err && typeof err === 'object' && 'message' in err
+          ? friendlyTrpcError(err as { message: string })
+          : 'Falha ao enviar arquivo.';
+      toast({ kind: 'error', title });
     } finally {
       setUploading(false);
     }
@@ -176,11 +181,6 @@ export default function AdminTemplatesPage() {
             {pendingKey && pendingFilename && !uploading && (
               <p className="mt-1 text-xs text-success-text">
                 ✓ {pendingFilename} pronto para salvar
-              </p>
-            )}
-            {error && (
-              <p role="alert" className="mt-1 rounded bg-danger/10 p-2 text-xs text-danger">
-                {error}
               </p>
             )}
           </div>

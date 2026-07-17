@@ -1,9 +1,11 @@
 'use client';
 
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { useState } from 'react';
 import type { DataSubjectRequestStatus, DataSubjectRequestType } from '@prisma/client';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { useToast } from '@/components/ui/toast';
 
 const TYPE_LABEL: Record<DataSubjectRequestType, string> = {
   ACCESS: 'Acesso',
@@ -22,15 +24,25 @@ const STATUS_BADGE: Record<DataSubjectRequestStatus, string> = {
 
 export default function AdminPrivacyPage() {
   const utils = trpc.useUtils();
-  const all = trpc.privacy.listAll.useQuery();
-  const process = trpc.privacy.process.useMutation({
-    onSuccess: () => utils.privacy.listAll.invalidate(),
-  });
-  const reject = trpc.privacy.reject.useMutation({
-    onSuccess: () => utils.privacy.listAll.invalidate(),
-  });
+  const { toast } = useToast();
   const [rejecting, setRejecting] = useState<string | null>(null);
   const [reason, setReason] = useState('');
+  const all = trpc.privacy.listAll.useQuery();
+  const process = trpc.privacy.process.useMutation({
+    onSuccess: () => {
+      utils.privacy.listAll.invalidate();
+      toast({ kind: 'success', title: 'Solicitação processada.' });
+    },
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
+  });
+  const reject = trpc.privacy.reject.useMutation({
+    onSuccess: () => {
+      utils.privacy.listAll.invalidate();
+      setRejecting(null);
+      toast({ kind: 'success', title: 'Solicitação rejeitada.' });
+    },
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
+  });
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -126,10 +138,7 @@ export default function AdminPrivacyPage() {
                   <div className="flex gap-2">
                     <button
                       disabled={reason.length < 3 || reject.isPending}
-                      onClick={async () => {
-                        await reject.mutateAsync({ id: req.id, reason });
-                        setRejecting(null);
-                      }}
+                      onClick={() => reject.mutate({ id: req.id, reason })}
                       className="px-3 py-1.5 text-sm rounded-md bg-danger text-white hover:opacity-90 disabled:opacity-50"
                     >
                       Confirmar rejeição

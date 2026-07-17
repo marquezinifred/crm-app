@@ -1,8 +1,10 @@
 'use client';
 
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { useState } from 'react';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { useToast } from '@/components/ui/toast';
 
 function fmtBytes(b: number) {
   if (b >= 1024 ** 3) return `${(b / 1024 ** 3).toFixed(1)} GB`;
@@ -28,11 +30,16 @@ function UsageBar({ pct, exceeded }: { pct: number; exceeded: boolean }) {
 }
 
 export default function BillingPage() {
+  const { toast } = useToast();
   const status = trpc.billing.status.useQuery();
   const usage = trpc.billing.currentUsage.useQuery();
   const history = trpc.billing.history.useQuery();
-  const checkout = trpc.billing.startCheckout.useMutation();
-  const portal = trpc.billing.openPortal.useMutation();
+  const checkout = trpc.billing.startCheckout.useMutation({
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
+  });
+  const portal = trpc.billing.openPortal.useMutation({
+    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
+  });
   const [busy, setBusy] = useState<string | null>(null);
 
   async function upgrade(plan: 'STARTER' | 'PRO' | 'ENTERPRISE') {
@@ -40,6 +47,8 @@ export default function BillingPage() {
     try {
       const { url } = await checkout.mutateAsync({ plan });
       window.location.href = url;
+    } catch {
+      // feedback via onError da mutation
     } finally {
       setBusy(null);
     }
@@ -50,6 +59,8 @@ export default function BillingPage() {
     try {
       const { url } = await portal.mutateAsync();
       window.location.href = url;
+    } catch {
+      // feedback via onError da mutation
     } finally {
       setBusy(null);
     }

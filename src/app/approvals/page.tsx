@@ -2,15 +2,19 @@
 
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { Button } from '@/components/ui/button';
 import { brl } from '@/lib/utils/hooks';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { useToast } from '@/components/ui/toast';
 
 export default function ApprovalsPage() {
   const utils = trpc.useUtils();
+  const { toast } = useToast();
   const { data, isLoading, error } = trpc.approvals.myPending.useQuery();
   const decide = trpc.approvals.decide.useMutation({
     onSuccess: () => utils.approvals.myPending.invalidate(),
+    onError: (err) => toast({ kind: 'error', title: friendlyTrpcError(err) }),
   });
   const [comments, setComments] = useState<Record<string, string>>({});
 
@@ -23,7 +27,11 @@ export default function ApprovalsPage() {
       />
 
       {isLoading && <p className="text-sm text-text-2">Carregando…</p>}
-      {error && <p className="text-sm text-danger">{error.message}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-danger">
+          {friendlyTrpcError(error)}
+        </p>
+      )}
       {data && data.length === 0 && (
         <p className="rounded border border-dashed border-border-strong p-6 text-center text-sm text-text-2">
           Nada pendente para você.

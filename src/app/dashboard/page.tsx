@@ -1,6 +1,7 @@
 'use client';
 
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { AlertType, AlertStatus } from '@prisma/client';
 import { urgencyFromDate } from '@/lib/utils/hooks';
 import { cn } from '@/lib/utils/cn';
@@ -45,7 +46,7 @@ export default function DashboardPage() {
 
       {error && (
         <div role="alert" className="rounded border border-danger/30 bg-danger-bg/40 text-danger-text p-3 text-body">
-          Algo saiu errado. {error.message}
+          Algo saiu errado. {friendlyTrpcError(error)}
         </div>
       )}
 

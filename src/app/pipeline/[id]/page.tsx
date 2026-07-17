@@ -13,6 +13,7 @@ import { DocumentsSection } from '@/components/pipeline/DocumentsSection';
 import { ProposalsSection } from '@/components/pipeline/ProposalsSection';
 import { TasksSection } from '@/components/pipeline/TasksSection';
 import { useToast } from '@/components/ui/toast';
+import { ErrorState } from '@/components/ui/empty-state';
 import { OpportunityLossReason } from '@prisma/client';
 
 export default function OpportunityDetailPage() {
@@ -20,7 +21,7 @@ export default function OpportunityDetailPage() {
   const router = useRouter();
   const utils = trpc.useUtils();
   const { toast } = useToast();
-  const { data: opp, isLoading, error } = trpc.opportunities.byId.useQuery({ id: params.id });
+  const { data: opp, isLoading, error, refetch } = trpc.opportunities.byId.useQuery({ id: params.id });
 
   const [showCancel, setShowCancel] = useState(false);
   const [cancelForm, setCancelForm] = useState({ reason: '', lossReason: '' as string });
@@ -51,7 +52,23 @@ export default function OpportunityDetailPage() {
   });
 
   if (isLoading) return <main className="p-6">Carregando…</main>;
-  if (error) return <main className="p-6 text-danger">{error.message}</main>;
+  if (error) {
+    // P-95 — nunca renderizar o erro Zod/TRPC cru na tela.
+    const notFound = error.data?.code === 'NOT_FOUND';
+    return (
+      <main className="p-6">
+        <ErrorState
+          title={notFound ? 'Oportunidade não encontrada.' : 'Algo saiu errado.'}
+          description={
+            notFound
+              ? 'Ela pode ter sido removida ou o link está incorreto.'
+              : friendlyTrpcError(error)
+          }
+          onRetry={notFound ? undefined : () => void refetch()}
+        />
+      </main>
+    );
+  }
   if (!opp) return null;
 
   const currentIdx = STAGES.indexOf(opp.stage);

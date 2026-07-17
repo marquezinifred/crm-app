@@ -698,6 +698,73 @@ horizontal via `<@` quebrado), V5 GESTOR consegue ver diretoria acima
 (regressão A4). V1/V2/V3 são CRUD admin — bugs registrar como P-XX
 mas não bloqueiam release.
 
+### 2.8. Rota /companies/new + erros amigáveis em rotas de operação (~10min — P-94/P-95)
+
+Cenários derivados do bug reproduzido em prod (Fred, 2026-07-17):
+link `/companies/new` em `/admin/partners` caía em `[id]` com
+`id="new"` e o array Zod cru (`[{"validation":"uuid",...}]`)
+renderizava em vermelho na tela. Cobre a rota estática nova
+(`src/app/companies/new/page.tsx`) e o sweep de `friendlyTrpcError`
+nas rotas de operação (`CompanyDetailContent`, `ContactDetailContent`,
+`/companies`, `/pipeline` kanban/mobile/detalhe, `/inbox`,
+`/approvals`, `/reports/inbound-vs-outbound`, `/dashboard`).
+
+1. **W1 — /companies/new renderiza form de criação (P-94)**
+   - Login: qualquer role com `company:create` (ADMIN/ANALISTA).
+   - Navegar direto pra `/companies/new` (deep link, URL na mão).
+   - **Passa se:** PageHeader "Nova empresa" + form completo
+     (CNPJ com auto-fill, Razão social, endereço, território) +
+     breadcrumb "← Voltar para empresas". ZERO texto vermelho com
+     JSON.
+   - **Falha se:** tela de detalhe com erro `Invalid uuid` (regressão
+     — Next voltou a matchear `[id]`).
+
+2. **W2 — Link de /admin/partners deixa de quebrar (P-94)**
+   - Login: ADMIN. Navegar `/admin/partners` → clicar no link
+     textual `/companies/new`.
+   - Preencher Razão social `"Parceira QA Ltda"` + Tipo `Parceiro`.
+     Criar.
+   - **Passa se:** toast "Parceira QA Ltda adicionada ao seu
+     portfólio." + redirect pra `/companies/<uuid>` da empresa criada
+     (full-page de detalhe carrega).
+
+3. **W3 — Detalhe com id inválido mostra erro amigável (P-95)**
+   - Navegar direto pra `/companies/abc-nao-uuid` e
+     `/contacts/abc-nao-uuid`.
+   - **Passa se:** ErrorState do design system ("Algo saiu errado."
+     + mensagem legível + botão "Tentar novamente"). O array Zod cru
+     (`"validation"`, `path`, `code`) NUNCA aparece no body.
+   - Repetir com uuid válido inexistente
+     (`/companies/00000000-0000-4000-8000-000000000000`) →
+     **Passa se:** "Empresa não encontrada." / "Contato não
+     encontrado." sem botão de retry, sem `NOT_FOUND` cru.
+
+4. **W4 — Mutations de operação com toast danger (P-95)**
+   - `/approvals`: com uma approval pendente, derrubar a rede
+     (DevTools offline) e clicar "Aprovar".
+   - `/inbox`: mesma técnica em "Vincular" / "Rejeitar".
+   - Detalhe de empresa → "Desativar empresa" offline.
+   - **Passa se:** toast vermelho com mensagem legível via
+     `friendlyTrpcError` em cada caso. Sem falha silenciosa, sem
+     JSON.
+
+5. **W5 — Erros de query em listas de operação (P-95)**
+   - Simular 500 (parar o backend OU token expirado) e carregar
+     `/companies`, `/inbox`, `/approvals`,
+     `/reports/inbound-vs-outbound`, `/dashboard`, `/pipeline`.
+   - **Passa se:** cada tela mostra mensagem em `role="alert"` legível
+     (não `TRPCClientError:` cru, não JSON). `/pipeline/<uuid-inexistente>`
+     mostra "Oportunidade não encontrada.".
+
+**Automatizado:** `tests/component/companies-new-page.test.tsx` (5
+casos) + `tests/component/detail-error-friendly.test.tsx` (5 casos)
+cobrem W1/W2/W3 em nível de componente. W4/W5 são manuais (dependem
+de rede degradada).
+
+**Bloqueia release se:** W1 regride (link quebrado volta) OU W3
+mostra JSON cru (P-95 é a promessa de que erro Zod nunca chega ao
+usuário em rota de operação).
+
 ---
 
 ## 3. Cenários de segurança (bloqueia release se falhar)

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatBRL, formatBRLCompact } from '@/lib/utils/format';
 import { STAGE_LABELS } from '@/components/pipeline/types';
@@ -55,7 +56,7 @@ export default function InboundVsOutboundPage() {
       {q.isLoading && <p className="text-sm text-text-2">Carregando…</p>}
       {q.error && (
         <p className="rounded-lg border border-danger bg-danger-bg p-3 text-sm text-danger-text">
-          {q.error.message}
+          {friendlyTrpcError(q.error)}
         </p>
       )}
 

@@ -3,10 +3,13 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Modal, ModalFooter } from '@/components/ui/modal';
+import { ErrorState } from '@/components/ui/empty-state';
+import { useToast } from '@/components/ui/toast';
 import { CompanyForm } from './CompanyForm';
 import { formatRelativeDate } from '@/lib/utils/format';
 
@@ -18,6 +21,7 @@ import { formatRelativeDate } from '@/lib/utils/format';
  */
 export function CompanyDetailContent({ companyId }: { companyId: string }) {
   const utils = trpc.useUtils();
+  const { toast } = useToast();
   const companyQ = trpc.companies.byId.useQuery({ id: companyId });
   const contactsQ = trpc.contacts.list.useQuery({ companyId, page: 1, pageSize: 50 });
 
@@ -28,8 +32,12 @@ export function CompanyDetailContent({ companyId }: { companyId: string }) {
     onSuccess: () => {
       utils.companies.list.invalidate();
       setDeactivating(false);
+      toast({ kind: 'success', title: 'Empresa desativada.' });
     },
-    onError: () => setDeactivating(false),
+    onError: (e) => {
+      setDeactivating(false);
+      toast({ kind: 'error', title: friendlyTrpcError(e) });
+    },
   });
 
   if (companyQ.isLoading) {
@@ -42,7 +50,19 @@ export function CompanyDetailContent({ companyId }: { companyId: string }) {
     );
   }
   if (companyQ.error) {
-    return <p role="alert" className="text-body text-danger">{companyQ.error.message}</p>;
+    // P-95 — nunca renderizar o erro Zod/TRPC cru na tela.
+    const notFound = companyQ.error.data?.code === 'NOT_FOUND';
+    return (
+      <ErrorState
+        title={notFound ? 'Empresa não encontrada.' : 'Algo saiu errado.'}
+        description={
+          notFound
+            ? 'Ela pode ter sido removida ou o link está incorreto.'
+            : friendlyTrpcError(companyQ.error)
+        }
+        onRetry={notFound ? undefined : () => void companyQ.refetch()}
+      />
+    );
   }
   const c = companyQ.data;
   if (!c) return <p className="text-body text-text-2">Empresa não encontrada.</p>;

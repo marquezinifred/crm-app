@@ -67,7 +67,7 @@ export function PipelineKanban({ onCardClick, onAdvanceError, ownerFilter }: Pro
   }
 
   if (isLoading) return <p className="p-6 text-sm text-text-2">Carregando pipeline…</p>;
-  if (error) return <p className="p-6 text-sm text-danger">{error.message}</p>;
+  if (error) return <p role="alert" className="p-6 text-sm text-danger">{friendlyTrpcError(error)}</p>;
   if (!data) return null;
 
   return (

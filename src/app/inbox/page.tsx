@@ -2,8 +2,10 @@
 
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { useToast } from '@/components/ui/toast';
 
 interface Suggestion {
   opportunityId: string;
@@ -14,15 +16,21 @@ interface Suggestion {
 
 export default function InboxPage() {
   const utils = trpc.useUtils();
+  const { toast } = useToast();
   const { data, isLoading, error } = trpc.inbox.list.useQuery({ status: 'PENDING' });
+  const onMutationError = (err: { message: string }) =>
+    toast({ kind: 'error', title: friendlyTrpcError(err) });
   const link = trpc.inbox.linkManually.useMutation({
     onSuccess: () => utils.inbox.list.invalidate(),
+    onError: onMutationError,
   });
   const reject = trpc.inbox.reject.useMutation({
     onSuccess: () => utils.inbox.list.invalidate(),
+    onError: onMutationError,
   });
   const retry = trpc.inbox.retryAutoLink.useMutation({
     onSuccess: () => utils.inbox.list.invalidate(),
+    onError: onMutationError,
   });
 
   const opps = trpc.opportunities.list.useQuery({ page: 1, pageSize: 100, status: 'ACTIVE' });
@@ -43,7 +51,11 @@ export default function InboxPage() {
       />
 
       {isLoading && <p className="text-sm text-text-2">Carregando…</p>}
-      {error && <p className="text-sm text-danger">{error.message}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-danger">
+          {friendlyTrpcError(error)}
+        </p>
+      )}
 
       {data && data.length === 0 && (
         <p className="rounded border border-dashed border-border-strong p-6 text-center text-sm text-text-2">

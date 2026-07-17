@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { trpc, type RouterOutputs } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -55,7 +56,7 @@ export default function CompaniesPage() {
 
       {error && (
         <p role="alert" className="rounded border border-danger/30 bg-danger-bg/40 p-3 text-body text-danger-text">
-          {error.message}
+          {friendlyTrpcError(error)}
         </p>
       )}
 

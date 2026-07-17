@@ -2,10 +2,13 @@
 
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
+import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Modal, ModalFooter } from '@/components/ui/modal';
+import { ErrorState } from '@/components/ui/empty-state';
+import { useToast } from '@/components/ui/toast';
 import { formatRelativeDate } from '@/lib/utils/format';
 
 const RT_LABEL: Record<string, string> = {
@@ -24,13 +27,18 @@ const RT_LABEL: Record<string, string> = {
  */
 export function ContactDetailContent({ contactId }: { contactId: string }) {
   const utils = trpc.useUtils();
+  const { toast } = useToast();
   const contactQ = trpc.contacts.byId.useQuery({ id: contactId });
   const remove = trpc.contacts.remove.useMutation({
     onSuccess: () => {
       utils.contacts.list.invalidate();
       setDeactivating(false);
+      toast({ kind: 'success', title: 'Contato desativado.' });
     },
-    onError: () => setDeactivating(false),
+    onError: (e) => {
+      setDeactivating(false);
+      toast({ kind: 'error', title: friendlyTrpcError(e) });
+    },
   });
   const [deactivating, setDeactivating] = useState(false);
 
@@ -44,7 +52,19 @@ export function ContactDetailContent({ contactId }: { contactId: string }) {
     );
   }
   if (contactQ.error) {
-    return <p role="alert" className="text-body text-danger">{contactQ.error.message}</p>;
+    // P-95 — nunca renderizar o erro Zod/TRPC cru na tela.
+    const notFound = contactQ.error.data?.code === 'NOT_FOUND';
+    return (
+      <ErrorState
+        title={notFound ? 'Contato não encontrado.' : 'Algo saiu errado.'}
+        description={
+          notFound
+            ? 'Ele pode ter sido removido ou o link está incorreto.'
+            : friendlyTrpcError(contactQ.error)
+        }
+        onRetry={notFound ? undefined : () => void contactQ.refetch()}
+      />
+    );
   }
   const c = contactQ.data;
   if (!c) return <p className="text-body text-text-2">Contato não encontrado.</p>;

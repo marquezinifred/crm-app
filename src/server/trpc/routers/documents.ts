@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { router, protectedProcedure } from '@/server/trpc/trpc';
+import { router } from '@/server/trpc/trpc';
 import { adminOnlyProcedure, withPermission } from '@/server/trpc/middlewares';
 import { prisma } from '@/server/db/client';
 import { audit } from '@/server/services/audit.service';
@@ -302,8 +302,11 @@ export const documentsRouter = router({
     }),
 });
 
+// P-91 — templates.list é consumido só por `/admin/templates` (verificado
+// com grep). Mutations já eram admin. Fecha vazamento de biblioteca de
+// templates (Contrato/Proposta/Aceite) pra não-ADMIN.
 export const templatesRouter = router({
-  list: protectedProcedure
+  list: adminOnlyProcedure
     .input(
       z
         .object({

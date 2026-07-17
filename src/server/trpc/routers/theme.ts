@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { router, protectedProcedure } from '@/server/trpc/trpc';
+import { router } from '@/server/trpc/trpc';
 import { adminOnlyProcedure } from '@/server/trpc/middlewares';
 import {
   getThemeConfig,
@@ -27,20 +27,25 @@ function mapError(err: ThemeUpdateError): TRPCError {
   });
 }
 
+// P-91 — todas as queries do router `theme` são consumidas exclusivamente
+// pela UI `/admin/branding`. `resolveTenantTheme` no layout server-side lê
+// direto do service `getThemeConfig` (não passa por tRPC), então gate
+// admin não afeta o rendering global. Fecha vazamento de config de brand
+// (paleta, fontes, overrides WCAG, histórico) pra não-ADMIN.
 export const themeRouter = router({
-  get: protectedProcedure.query(({ ctx }) => getThemeConfig(ctx.tenantId)),
+  get: adminOnlyProcedure.query(({ ctx }) => getThemeConfig(ctx.tenantId)),
 
-  validate: protectedProcedure
+  validate: adminOnlyProcedure
     .input(themeConfigSchema)
     .query(({ input }) => validateThemeCombinations(input)),
 
-  suggestContrastFix: protectedProcedure
+  suggestContrastFix: adminOnlyProcedure
     .input(z.object({ baseHex: z.string(), minRatio: z.number().min(1).max(21).default(4.5) }))
     .query(({ input }) => suggestContrastFix(input.baseHex, input.minRatio)),
 
-  listCuratedPalettes: protectedProcedure.query(() => CURATED_PALETTES),
+  listCuratedPalettes: adminOnlyProcedure.query(() => CURATED_PALETTES),
 
-  listCuratedFonts: protectedProcedure.query(() => CURATED_FONTS),
+  listCuratedFonts: adminOnlyProcedure.query(() => CURATED_FONTS),
 
   update: adminOnlyProcedure
     .input(
@@ -111,7 +116,7 @@ export const themeRouter = router({
     }));
   }),
 
-  planInfo: protectedProcedure.query(async ({ ctx }) => {
+  planInfo: adminOnlyProcedure.query(async ({ ctx }) => {
     const t = await prisma.tenant.findUnique({
       where: { id: ctx.tenantId },
       select: { plan: true },

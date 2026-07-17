@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { router, protectedProcedure } from '@/server/trpc/trpc';
+import { router } from '@/server/trpc/trpc';
 import { withPermission, adminOnlyProcedure } from '@/server/trpc/middlewares';
 import { prisma } from '@/server/db/client';
 import { audit } from '@/server/services/audit.service';
@@ -132,7 +132,10 @@ export const searchNaturalRouter = router({
 });
 
 export const adminEmailRouter = router({
-  getSlug: protectedProcedure.query(async ({ ctx }) => {
+  // P-91 — gate admin: slug do endereço inbound + fullAddress. Mutations
+  // já eram admin. Fecha vazamento de config de captura por email
+  // (endereço + slug custom).
+  getSlug: adminOnlyProcedure.query(async ({ ctx }) => {
     const t = await prisma.tenant.findUnique({
       where: { id: ctx.tenantId },
       select: { inboundEmailSlug: true },

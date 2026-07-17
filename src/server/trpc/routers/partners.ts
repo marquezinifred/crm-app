@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { router, protectedProcedure, publicProcedure } from '@/server/trpc/trpc';
+import { router, publicProcedure } from '@/server/trpc/trpc';
 import { adminOnlyProcedure, withPermission } from '@/server/trpc/middlewares';
 import { prisma } from '@/server/db/client';
 import { runAsSystem } from '@/server/db/tenant-context';
@@ -18,7 +18,9 @@ import { CompanyType, Prisma } from '@prisma/client';
  */
 
 export const partnersRouter = router({
-  listWithStats: protectedProcedure.query(async ({ ctx }) => {
+  // P-91 — gate admin: lista com stats + comissões acumuladas + T&C version
+  // é config sensível pro Admin de Parceiros. Mutations já eram admin.
+  listWithStats: adminOnlyProcedure.query(async ({ ctx }) => {
     const partners = await prisma.company.findMany({
       where: { tenantId: ctx.tenantId, type: CompanyType.PARTNER, deletedAt: null },
       orderBy: { razaoSocial: 'asc' },
@@ -74,7 +76,9 @@ export const partnersRouter = router({
     });
   }),
 
-  getTcText: protectedProcedure
+  // P-91 — gate admin: T&C do parceiro. Versão pública (por token, sem
+  // auth) fica em `publicTcView` abaixo — não confundir.
+  getTcText: adminOnlyProcedure
     .input(z.object({ partnerCompanyId: zUuid }))
     .query(async ({ input }) => {
       const p = await prisma.company.findFirst({

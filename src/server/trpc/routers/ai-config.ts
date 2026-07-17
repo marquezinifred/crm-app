@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { router, protectedProcedure } from '@/server/trpc/trpc';
+import { router } from '@/server/trpc/trpc';
 import { adminOnlyProcedure } from '@/server/trpc/middlewares';
 import { prisma } from '@/server/db/client';
 import { audit } from '@/server/services/audit.service';
@@ -294,7 +294,8 @@ export const aiConfigRouter = router({
       return { ok: true, cleared };
     }),
 
-  monthlyUsage: protectedProcedure.query(({ ctx }) => getMonthlyUsage(ctx.tenantId)),
+  // P-91 — gate admin: consumo mensal com custo por provider é config sensível.
+  monthlyUsage: adminOnlyProcedure.query(({ ctx }) => getMonthlyUsage(ctx.tenantId)),
 
   /**
    * P-23 refino — dados por-feature pro Card D calcular alertas de
@@ -366,7 +367,10 @@ export const aiConfigRouter = router({
     });
   }),
 
-  pricingTable: protectedProcedure.query(() => AI_PRICING),
+  // P-91 — gate admin defensivo: tabela de preços por (provider, model)
+  // expõe stack de IA em uso pelo tenant. Não referenciada pela UI mas
+  // exposta via router.
+  pricingTable: adminOnlyProcedure.query(() => AI_PRICING),
 });
 
 /**

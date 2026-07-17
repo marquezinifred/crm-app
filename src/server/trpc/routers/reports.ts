@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { router, protectedProcedure } from '@/server/trpc/trpc';
+import { router } from '@/server/trpc/trpc';
 import { adminOnlyProcedure, withPermission } from '@/server/trpc/middlewares';
 import { SalesStructureService } from '@/server/services/sales-structure.service';
 import { prisma } from '@/server/db/client';
@@ -253,7 +253,10 @@ export const reportsRouter = router({
     }),
 
   // ----- Conversion rates config -----
-  conversionRates: protectedProcedure.query(async ({ ctx }) => {
+  // P-91 — gate admin: `/admin/conversion-rates` era acessível read-only pra
+  // ANALISTA/GESTOR (mutations já bloqueavam com adminOnlyProcedure). Fecha
+  // vazamento de config sensível.
+  conversionRates: adminOnlyProcedure.query(async ({ ctx }) => {
     const t = await prisma.tenant.findUnique({
       where: { id: ctx.tenantId },
       select: { conversionRates: true },

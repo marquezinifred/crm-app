@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { router, protectedProcedure } from '@/server/trpc/trpc';
+import { router } from '@/server/trpc/trpc';
 import { adminOnlyProcedure } from '@/server/trpc/middlewares';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/server/db/client';
@@ -12,8 +12,13 @@ import {
   productListInput,
 } from '@/lib/validators/product';
 
+// P-91 — gate admin: catálogo de produtos expõe `minMarginPct` (margem
+// mínima aceitável) que é config sensível pro Admin de Portfólio. Não é
+// consumido por rotas operacionais (verificado com grep). Se Sprint futuro
+// consumir products.list em `/pipeline/new` ou similar, migrar pra
+// `withPermission('product:read')` (permission nova).
 export const productsRouter = router({
-  list: protectedProcedure.input(productListInput).query(async ({ input }) => {
+  list: adminOnlyProcedure.input(productListInput).query(async ({ input }) => {
     const where: Prisma.ProductWhereInput = {
       deletedAt: null,
       ...(typeof input.active === 'boolean' ? { active: input.active } : {}),
@@ -24,7 +29,7 @@ export const productsRouter = router({
     return prisma.product.findMany({ where, orderBy: { name: 'asc' } });
   }),
 
-  byId: protectedProcedure.input(z.object({ id: zUuid })).query(async ({ input }) => {
+  byId: adminOnlyProcedure.input(z.object({ id: zUuid })).query(async ({ input }) => {
     const p = await prisma.product.findFirst({
       where: { id: input.id, deletedAt: null },
     });

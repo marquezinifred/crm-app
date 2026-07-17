@@ -34,7 +34,8 @@ export const alertsRouter = router({
       });
     }),
 
-  tenantConfig: protectedProcedure.query(async ({ ctx }) => {
+  // P-91 — gate admin: configuração de alertas do tenant.
+  tenantConfig: adminOnlyProcedure.query(async ({ ctx }) => {
     const t = await prisma.tenant.findUnique({
       where: { id: ctx.tenantId },
       select: { alertLeadDays: true, centralCrmEmail: true, taskOverdueDays: true },

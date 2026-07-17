@@ -16,7 +16,9 @@ const APPROVER_ROLES = [
 ] as const satisfies readonly UserRole[];
 
 export const approvalRulesRouter = router({
-  list: protectedProcedure.query(({ ctx }) =>
+  // P-91 — gate admin: regras de aprovação são config sensível
+  // (threshold + approvers). Mutations já eram admin.
+  list: adminOnlyProcedure.query(({ ctx }) =>
     prisma.approvalRule.findMany({
       where: { tenantId: ctx.tenantId, deletedAt: null },
       orderBy: { createdAt: 'asc' },
@@ -106,7 +108,9 @@ export const approvalRulesRouter = router({
 });
 
 export const contractsConfigRouter = router({
-  getConfig: protectedProcedure.query(async ({ ctx }) => {
+  // P-91 — gate admin: config de handoff/renovação (emails do time interno
+  // + lead days de contratos). Sensitive.
+  getConfig: adminOnlyProcedure.query(async ({ ctx }) => {
     const t = await prisma.tenant.findUnique({
       where: { id: ctx.tenantId },
       select: { handoffEmails: true, contractRenewalLeadDays: true },

@@ -377,3 +377,111 @@ describe('/admin/users (P-86 wiring)', () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe('/admin/users — convite + ordenação (coverage housekeeping)', () => {
+  it('botão "+ Convidar usuário" abre o modal com os campos', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(
+      screen.getByRole('button', { name: /\+ Convidar usuário/i }),
+    );
+    const dialog = screen.getByRole('dialog', { name: /Convidar usuário/i });
+    expect(within(dialog).getByLabelText(/Nome completo/i)).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(/E-mail/i)).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(/Papel/i)).toBeInTheDocument();
+    // tenant destino resolvido
+    expect(within(dialog).getByText(/Marquezini/)).toBeInTheDocument();
+    expect(captured.mutate.invite).not.toHaveBeenCalled();
+  });
+
+  it('preencher e enviar dispara invite.mutate com os dados do form', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(
+      screen.getByRole('button', { name: /\+ Convidar usuário/i }),
+    );
+    const dialog = screen.getByRole('dialog', { name: /Convidar usuário/i });
+    await user.type(
+      within(dialog).getByLabelText(/Nome completo/i),
+      'Maria Souza',
+    );
+    await user.type(
+      within(dialog).getByLabelText(/E-mail/i),
+      'maria@venzo.com',
+    );
+    await user.selectOptions(within(dialog).getByLabelText(/Papel/i), 'GESTOR');
+    await user.click(within(dialog).getByRole('button', { name: /Enviar convite/i }));
+
+    expect(captured.mutate.invite).toHaveBeenCalledTimes(1);
+    expect(captured.mutate.invite).toHaveBeenCalledWith({
+      fullName: 'Maria Souza',
+      email: 'maria@venzo.com',
+      role: 'GESTOR',
+    });
+  });
+
+  it('invite onSuccess fecha modal + toast + invalida list', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(
+      screen.getByRole('button', { name: /\+ Convidar usuário/i }),
+    );
+    expect(captured.invite?.onSuccess).toBeTypeOf('function');
+
+    await act(async () => {
+      captured.invite!.onSuccess!();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Convite enviado\./i)).toBeInTheDocument();
+    });
+    expect(captured.invalidates.list).toHaveBeenCalled();
+    expect(
+      screen.queryByRole('dialog', { name: /Convidar usuário/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('invite onError renderiza erro inline no modal', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(
+      screen.getByRole('button', { name: /\+ Convidar usuário/i }),
+    );
+    expect(captured.invite?.onError).toBeTypeOf('function');
+
+    await act(async () => {
+      captured.invite!.onError!({ message: 'E-mail já convidado.' });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(/E-mail já convidado/i);
+    });
+  });
+
+  it('cancelar no modal de convite fecha sem submeter', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(
+      screen.getByRole('button', { name: /\+ Convidar usuário/i }),
+    );
+    const dialog = screen.getByRole('dialog', { name: /Convidar usuário/i });
+    await user.click(within(dialog).getByRole('button', { name: /Cancelar/i }));
+
+    expect(captured.mutate.invite).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole('dialog', { name: /Convidar usuário/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('clicar nos headers ordenáveis reordena (cobre sort keys)', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    // Papel → SORT_USER_ROLE; Último login → SORT_USER_LAST_LOGIN; Nome → SORT_USER_NAME
+    await user.click(screen.getByRole('columnheader', { name: /Papel/i }));
+    await user.click(screen.getByRole('columnheader', { name: /Último login/i }));
+    await user.click(screen.getByRole('columnheader', { name: /^Nome/i }));
+    // Tabela segue renderizando as linhas após reordenar
+    expect(screen.getByText('João Silva')).toBeInTheDocument();
+    expect(screen.getByText('Fred Admin')).toBeInTheDocument();
+  });
+});

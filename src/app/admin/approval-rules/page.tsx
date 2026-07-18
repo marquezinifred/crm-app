@@ -5,6 +5,7 @@ import { trpc } from '@/lib/trpc/client';
 import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
+import { AlertDialog } from '@/components/ui/alert-dialog';
 import { useToast } from '@/components/ui/toast';
 import { ApprovalRuleCriteria } from '@prisma/client';
 
@@ -36,6 +37,9 @@ export default function ApprovalRulesPage() {
     thresholdNumeric: '',
     approverRoles: ['DIRETOR_COMERCIAL'],
   });
+  const [confirmingRemove, setConfirmingRemove] = useState<
+    { id: string; name: string } | null
+  >(null);
 
   const create = trpc.approvalRules.create.useMutation({
     onSuccess: () => {
@@ -48,9 +52,13 @@ export default function ApprovalRulesPage() {
   const remove = trpc.approvalRules.remove.useMutation({
     onSuccess: () => {
       utils.approvalRules.list.invalidate();
+      setConfirmingRemove(null);
       toast({ kind: 'success', title: 'Regra removida.' });
     },
-    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
+    onError: (e) => {
+      setConfirmingRemove(null);
+      toast({ kind: 'error', title: friendlyTrpcError(e) });
+    },
   });
   const toggle = trpc.approvalRules.update.useMutation({
     onSuccess: () => {
@@ -178,9 +186,7 @@ export default function ApprovalRulesPage() {
               <Button
                 size="sm"
                 variant="destructive"
-                onClick={() => {
-                  if (confirm(`Remover regra "${r.name}"?`)) remove.mutate({ id: r.id });
-                }}
+                onClick={() => setConfirmingRemove({ id: r.id, name: r.name })}
               >
                 Remover
               </Button>
@@ -188,6 +194,23 @@ export default function ApprovalRulesPage() {
           </li>
         ))}
       </ul>
+
+      <AlertDialog
+        open={confirmingRemove !== null}
+        onCancel={() => setConfirmingRemove(null)}
+        onConfirm={() => {
+          if (confirmingRemove) remove.mutate({ id: confirmingRemove.id });
+        }}
+        title="Remover regra?"
+        description={
+          confirmingRemove
+            ? `A regra "${confirmingRemove.name}" deixa de ser aplicada às novas versões de proposta. Aprovações já criadas não são afetadas.`
+            : undefined
+        }
+        confirmLabel="Remover"
+        tone="danger"
+        loading={remove.isPending}
+      />
     </main>
   );
 }

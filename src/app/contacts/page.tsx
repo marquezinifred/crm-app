@@ -10,6 +10,7 @@ import {
   WorkArea,
 } from '@prisma/client';
 import { useToast } from '@/components/ui/toast';
+import { AlertDialog } from '@/components/ui/alert-dialog';
 import { QuickCreateTrigger } from '@/components/ui/quick-create-trigger';
 import { useTableSort, type SortKey } from '@/lib/hooks/useTableSort';
 import { Table, THead, TBody, TH, TR, TD, TableEmpty } from '@/components/ui/table';
@@ -74,6 +75,9 @@ export default function ContactsPage() {
   const [rtFilter, setRtFilter] = useState<'' | ContactRelationshipType>('');
   const [form, setForm] = useState<FormState>(EMPTY);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [confirmingRemove, setConfirmingRemove] = useState<
+    { id: string; fullName: string } | null
+  >(null);
   const formTitleId = useId();
 
   const contacts = trpc.contacts.list.useQuery({ search: search || undefined });
@@ -100,7 +104,12 @@ export default function ContactsPage() {
   const remove = trpc.contacts.remove.useMutation({
     onSuccess: () => {
       utils.contacts.list.invalidate();
+      setConfirmingRemove(null);
       toast({ kind: 'success', title: 'Contato desativado.' });
+    },
+    onError: (e) => {
+      setConfirmingRemove(null);
+      toast({ kind: 'error', title: friendlyTrpcError(e) });
     },
   });
 
@@ -415,7 +424,7 @@ export default function ContactsPage() {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (confirm(`Remover ${c.fullName}?`)) remove.mutate({ id: c.id });
+                      setConfirmingRemove({ id: c.id, fullName: c.fullName });
                     }}
                     className="px-2 py-1 text-xs rounded border text-danger hover:bg-danger-bg focus-visible:ring-2 focus-visible:ring-danger"
                   >
@@ -427,6 +436,23 @@ export default function ContactsPage() {
           </TBody>
         </Table>
       </section>
+
+      <AlertDialog
+        open={confirmingRemove !== null}
+        onCancel={() => setConfirmingRemove(null)}
+        onConfirm={() => {
+          if (confirmingRemove) remove.mutate({ id: confirmingRemove.id });
+        }}
+        title="Remover contato?"
+        description={
+          confirmingRemove
+            ? `${confirmingRemove.fullName} some das listas, mas o histórico fica preservado e pode ser reativado depois.`
+            : undefined
+        }
+        confirmLabel="Remover"
+        tone="danger"
+        loading={remove.isPending}
+      />
 
       <style jsx>{`
         .input {

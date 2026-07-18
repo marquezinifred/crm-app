@@ -5,6 +5,7 @@ import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { useId, useMemo, useState } from 'react';
 import { ProductType } from '@prisma/client';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { AlertDialog } from '@/components/ui/alert-dialog';
 import { useToast } from '@/components/ui/toast';
 import { Table, THead, TBody, TH, TR, TD, TableEmpty } from '@/components/ui/table';
 import { useTableSort, type SortKey } from '@/lib/hooks/useTableSort';
@@ -50,6 +51,9 @@ export default function AdminProductsPage() {
   const list = trpc.products.list.useQuery({});
   const [form, setForm] = useState<FormState>(EMPTY);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingRemove, setConfirmingRemove] = useState<
+    { id: string; name: string } | null
+  >(null);
   const formTitleId = useId();
 
   const create = trpc.products.create.useMutation({
@@ -73,9 +77,13 @@ export default function AdminProductsPage() {
   const remove = trpc.products.remove.useMutation({
     onSuccess: () => {
       utils.products.list.invalidate();
+      setConfirmingRemove(null);
       toast({ kind: 'success', title: 'Produto desativado.' });
     },
-    onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
+    onError: (e) => {
+      setConfirmingRemove(null);
+      toast({ kind: 'error', title: friendlyTrpcError(e) });
+    },
   });
 
   const rows = useMemo(() => list.data ?? [], [list.data]);
@@ -270,9 +278,7 @@ export default function AdminProductsPage() {
                     Editar
                   </button>{' '}
                   <button
-                    onClick={() => {
-                      if (confirm(`Remover ${p.name}?`)) remove.mutate({ id: p.id });
-                    }}
+                    onClick={() => setConfirmingRemove({ id: p.id, name: p.name })}
                     className="px-2 py-1 text-xs rounded border text-danger hover:bg-danger-bg focus-visible:ring-2 focus-visible:ring-rose-500"
                   >
                     Remover
@@ -283,6 +289,23 @@ export default function AdminProductsPage() {
           </TBody>
         </Table>
       </section>
+
+      <AlertDialog
+        open={confirmingRemove !== null}
+        onCancel={() => setConfirmingRemove(null)}
+        onConfirm={() => {
+          if (confirmingRemove) remove.mutate({ id: confirmingRemove.id });
+        }}
+        title="Remover produto?"
+        description={
+          confirmingRemove
+            ? `${confirmingRemove.name} some do catálogo, mas propostas e contratos que já o referenciam ficam preservados. Você pode reativá-lo depois.`
+            : undefined
+        }
+        confirmLabel="Remover"
+        tone="danger"
+        loading={remove.isPending}
+      />
 
       <style jsx>{`
         .input {

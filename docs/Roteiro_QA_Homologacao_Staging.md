@@ -816,6 +816,44 @@ Automatizado: `tests/component/admin-error-feedback.test.tsx`
 **Bloqueia release se:** F1 ou F2 falham em silêncio (regressão do
 bug original). F3–F5 registrar como P-XX se divergirem, sem bloquear.
 
+### 2.10. AlertDialog em ações destrutivas (~5min — P-96)
+
+Contexto: débito P-12 — `confirm()` nativo do browser é proibido pelo
+design system (quebra focus trap e tokens). O P-96 zerou o último foco
+de `confirm()` nativo em `src/`. Padrão canônico: botão "Remover" abre
+`AlertDialog` Venzo (tom danger, título + descrição, loading durante a
+mutação), confirmar dispara a mutation + toast, cancelar fecha sem
+efeito.
+
+Login: ADMIN do tenant marquezini.
+
+- [ ] **G1 — Approval rules**
+  `/admin/approval-rules` (ter ≥1 regra; criar se preciso) → clicar
+  "Remover" numa regra.
+  Esperado: abre `AlertDialog` "Remover regra?" com o nome da regra na
+  descrição — **não** o popup nativo do browser. Confirmar → toast
+  "Regra removida." + linha some. Cancelar → nada acontece, dialog
+  fecha.
+- [ ] **G2 — Produtos**
+  `/admin/products` → "Remover" num produto.
+  Esperado: `AlertDialog` "Remover produto?" → confirmar → toast
+  "Produto desativado.".
+- [ ] **G3 — Contatos**
+  `/contacts` → "Remover" numa linha (o clique não deve abrir o
+  detalhe — `stopPropagation` preservado).
+  Esperado: `AlertDialog` "Remover contato?" → confirmar → toast
+  "Contato desativado.".
+- [ ] **G4 — Zero confirm() nativo residual**
+  Spot-check visual: nenhum popup cinza do browser em ação
+  destrutiva. (Backstop automatizado: `grep -rn "confirm(" src/` só
+  retorna comentários.)
+
+Automatizado: `tests/component/approval-rules-remove.test.tsx`
+(5 casos — abre dialog, confirma, cancela, onSuccess, onError).
+
+**Bloqueia release se:** qualquer botão destrutivo abrir `confirm()`
+nativo em vez do AlertDialog (P-12 regrediu).
+
 ---
 
 ## 3. Cenários de segurança (bloqueia release se falhar)

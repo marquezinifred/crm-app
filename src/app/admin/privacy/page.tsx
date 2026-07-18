@@ -5,6 +5,7 @@ import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { useState } from 'react';
 import type { DataSubjectRequestStatus, DataSubjectRequestType } from '@prisma/client';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { ErrorState } from '@/components/ui/empty-state';
 import { useToast } from '@/components/ui/toast';
 
 const TYPE_LABEL: Record<DataSubjectRequestType, string> = {
@@ -52,6 +53,15 @@ export default function AdminPrivacyPage() {
         meta={all.data && `${all.data.length} solicitaç${all.data.length === 1 ? 'ão' : 'ões'}`}
       />
 
+      {/* P-92b — listAll é adminOnly (P-91); não-admin recebe 403. Sem
+          esse branch a tela ficava sem sinal (nem loading, nem lista). */}
+      {all.error && !all.data && (
+        <ErrorState
+          title="Não foi possível carregar as solicitações LGPD."
+          description={friendlyTrpcError(all.error)}
+          onRetry={() => void all.refetch()}
+        />
+      )}
       {all.isLoading && <p>Carregando...</p>}
       {all.data && all.data.length === 0 && (
         <p className="text-text-2">Sem solicitações LGPD em aberto.</p>

@@ -6,6 +6,7 @@ import { useId, useMemo, useState } from 'react';
 import { ProductType } from '@prisma/client';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { AlertDialog } from '@/components/ui/alert-dialog';
+import { ErrorState } from '@/components/ui/empty-state';
 import { useToast } from '@/components/ui/toast';
 import { Table, THead, TBody, TH, TR, TD, TableEmpty } from '@/components/ui/table';
 import { useTableSort, type SortKey } from '@/lib/hooks/useTableSort';
@@ -102,6 +103,24 @@ export default function AdminProductsPage() {
     };
     if (form.id) update.mutate({ id: form.id, ...payload });
     else create.mutate(payload);
+  }
+
+  // P-92b — query adminOnly (P-91): não-admin recebe 403. Sem esse
+  // branch a tabela mostrava o empty state silenciosamente.
+  if (list.error && !list.data) {
+    return (
+      <div className="max-w-5xl mx-auto space-y-8">
+        <PageHeader
+          title="Produtos e serviços"
+          description="O portfólio que vai virar proposta e contrato."
+        />
+        <ErrorState
+          title="Não foi possível carregar o catálogo."
+          description={friendlyTrpcError(list.error)}
+          onRetry={() => void list.refetch()}
+        />
+      </div>
+    );
   }
 
   return (

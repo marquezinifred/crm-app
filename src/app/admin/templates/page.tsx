@@ -5,6 +5,7 @@ import { trpc } from '@/lib/trpc/client';
 import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
+import { ErrorState } from '@/components/ui/empty-state';
 import { FileDropzone, type FileMetadata } from '@/components/ui/file-dropzone';
 import { useToast } from '@/components/ui/toast';
 import { DocumentCategory } from '@prisma/client';
@@ -51,7 +52,8 @@ async function fileToBase64(file: File): Promise<string> {
 export default function AdminTemplatesPage() {
   const utils = trpc.useUtils();
   const { toast } = useToast();
-  const { data } = trpc.templates.list.useQuery({ activeOnly: false });
+  const listQ = trpc.templates.list.useQuery({ activeOnly: false });
+  const data = listQ.data;
 
   const [category, setCategory] = useState<DocumentCategory>('PROPOSTA_TECNICA');
   const [name, setName] = useState('');
@@ -105,6 +107,24 @@ export default function AdminTemplatesPage() {
     category: cat,
     items: (data ?? []).filter((t) => t.category === cat),
   })).filter((g) => g.items.length > 0);
+
+  // P-92b — query adminOnly (P-91): não-admin recebe 403. Sem esse
+  // branch a tela mostrava "Sem templates" silenciosamente.
+  if (listQ.error && !data) {
+    return (
+      <main className="mx-auto max-w-3xl p-4 md:p-6">
+        <PageHeader
+          title="Templates"
+          description="Modelos de proposta, contrato, NDA e outros — organizados por categoria."
+        />
+        <ErrorState
+          title="Não foi possível carregar os templates."
+          description={friendlyTrpcError(listQ.error)}
+          onRetry={() => void listQ.refetch()}
+        />
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto max-w-3xl p-4 md:p-6">

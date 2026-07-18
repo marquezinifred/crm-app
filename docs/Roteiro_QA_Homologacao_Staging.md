@@ -856,6 +856,52 @@ nativo em vez do AlertDialog (P-12 regrediu).
 
 ---
 
+### 2.11. Error state das QUERIES nas telas /admin (~10min — P-92b)
+
+Contexto: complemento do P-92. Depois do P-91, várias queries de config
+admin viraram `adminOnlyProcedure` (ou `withPermission`) → retornam 403
+pra não-admin. O P-92 cobriu `onError` de **mutations**; faltava tratar
+o estado de erro das **queries**. Sem isso, ANALISTA acessando a tela
+via **URL direta** travava em **"Carregando…" infinito** (caso confirmado:
+`/admin/conversion-rates`) OU via lista/tabela vazia silenciosa. Padrão
+pós-P-92b: **query em erro → `ErrorState` do design system com a mensagem
+via `friendlyTrpcError` + botão "Tentar novamente"**.
+
+Pré-condição: usuário ANALISTA **sem** overrides de permission admin,
+acessando as rotas por **URL direta** (a sidebar já esconde os itens
+via RBAC — P-88/P-88b; o ponto aqui é o acesso por link/bookmark).
+
+- [ ] **E1 — Conversion rates (o caso crítico original)**
+  Como ANALISTA, abrir `/admin/conversion-rates` digitando a URL.
+  Esperado: bloco de erro centralizado ("Não foi possível carregar as
+  taxas de conversão." + "Perfil ANALISTA não tem acesso…") com botão
+  **Tentar novamente**. **NUNCA** "Carregando…" que nunca resolve.
+- [ ] **E2 — Approval rules**
+  Como ANALISTA, abrir `/admin/approval-rules` via URL.
+  Esperado: `ErrorState` amigável no lugar da lista + form vazios; o
+  título "Regras de aprovação" continua visível (contexto preservado).
+- [ ] **E3 — Smoke demais telas** (URL direta como ANALISTA)
+  `/admin/alerts`, `/admin/contracts`, `/admin/branding`, `/admin/ai`,
+  `/admin/templates`, `/admin/partners`, `/admin/products`,
+  `/admin/privacy`, `/admin/billing`, `/admin/email-inbound` (tabs
+  E-mail/Forms/Histórico) e `/admin/inbound-rejected`.
+  Esperado: cada uma mostra `ErrorState` legível — nenhuma trava em
+  "Carregando…" nem exibe empty state enganoso ("cadastre o primeiro…").
+- [ ] **E4 — Loading legítimo preservado**
+  Como ADMIN, abrir as mesmas telas com rede lenta (F12 → throttling).
+  Esperado: "Carregando…" aparece brevemente e resolve para o conteúdo
+  — o branch de erro não sequestra o loading normal.
+
+Automatizado: `tests/component/admin-query-error.test.tsx`
+(8 casos — conversion-rates a fundo incl. loading/sucesso/JSON-cru,
+approval-rules, smoke alerts/products).
+
+**Bloqueia release se:** E1 ou E2 travam em "Carregando…" infinito ou
+mostram JSON cru (regressão do bug original). E3/E4 registrar como P-XX
+se divergirem, sem bloquear.
+
+---
+
 ## 3. Cenários de segurança (bloqueia release se falhar)
 
 Rápidos (~10min total) mas críticos.

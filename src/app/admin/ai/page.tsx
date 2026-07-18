@@ -10,6 +10,7 @@ import { Field } from '@/components/ui/field';
 import { Input, Select } from '@/components/ui/input';
 import { Modal, ModalFooter } from '@/components/ui/modal';
 import { AlertDialog } from '@/components/ui/alert-dialog';
+import { ErrorState } from '@/components/ui/empty-state';
 import { Table, THead, TBody, TH, TR, TD, TableEmpty } from '@/components/ui/table';
 import { useToast } from '@/components/ui/toast';
 import { computeAiAlerts } from '@/lib/ai/admin-alerts';
@@ -62,16 +63,32 @@ const CATEGORY_ORDER = [
 ];
 
 export default function AdminAIPage() {
+  // P-92b — todas as queries do aiConfig são adminOnly (P-91). Não-admin
+  // recebe 403 nos 4 cards e cada um mostrava vazio silenciosamente.
+  // Usa getConfig como sonda (mesma queryKey do CardConfigPadrao — o
+  // react-query deduplica, sem request extra) e substitui os cards por
+  // um único ErrorState quando o acesso é negado.
+  const probe = trpc.aiConfig.getConfig.useQuery();
   return (
     <main className="mx-auto max-w-5xl p-6 space-y-6">
       <PageHeader
         title="IA"
         description="Provider, modelo e chave por tenant e por feature. Fallback opcional quando o provider primário falha."
       />
-      <CardConfigPadrao />
-      <CardFeatures />
-      <CardUsoCusto />
-      <CardAlertas />
+      {probe.error && !probe.data ? (
+        <ErrorState
+          title="Não foi possível carregar a configuração de IA."
+          description={friendlyTrpcError(probe.error)}
+          onRetry={() => void probe.refetch()}
+        />
+      ) : (
+        <>
+          <CardConfigPadrao />
+          <CardFeatures />
+          <CardUsoCusto />
+          <CardAlertas />
+        </>
+      )}
     </main>
   );
 }

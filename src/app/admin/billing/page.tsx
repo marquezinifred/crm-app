@@ -4,6 +4,7 @@ import { trpc } from '@/lib/trpc/client';
 import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { useState } from 'react';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { ErrorState } from '@/components/ui/empty-state';
 import { useToast } from '@/components/ui/toast';
 
 function fmtBytes(b: number) {
@@ -64,6 +65,24 @@ export default function BillingPage() {
     } finally {
       setBusy(null);
     }
+  }
+
+  // P-92b — billing.status é adminOnly; não-admin recebe 403. Sem esse
+  // branch a tela renderizava plano "—" e seções vazias silenciosamente.
+  if (status.error && !status.data) {
+    return (
+      <main className="p-6 md:p-10 max-w-5xl mx-auto space-y-8">
+        <PageHeader
+          title="Plano e cobrança"
+          description="Assinatura Stripe, métodos de pagamento e consumo atual do plano."
+        />
+        <ErrorState
+          title="Não foi possível carregar o plano e cobrança."
+          description={friendlyTrpcError(status.error)}
+          onRetry={() => void status.refetch()}
+        />
+      </main>
+    );
   }
 
   return (

@@ -6,6 +6,7 @@ import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 import { AlertDialog } from '@/components/ui/alert-dialog';
+import { ErrorState } from '@/components/ui/empty-state';
 import { useToast } from '@/components/ui/toast';
 import { ApprovalRuleCriteria } from '@prisma/client';
 
@@ -25,7 +26,8 @@ const CRITERIA_LABELS: Record<ApprovalRuleCriteria, string> = {
 export default function ApprovalRulesPage() {
   const utils = trpc.useUtils();
   const { toast } = useToast();
-  const { data } = trpc.approvalRules.list.useQuery();
+  const listQ = trpc.approvalRules.list.useQuery();
+  const data = listQ.data;
   const [form, setForm] = useState<{
     name: string;
     criteria: ApprovalRuleCriteria;
@@ -67,6 +69,24 @@ export default function ApprovalRulesPage() {
     },
     onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
+
+  // P-92b — query adminOnly (P-91): não-admin recebe 403. Sem esse
+  // branch a tela renderizava o form + lista vazia silenciosamente.
+  if (listQ.error && !data) {
+    return (
+      <main className="mx-auto max-w-2xl p-6">
+        <PageHeader
+          title="Regras de aprovação"
+          description="Cada nova versão de proposta passa por estas regras. Aprovações pendentes bloqueiam o avanço para Aceite."
+        />
+        <ErrorState
+          title="Não foi possível carregar as regras de aprovação."
+          description={friendlyTrpcError(listQ.error)}
+          onRetry={() => void listQ.refetch()}
+        />
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto max-w-2xl p-6">

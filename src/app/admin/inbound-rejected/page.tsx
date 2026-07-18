@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select } from '@/components/ui/input';
 import { AlertDialog } from '@/components/ui/alert-dialog';
+import { ErrorState } from '@/components/ui/empty-state';
 import { useToast } from '@/components/ui/toast';
 
 /**
@@ -113,7 +114,16 @@ export default function InboundRejectedPage() {
         </div>
       </section>
 
-      {listQuery.isLoading ? (
+      {/* P-92b — rejectedList exige inbound:view_queue; sem a permission
+          o usuário recebe 403 e a tela mostrava "Carregando…" ou fila
+          vazia silenciosamente. */}
+      {listQuery.error && !listQuery.data ? (
+        <ErrorState
+          title="Não foi possível carregar os leads rejeitados."
+          description={friendlyTrpcError(listQuery.error)}
+          onRetry={() => void listQuery.refetch()}
+        />
+      ) : listQuery.isLoading ? (
         <p className="text-sm text-text-2">Carregando…</p>
       ) : listQuery.data && listQuery.data.length > 0 ? (
         <ul className="space-y-2">

@@ -5,10 +5,11 @@ import { trpc } from '@/lib/trpc/client';
 import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
+import { ErrorState } from '@/components/ui/empty-state';
 import { useToast } from '@/components/ui/toast';
 
 export default function AdminAlertsPage() {
-  const { data, isLoading } = trpc.alerts.tenantConfig.useQuery();
+  const { data, isLoading, error, refetch } = trpc.alerts.tenantConfig.useQuery();
   const utils = trpc.useUtils();
   const { toast } = useToast();
   const [leadDays, setLeadDays] = useState<number[]>([]);
@@ -30,6 +31,20 @@ export default function AdminAlertsPage() {
     },
     onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
+
+  // P-92b — query adminOnly (P-91): não-admin recebe 403. Sem esse
+  // branch a tela travava em "Carregando…" infinito.
+  if (error && !data) {
+    return (
+      <main className="mx-auto max-w-2xl p-6">
+        <ErrorState
+          title="Não foi possível carregar a configuração de alertas."
+          description={friendlyTrpcError(error)}
+          onRetry={() => void refetch()}
+        />
+      </main>
+    );
+  }
 
   if (isLoading || !data) return <main className="p-6">Carregando…</main>;
 

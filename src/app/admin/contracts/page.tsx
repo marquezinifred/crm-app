@@ -5,12 +5,13 @@ import { trpc } from '@/lib/trpc/client';
 import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
+import { ErrorState } from '@/components/ui/empty-state';
 import { useToast } from '@/components/ui/toast';
 
 export default function AdminContractsPage() {
   const utils = trpc.useUtils();
   const { toast } = useToast();
-  const { data, isLoading } = trpc.contractsConfig.getConfig.useQuery();
+  const { data, isLoading, error, refetch } = trpc.contractsConfig.getConfig.useQuery();
   const [handoffEmails, setHandoffEmails] = useState<string[]>([]);
   const [renewalDays, setRenewalDays] = useState<number[]>([]);
   const [newEmail, setNewEmail] = useState('');
@@ -29,6 +30,20 @@ export default function AdminContractsPage() {
     },
     onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
+
+  // P-92b — query adminOnly (P-91): não-admin recebe 403. Sem esse
+  // branch a tela travava em "Carregando…" infinito.
+  if (error && !data) {
+    return (
+      <main className="mx-auto max-w-2xl p-6">
+        <ErrorState
+          title="Não foi possível carregar a configuração de contratos."
+          description={friendlyTrpcError(error)}
+          onRetry={() => void refetch()}
+        />
+      </main>
+    );
+  }
 
   if (isLoading || !data) return <main className="p-6">Carregando…</main>;
 

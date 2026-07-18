@@ -5,6 +5,7 @@ import { trpc } from '@/lib/trpc/client';
 import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
+import { ErrorState } from '@/components/ui/empty-state';
 import { useToast } from '@/components/ui/toast';
 import type { ThemeConfig } from '@/lib/theme/types';
 import { VENZO_DEFAULTS } from '@/lib/theme/types';
@@ -64,6 +65,26 @@ export default function BrandingPage() {
     },
     onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
+
+  // P-92b — queries adminOnly (P-91): não-admin recebe 403. Sem esse
+  // branch a tela caía silenciosamente no upsell de Starter (plan
+  // default) em vez de sinalizar o erro.
+  const brandingError =
+    (themeQ.error && !themeQ.data) || (planQ.error && !planQ.data);
+  if (brandingError) {
+    return (
+      <main className="mx-auto max-w-2xl p-6">
+        <ErrorState
+          title="Não foi possível carregar o tema."
+          description={friendlyTrpcError(themeQ.error ?? planQ.error!)}
+          onRetry={() => {
+            void themeQ.refetch();
+            void planQ.refetch();
+          }}
+        />
+      </main>
+    );
+  }
 
   if (themeQ.isLoading || planQ.isLoading) return <main className="p-6">Carregando…</main>;
   const plan = planQ.data?.plan ?? 'STARTER';

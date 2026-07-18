@@ -5,6 +5,7 @@ import { trpc } from '@/lib/trpc/client';
 import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
+import { ErrorState } from '@/components/ui/empty-state';
 import { useToast } from '@/components/ui/toast';
 import { STAGES, STAGE_LABELS } from '@/components/pipeline/types';
 import type { OpportunityStage } from '@prisma/client';
@@ -36,6 +37,21 @@ export default function ConversionRatesPage() {
     onSuccess: (data) => setSuggestion(data),
     onError: (e) => toast({ kind: 'error', title: friendlyTrpcError(e) }),
   });
+
+  // P-92b — query adminOnly (P-91): ANALISTA/não-admin recebe 403.
+  // Sem esse branch a tela travava em "Carregando…" infinito (rates
+  // nunca é populado). Mostra ErrorState antes do fallback de loading.
+  if (current.error && !rates) {
+    return (
+      <main className="mx-auto max-w-2xl p-6">
+        <ErrorState
+          title="Não foi possível carregar as taxas de conversão."
+          description={friendlyTrpcError(current.error)}
+          onRetry={() => void current.refetch()}
+        />
+      </main>
+    );
+  }
 
   if (!rates) return <main className="p-6">Carregando…</main>;
 

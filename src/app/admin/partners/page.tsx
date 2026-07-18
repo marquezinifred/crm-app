@@ -5,6 +5,7 @@ import { trpc, type RouterOutputs } from '@/lib/trpc/client';
 import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
+import { ErrorState } from '@/components/ui/empty-state';
 import { useToast } from '@/components/ui/toast';
 import { brl } from '@/lib/utils/hooks';
 import {
@@ -23,7 +24,7 @@ const SORT_ACCESSORS: Record<SortOption, SortKey<Partner>> = {
 };
 
 export default function AdminPartnersPage() {
-  const { data, isLoading } = trpc.partners.listWithStats.useQuery();
+  const { data, isLoading, error, refetch } = trpc.partners.listWithStats.useQuery();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortOption>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
@@ -38,6 +39,24 @@ export default function AdminPartnersPage() {
     });
     return copy;
   }, [rows, sortBy, sortDir]);
+
+  // P-92b — query adminOnly (P-91): não-admin recebe 403. Sem esse
+  // branch a tela mostrava a lista de parceiros vazia silenciosamente.
+  if (error && !data) {
+    return (
+      <main className="mx-auto max-w-5xl p-4 md:p-6">
+        <PageHeader
+          title="Parceiros"
+          description="Cadastro e comissão por vínculo — comissão padrão, T&C e performance por parceiro."
+        />
+        <ErrorState
+          title="Não foi possível carregar os parceiros."
+          description={friendlyTrpcError(error)}
+          onRetry={() => void refetch()}
+        />
+      </main>
+    );
+  }
 
   if (isLoading) return <main className="p-6">Carregando…</main>;
 

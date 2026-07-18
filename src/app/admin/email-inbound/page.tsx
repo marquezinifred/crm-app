@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { AlertDialog } from '@/components/ui/alert-dialog';
+import { ErrorState } from '@/components/ui/empty-state';
 import { useToast } from '@/components/ui/toast';
 
 /**
@@ -54,7 +55,7 @@ export default function EmailInboundConfigPage() {
 function EmailTab() {
   const utils = trpc.useUtils();
   const { toast } = useToast();
-  const { data, isLoading } = trpc.adminEmail.getSlug.useQuery();
+  const { data, isLoading, error, refetch } = trpc.adminEmail.getSlug.useQuery();
   const [slug, setSlug] = useState('');
   const setSlugMut = trpc.adminEmail.setSlug.useMutation({
     onSuccess: () => {
@@ -77,6 +78,16 @@ function EmailTab() {
   });
   const [regenOpen, setRegenOpen] = useState(false);
 
+  // P-92b — adminEmail.getSlug é adminOnly (P-91); não-admin recebe 403.
+  if (error && !data) {
+    return (
+      <ErrorState
+        title="Não foi possível carregar o endereço inbound."
+        description={friendlyTrpcError(error)}
+        onRetry={() => void refetch()}
+      />
+    );
+  }
   if (isLoading || !data) return <p className="text-sm text-text-2">Carregando…</p>;
 
   return (
@@ -165,7 +176,7 @@ function EmailTab() {
 function FormsTab() {
   const { toast } = useToast();
   const utils = trpc.useUtils();
-  const { data: config, isLoading } = trpc.inbound.getConfig.useQuery();
+  const { data: config, isLoading, error, refetch } = trpc.inbound.getConfig.useQuery();
   const usersQuery = trpc.users.list.useQuery({});
 
   const [webhookEnabled, setWebhookEnabled] = useState<boolean | null>(null);
@@ -199,6 +210,17 @@ function FormsTab() {
   const effectiveNotifyIds = notifyUserIds ?? config?.notifyUserIds ?? [];
   const effectiveBlacklist = blacklistText ?? (config?.blacklistDomains ?? []).join('\n');
 
+  // P-92b — inbound.getConfig exige inbound:view_queue; sem a permission
+  // o usuário recebe 403 e a tela travava em "Carregando…" infinito.
+  if (error && !config) {
+    return (
+      <ErrorState
+        title="Não foi possível carregar a configuração de captura."
+        description={friendlyTrpcError(error)}
+        onRetry={() => void refetch()}
+      />
+    );
+  }
   if (isLoading) return <p className="text-sm text-text-2">Carregando…</p>;
 
   const webhookUrl =
@@ -391,6 +413,23 @@ function HistoryTab() {
     );
   }, [historyQuery.data, rejectedQuery.data]);
 
+  // P-92b — historyList/rejectedList exigem inbound:view_queue; sem a
+  // permission o usuário recebe 403 e a tela travava em "Carregando…".
+  const historyError =
+    (historyQuery.error && !historyQuery.data) ||
+    (rejectedQuery.error && !rejectedQuery.data);
+  if (historyError) {
+    return (
+      <ErrorState
+        title="Não foi possível carregar o histórico."
+        description={friendlyTrpcError(historyQuery.error ?? rejectedQuery.error!)}
+        onRetry={() => {
+          void historyQuery.refetch();
+          void rejectedQuery.refetch();
+        }}
+      />
+    );
+  }
   if (historyQuery.isLoading || rejectedQuery.isLoading) {
     return <p className="text-sm text-text-2">Carregando…</p>;
   }

@@ -494,7 +494,41 @@ export SECRET="<cole-o-secret-daqui>"
 8. **Sidebar respeitando permissions** — logar como user sem `inbound:view_queue`.
    - **Passa se:** item "Fila inbound" **não aparece** na sidebar.
 
-**Bloqueia release se:** guard anti-escalada quebra ou UI de permissions não carrega.
+> Os passos 9 e 10 abaixo **independem** de `RBAC_GRANULAR_ENABLED` — o gate de
+> UI usa `hasPermissionByRole` (role default) e a mensagem FORBIDDEN vale em
+> qualquer path. Rodar sempre.
+
+9. **Gate de permissão na página /more (P-97)** — logar como **ANALISTA** (ou
+   qualquer não-ADMIN). Abrir `/more` (índice mobile — use viewport < 768px ou
+   URL direta).
+   - **Passa se:** a lista **não** mostra nenhum item admin gated que o role não
+     tem (Usuários, Produtos, Plano e cobrança, Identidade, Alertas, IA, Taxas
+     de conversão, Regras de aprovação, Contratos, Parceiros, Templates, E-mail
+     Inbound, Inbound rejeitados, Solicitações LGPD).
+   - **Passa se:** items sem gate continuam visíveis (Empresas, Contatos,
+     Relatórios, Contratos, Aprovações). ANALISTA vê "Estrutura comercial"
+     (tem `sales_structure:read`) mas **não** "Importação" (sem `import:run`).
+   - **Passa se:** a lista de /more bate 1:1 com a Sidebar (mesma permission por
+     rota — P-88/P-88b).
+   - **Falha (regressão P-97):** ANALISTA vê itens admin no /more.
+   - Como ADMIN, `/more` mostra todos os itens (sanity).
+
+10. **Mensagem genérica de acesso negado (P-98)** — como user sem uma permission,
+    disparar uma ação que retorna FORBIDDEN (ex.: ANALISTA tentando salvar em
+    `/admin/conversion-rates`, ou qualquer mutation admin barrada).
+    - **Passa se:** o toast/erro mostra exatamente **"Seu perfil não tem acesso
+      a esta operação."** — sem expor o role do usuário nem o requisito técnico
+      (allowed roles / `resource:action` / permission).
+    - **Passa se:** as mensagens são **consistentes** entre telas (withRoles /
+      withCapability / withPermission produzem o mesmo texto).
+    - **Falha (regressão P-98):** aparece "Perfil ANALISTA não tem acesso
+      (requer um de: ADMIN)" ou "Sem permissão: X" — vazamento de detalhe.
+    - O detalhe técnico continua disponível pra suporte/debug no `cause` do
+      TRPCError (server-side, não serializado pro cliente).
+
+**Bloqueia release se:** guard anti-escalada quebra, UI de permissions não
+carrega, /more vaza item admin pra não-ADMIN, ou a mensagem FORBIDDEN volta a
+expor role/requisito.
 
 ### 2.6. Command Palette ⌘K (~5min)
 

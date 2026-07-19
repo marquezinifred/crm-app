@@ -32,7 +32,9 @@ const registry: {
   refetch: {},
 };
 
-const FORBIDDEN_MSG = 'Perfil ANALISTA não tem acesso (requer um de: ADMIN)';
+// P-98 — mensagem FORBIDDEN agora é genérica (não expõe role/requisito).
+// O cliente recebe apenas esta string via `err.message`.
+const FORBIDDEN_MSG = 'Seu perfil não tem acesso a esta operação.';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), back: vi.fn() }),

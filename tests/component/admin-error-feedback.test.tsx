@@ -164,13 +164,13 @@ describe('/admin/conversion-rates (P-92 crítica — silent failure)', () => {
 
     await act(async () => {
       opts!.onError!({
-        message: 'Perfil ANALISTA não tem acesso (requer um de: ADMIN)',
+        message: 'Seu perfil não tem acesso a esta operação.',
       });
     });
 
     await waitFor(() => {
       const alert = screen.getByRole('alert');
-      expect(alert.textContent).toMatch(/Perfil ANALISTA não tem acesso/i);
+      expect(alert.textContent).toMatch(/Seu perfil não tem acesso a esta operação/i);
     });
   });
 
@@ -230,13 +230,13 @@ describe('/admin/approval-rules (P-92 crítica — silent failure)', () => {
 
     await act(async () => {
       opts!.onError!({
-        message: 'Perfil ANALISTA não tem acesso (requer um de: ADMIN)',
+        message: 'Seu perfil não tem acesso a esta operação.',
       });
     });
 
     await waitFor(() => {
       expect(screen.getByRole('alert').textContent).toMatch(
-        /Perfil ANALISTA não tem acesso/i,
+        /Seu perfil não tem acesso a esta operação/i,
       );
     });
   });
@@ -302,13 +302,13 @@ describe('/admin/alerts (P-92 smoke)', () => {
 
     await act(async () => {
       opts!.onError!({
-        message: 'Perfil ANALISTA não tem acesso (requer um de: ADMIN)',
+        message: 'Seu perfil não tem acesso a esta operação.',
       });
     });
 
     await waitFor(() => {
       expect(screen.getByRole('alert').textContent).toMatch(
-        /Perfil ANALISTA não tem acesso/i,
+        /Seu perfil não tem acesso a esta operação/i,
       );
     });
   });

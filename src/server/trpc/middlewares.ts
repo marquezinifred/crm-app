@@ -9,6 +9,18 @@ type Resource = Parameters<typeof hasCapability>[1];
 type ActionOf<R extends Resource> = Parameters<typeof hasCapability<R>>[2];
 
 /**
+ * P-98 — Mensagem única e genérica pra todo FORBIDDEN de RBAC.
+ *
+ * Fred (2026-07-17) pediu que a UI não exponha o role do usuário nem o
+ * requisito técnico (allowed roles / resource:action / permission) — as
+ * mensagens antigas variavam entre si e vazavam detalhe. Esta é a única
+ * string visível ao usuário; o detalhe técnico vai pro `cause` do
+ * TRPCError (server-side, não serializado pro cliente — o errorFormatter
+ * em `trpc.ts` não inclui `cause` no shape).
+ */
+export const FORBIDDEN_MESSAGE = 'Seu perfil não tem acesso a esta operação.';
+
+/**
  * Restringe procedure a uma lista de UserRoles.
  * Retorna um procedure já refinado (ctx.user e ctx.tenantId não-null).
  *
@@ -20,7 +32,8 @@ export function withRoles(...allowed: UserRole[]) {
     if (!allowed.includes(ctx.user.role)) {
       throw new TRPCError({
         code: 'FORBIDDEN',
-        message: `Perfil ${ctx.user.role} não tem acesso (requer um de: ${allowed.join(', ')})`,
+        message: FORBIDDEN_MESSAGE,
+        cause: `withRoles: role=${ctx.user.role} requer=[${allowed.join(',')}]`,
       });
     }
     return next({ ctx });
@@ -39,7 +52,8 @@ export function withCapability<R extends Resource>(resource: R, action: ActionOf
     if (!hasCapability(ctx.user.role, resource, action)) {
       throw new TRPCError({
         code: 'FORBIDDEN',
-        message: `Sem permissão ${resource}:${action}`,
+        message: FORBIDDEN_MESSAGE,
+        cause: `withCapability: role=${ctx.user.role} requer=${resource}:${action}`,
       });
     }
     return next({ ctx });
@@ -60,7 +74,8 @@ export function withPermission(permission: Permission) {
     if (!ok) {
       throw new TRPCError({
         code: 'FORBIDDEN',
-        message: `Sem permissão: ${permission}`,
+        message: FORBIDDEN_MESSAGE,
+        cause: `withPermission: role=${ctx.user.role} requer=${permission}`,
       });
     }
     return next({ ctx });

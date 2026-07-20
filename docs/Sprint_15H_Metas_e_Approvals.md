@@ -1,11 +1,12 @@
 # Sprint 15H — Metas por Unidade + Reconcile de Approvals
 
 **Estimativa:** 8-10 dias úteis · **Spec versão inicial:** 2026-07-08
-**Migration:** 0032 (approvals) + 0033 (metas)
+**Migration:** ~~0032 (approvals) + 0033 (metas)~~ → **0033 (approvals) + 0034 (metas)** — deslizado porque o Sprint 15G.5 (que precede) reivindicou o `0032` (T11 do `Sprint_15G5_Transferencia_Oportunidade.md`). ✅ Corpo desta spec já reconciliado (2026-07-20): approvals→0033, metas→0034 em todas as seções (§3.2, §4.1, rollout, chips, riscos, rollback).
 **Pré-requisitos:**
 - ✅ Sprint 15G Fases 1-3 mergidas + QA verde
 - 🟡 Sprint 15G Fase 4 em desenvolvimento (paralelo — não bloqueia início do 15H)
 - 🟡 Sprint 15G rollout prod em curso
+- ⚠️ **Sprint 15G.5 mergido antes do 15H** — owns migration 0032; 15H usa 0033/0034
 
 ---
 
@@ -61,7 +62,7 @@ Chip A escolhe entre 2 caminhos, documenta no commit:
 **Recomendação spec:** Caminho A1 pra 15H. A2 fica pra Sprint 15I se pressão
 de tempo dos approvers ficar crítica.
 
-### 3.2. Schema (migration 0032)
+### 3.2. Schema (migration 0033 — approvals)
 
 ```prisma
 // Novos campos em Approval:
@@ -85,7 +86,7 @@ enum ApprovalStatus {
 }
 ```
 
-Migration 0032:
+Migration 0033 (approvals — deslizada de 0032; T11 do 15G.5):
 - ADD COLUMN `applicable_rule_id` UUID nullable + FK
 - ADD COLUMN `orphaned_at` timestamptz nullable
 - ADD COLUMN `orphaned_reason` text nullable
@@ -185,7 +186,7 @@ export async function reconcileApprovalsForTenant(tenantId: string) {
 
 ## 4. Bloco B — Metas por Unidade
 
-### 4.1. Schema (migration 0033)
+### 4.1. Schema (migration 0034 — metas)
 
 ```prisma
 model SalesQuota {
@@ -214,7 +215,7 @@ model Tenant {
 }
 ```
 
-Migration 0033:
+Migration 0034 (metas — deslizada de 0033; T11 do 15G.5):
 - CREATE TABLE `sales_quotas` com RLS default policy
 - ADD COLUMN `tenants.quota_period_type` text default 'QUARTERLY'
 - Índices GiST descartados (não precisa — só filtro por tenant + period + unit)
@@ -324,7 +325,7 @@ Testes: 3+ casos verificando shape do include.
 ## 6. Rollout Sprint 15H em prod
 
 1. Deploy código com `APPROVAL_RECONCILE_ENABLED=false` E `SALES_QUOTAS_ENABLED=false`
-2. Migrations 0032 + 0033 via `prisma migrate deploy`
+2. Migrations 0033 (approvals) + 0034 (metas) via `prisma migrate deploy` — nos DOIS branches Neon (staging + production-live, T9/P-80)
 3. Rodar `approvals-reconcile` uma vez em modo dry-run (log only, sem UPDATE) pra ver quantos órfãs seriam marcados
 4. Ativar `APPROVAL_RECONCILE_ENABLED=true` (worker começa a rodar diário)
 5. Monitorar 48h — audit_logs `action='approval.orphaned'` deve gerar entradas razoáveis
@@ -337,8 +338,8 @@ Testes: 3+ casos verificando shape do include.
 ## 7. Decomposição por chip (Modo B)
 
 **Fase 1 (paralela):**
-- **Chip 1a**: Migration 0032 (schema approvals) + service + worker + feature flag
-- **Chip 1b**: Migration 0033 (schema quotas) + service base
+- **Chip 1a**: Migration 0033 (schema approvals) + service + worker + feature flag
+- **Chip 1b**: Migration 0034 (schema quotas) + service base
 
 **Fase 2 (paralela após Fase 1):**
 - **Chip 2a**: Router `approvals-reconcile` + UI `/admin/approvals-orphaned`
@@ -358,7 +359,7 @@ Total: **8 chips em 3 fases + 3 QAs Modo B**. Esforço agregado ~10 dias.
 | Risco | Mitigação |
 |-------|-----------|
 | Worker reconcile marca approvals válidas como ORPHANED por bug | Feature flag OFF em prod até smoke test; dry-run mode inicial log-only |
-| Migration 0032 `ALTER TYPE ADD VALUE` bloqueante em Postgres antigo | Padrão migration-pitfalls #1 (RENAME_old + cast); Postgres 12+ suporta ADD VALUE non-blocking |
+| Migration 0033 `ALTER TYPE ADD VALUE` bloqueante em Postgres antigo | Padrão migration-pitfalls #1 (RENAME_old + cast); Postgres 12+ suporta ADD VALUE non-blocking |
 | Rollup de metas cross-nível não implementado no 15H | Explicitado no §2 "não entra"; Sprint 15I |
 | `computeQuotaProgress` query pesada em tenants grandes | Índice `(tenantId, period)` + agregação limitada por período específico |
 | Race condition em CRUD de quota simultâneo | UNIQUE constraint `(tenantId, unitId, period)` bloqueia duplicata |
@@ -370,7 +371,7 @@ Total: **8 chips em 3 fases + 3 QAs Modo B**. Esforço agregado ~10 dias.
 - Reconcile: setar `APPROVAL_RECONCILE_ENABLED=false` — worker para, approvals já marcadas ORPHANED ficam como estão (rejeitar manualmente ou re-atribuir via UI)
 - Quotas: setar `SALES_QUOTAS_ENABLED=false` — routers respondem com feature disabled; UI oculta
 
-Migrations 0032/0033 ficam no DB (tabelas ficam vazias/inertes). Rollback pesado exige revert migration reversa em `prisma/migrations/XXXX_revert/`.
+Migrations 0033/0034 ficam no DB (tabelas ficam vazias/inertes). Rollback pesado exige revert migration reversa em `prisma/migrations/XXXX_revert/`.
 
 ---
 

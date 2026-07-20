@@ -2,8 +2,10 @@
 
 **Autor:** sessão de gestão (arquiteto) · **Data:** 2026-07-17
 **Débito de origem:** P-87 (Planejamento_Debitos_Pos_Rollout_15G.md §P-87)
-**Estimativa:** 6-7 dias · **Depende de:** Sprint 15G (estrutura ltree + Sales Units) — atendido
-**Status:** 📋 planejado — aguarda kickoff do Fred
+**Estimativa:** ~6,75 dias · **Depende de:** Sprint 15G (estrutura ltree + Sales Units) — atendido
+**Migration:** `0032` (única) — **precede o 15H, que desliza para 0033/0034 (T11)**
+**Status:** 📋 planejado — decisões do PO fechadas (§9); pronto para kickoff
+**Revisões:** v1 (arquiteto, 2026-07-17) · emendas T11–T17 (revisão PO, 2026-07-20 — §3.1)
 
 ---
 
@@ -77,6 +79,23 @@ mitigação embutida nos critérios de aceite.
 
 ---
 
+## 3.1. Emendas pós-revisão do PO (2026-07-20)
+
+Segunda rodada de revisão. T11–T17 substituem/refinam pontos das seções abaixo.
+Onde houver conflito, T11–T17 vencem.
+
+| # | Decisão / risco | Emenda (obrigatória) |
+|---|-----------------|----------------------|
+| **T11** | **Colisão de número de migration com Sprint 15H.** 15H reivindica `0032` (approvals) + `0033` (metas). Como o 15G.5 vai antes (Opção A), ele fica com `0032`. | 15G.5 possui `0032` como **arquivo único** (tabela+enum+3 índices+RLS+coluna `opportunities.current_transfer_id`+coluna `tenant_settings.transfer_timeout_hours` — sem sufixos `b`/`c`). **Sprint 15H desliza:** approvals→`0033`, metas→`0034`. Emenda cruzada obrigatória em `Sprint_15H_Metas_e_Approvals.md` antes do kickoff do 15H. |
+| **T12** | **Gate RBAC ausente** (quebra §4.5 withPermission; sem caminho de revogação por usuário). | Adicionar **`opportunity:transfer`** ao catálogo (66ª permission, categoria `opportunity`). Router gateado com `withPermission('opportunity:transfer')` **+** check estrutural por-opp por cima. Default do role: concedida aos perfis manager-tier atuais (GESTOR, DIRETOR_COMERCIAL, DIRETOR_OPERACOES, ADMIN); ANALISTA/PARCEIRO não. A permission é o *interruptor de capacidade*; a autoridade real continua sendo o check estrutural ltree (T13). Admin revoga de um gestor específico via `user_permission_overrides`. Atualizar `permission-matrix.md` + migration de catálogo. |
+| **T13** | **Autoridade nunca pode indexar por nome de perfil** (`users.role`). Novo perfil nomeado (Coordenador, Head) quebraria a lógica. | Todo o modelo de autoridade é **estrutural**: deriva de `sales_unit_members.role` (`MANAGER`/`MEMBER` — papel na unidade) + posição ltree. **Nunca** de `users.role`. `sources` = `getSubtreeMemberIds(callerId, tenantId)` (já é união de todas as unidades onde o caller é MANAGER — multi-membership resolvido de graça). Convenção documentada no `TransferScopeService`. |
+| **T14** | **Targets restritos (pares imediatos + superior direto)** com multi-membership. "Nível" não é escalar quando o user pertence a N unidades. | Definição estrutural, sem escalar de nível nem nome de cargo: para **cada** unidade onde o caller é MANAGER, targets = managers das **unidades-irmãs** (mesmo `parent_id`) + manager da **unidade-pai** (superior direto). **Tie-break multi-membership:** computa por membership e **une** os conjuntos. Novo `$queryRaw` em `SalesUnitRepository.resolveTransferTargets(callerId, tenantId)` derivando irmãos via `parent_id` e pai via `parent_id` do nó gerenciado. Nunca via `users.role`. |
+| **T15** | **Guard de write (T2) era denylist mantida à mão** — mutation nova esquece o guard e quebra a invariante read-only silenciosamente. | Guard sobe pra **choke point na Prisma extension** (`src/server/db/client.ts`): nos writes dos modelos que referenciam opportunity (`opportunity`, `proposal`, `activity`, `task`, `document`), a extension resolve a opp-alvo e bloqueia se `current_transfer_id != null && ctx.userId != requested_by_id`. `ctx.userId` via `runWithTenant` (AsyncLocalStorage). Name-independent, sem lista pra esquecer, cobre mutation nova automaticamente. **É mudança em módulo core → o chip do guard vira Modo A** (QA na branch). Custo: +1 lookup da opp-pai nos writes de entidades-filhas. **Backstop:** teste de regressão estrutural que faz grep nas rotas de opportunity e afirma que nenhuma mutation de escrita escapa do choke point (padrão `ai-masking-preserved.test.ts` §4.2 / `env-schema-regression.test.ts` §4.9). |
+| **T16** | **Kill-switch OFF congela `current_transfer_id`** → badge "Em transferência" mente (opp editável, guard inerte). | Frontend renderiza o badge **apenas** se `OPPORTUNITY_TRANSFER_ENABLED` estiver ON. Guard inerte + badge honesto + **zero mutação de dado** + rollback continua sendo só virar a flag. As PENDING resumem intactas ao religar (worker expira as vencidas). Sem drain script. |
+| **T17** | **`approve` gravava em `stageHistory`** — transferência é troca de owner, não de estágio; polui relatório de tempo-por-estágio (`reports.ts`). | `approve` grava a troca de owner em `audit()` + trilha de owner dedicada. **Nunca** em `stageHistory` (estágio é preservado — regra 4 do §2; não há evento de funil). |
+
+---
+
 ## 4. Modelo de dados — Migration 0032
 
 ```sql
@@ -135,37 +154,43 @@ fase. Chips de uma mesma fase que tocam arquivos disjuntos rodam em paralelo.
 - Critério: `prisma migrate dev` limpo, `prisma validate` OK, type-check zero
 
 **Chip 1b — TransferScopeService (funções puras)** *(depende de 1a p/ tipos)*
-- `resolveTransferSources(caller, tenantId)`: caller é ancestor de quais donos? (pode disparar sobre quais opps)
-- `resolveTransferTargets(caller, tenantId)`: pares no nível do caller + superior direto → lista de target managers válidos
-- `canReceiveAsNewOwner(targetManager, newOwnerId, tenantId)`: newOwner ∈ subárvore do targetManager (T10) — reusa `SalesUnitRepository.getSubtreeMemberIds`
-- `isAncestorOf(callerUnitPath, ownerUnitPath)`: comparação ltree
+- `resolveTransferSources(callerId, tenantId)`: opps cujo owner ∈ `getSubtreeMemberIds(callerId, tenantId)` — reusa direto o helper do 15G (T13; multi-membership resolvido de graça pela união do `<@ ANY`)
+- `resolveTransferTargets(callerId, tenantId)`: **estrutural** (T14) — para cada unidade onde caller é MANAGER: managers das unidades-irmãs (mesmo `parent_id`) + manager da unidade-pai (superior direto); **une** por membership. Nunca via `users.role`
+- `canTransferOpportunity(callerId, opportunityId, tenantId)`: avaliado **por-opp** (T13) — caller é ancestor do owner daquela opp específica. Substitui qualquer flag global de capacidade
+- `canReceiveAsNewOwner(targetManagerId, newOwnerId, tenantId)`: newOwner ∈ subárvore do targetManager (T10) — reusa `SalesUnitRepository.getSubtreeMemberIds`
+- Novo helper de repo `SalesUnitRepository.resolveTransferTargets` ($queryRaw irmãos+pai via `parent_id`)
 - Funções PURAS testáveis sem tRPC (padrão do `analytics.service`/`approval-engine.service`)
-- Critério: testes unitários cobrindo cada cenário da tabela de regras §2
+- Critério: testes unitários cobrindo cada cenário da tabela de regras §2 + tie-break multi-membership (T14)
 
 **QA Modo B Fase 1** — baseline verde + coverage do service.
 
 ### Fase 2 — Backend (procedures + worker + guard) · ~2 dias
 
 **Chip 2a — Router `opportunityTransfers` (7 procedures)** *(depende de 1b)*
-- `request` (dispara; valida ancestor + destino via TransferScopeService; cria row PENDING; seta `opportunities.current_transfer_id`; notifica; audit T4)
+- **Todas gateadas com `withPermission('opportunity:transfer')`** (T12) + check estrutural por-opp por cima
+- `request` (dispara; valida `canTransferOpportunity` + destino via TransferScopeService; cria row PENDING; seta `opportunities.current_transfer_id`; notifica; audit T4)
 - `cancel` (disparador; status→CANCELLED; opp fica com disparador; notifica)
-- `approve` (destinatário; valida newOwner T10; status→APPROVED; troca `owner_id`; limpa `current_transfer_id`; grava stageHistory; notifica)
+- `approve` (destinatário; valida newOwner T10; status→APPROVED; troca `owner_id`; limpa `current_transfer_id`; **grava troca em `audit()` + trilha de owner — NUNCA em `stageHistory`** T17; notifica)
 - `reject` (destinatário; status→REJECTED; opp fica com disparador; notifica)
 - `pendingForMe` / `myOutgoing` / `historyForOpportunity` (queries; filtro tenantId T6)
 - Todas revalidam `status===PENDING` (T8); kill-switch no topo (T3); cross-tenant guard; mensagem genérica + cause (T7)
 
-**Chip 2b — Worker timeout + guard de write** *(depende de 1a; paralelo a 2a se não colidir no router de opportunities — coordenar)*
-- `jobs/opportunity-transfer-timeout.worker.ts` + queue: de hora em hora, PENDING com `expires_at < now()` → TIMED_OUT + limpa flag + notifica (idempotente, T5)
-- Guard centralizado de write (T2): helper `assertOpportunityWritable(oppId, callerId)` chamado em TODAS as mutations que escrevem na opp — `opportunities.update/advanceStage/cancel`, `proposals.create/addVersion`, `activities.*`, `tasks.create/update/delete`, `documents.create/addVersion`. Bloqueia se `current_transfer_id != null` e caller ≠ `requested_by_id`.
+**Chip 2b — Worker timeout** *(depende de 1a; paralelo a 2a)*
+- `jobs/opportunity-transfer-timeout.worker.ts` + queue: itera tenants ativos (best-effort por tenant, padrão approval-reconcile); de hora em hora, PENDING com `expires_at < now()` → TIMED_OUT + limpa flag + notifica (idempotente, T5)
 - 7 templates de notificação (email `lib/email/templates` + push `push-sender`): REQUESTED (destinatário + dono), APPROVED (disparador + dono + novo owner), REJECTED/CANCELLED/TIMED_OUT (disparador + dono)
 
-**QA Modo B Fase 2** — atenção à colisão 2a/2b no router de opportunities; máquina de estado; guard por caminho; kill-switch OFF preserva runtime.
+**Chip 2c — Guard de write via Prisma extension** *(Modo A — módulo core; QA na branch)* (T15)
+- Choke point em `src/server/db/client.ts`: nos writes de `opportunity`/`proposal`/`activity`/`task`/`document`, resolve a opp-alvo e bloqueia se `current_transfer_id != null && ctx.userId != requested_by_id`. Name-independent, sem denylist mantida à mão; cobre mutation nova automaticamente
+- Backstop: teste de regressão estrutural (grep nas rotas de opportunity afirmando que nenhuma escrita escapa do choke point)
+- **Modo A** por tocar a extension (WHERE injection / backstop P-42). QA na branch antes do merge (§9.4.2 Metodologia)
+
+**QA Fase 2** — Modo B para 2a+2b (router+worker, disjuntos); **Modo A para 2c** (extension). Máquina de estado; guard por caminho; kill-switch OFF preserva runtime.
 
 ### Fase 3 — Frontend (3 telas) · ~2 dias · chips paralelos
 
 **Chip 3a — Disparo + read-only em `/pipeline/[id]`**
-- Botão "Transferir responsabilidade" (visível só se caller é ancestor do owner — via novo `myTransferCapability`); Modal com Select de destino (`resolveTransferTargets`) + textarea motivo
-- Badge "🔄 Em transferência para X" + edits disabled quando `currentTransferId != null` (espelha guard backend); aba Histórico mostra transferências
+- Botão "Transferir responsabilidade" (visível só se `canTransferOpportunity(callerId, oppId)` — avaliado **por-opp**, T13; nunca flag global); Modal com Select de destino (`resolveTransferTargets`) + textarea motivo
+- Badge "🔄 Em transferência para X" + edits disabled quando `currentTransferId != null` **E** `OPPORTUNITY_TRANSFER_ENABLED` ON (T16 — badge não mente em rollback); aba Histórico mostra transferências
 - Se já PENDING e caller é disparador → botão "Cancelar transferência"
 
 **Chip 3b — Fila do destinatário `/inbox/transferencias-recebidas`**
@@ -210,21 +235,25 @@ após smoke. Rollback = flag `false` sem redeploy; dados ficam inertes.
 
 | Fase | Chips | Dias |
 |------|-------|------|
-| 1 — Fundação | 1a + 1b | 1,5 |
-| 2 — Backend | 2a + 2b | 2,0 |
+| 1 — Fundação | 1a (+ migration catálogo `opportunity:transfer` T12) + 1b | 1,75 |
+| 2 — Backend | 2a + 2b + **2c (Modo A, extension)** | 2,5 |
 | 3 — Frontend | 3a + 3b + 3c | 2,0 |
 | 4 — Rollout | doc + QA final | 0,5 |
-| **Total** | **7 chips + 4 QAs** | **~6 dias** |
+| **Total** | **8 chips + 4 QAs (1 em Modo A)** | **~6,75 dias** |
+
+Delta vs v1 (~6 dias): +permission de catálogo (T12) + guard promovido a choke point na extension como chip Modo A dedicado (T15).
 
 ---
 
-## 9. Decisão em aberto pro PO (herdada do Planejamento v3 — reconfirmar)
+## 9. Decisões do PO — resolvidas (2026-07-20)
 
-Regra "destino cross-branch": Fred definiu que transferência para outra estrutura
-vai ao **gestor** daquela estrutura (que decide seguir/cancelar e atribui um
-analista) — ou seja, o modelo deste sprint. Reconfirmar antes do kickoff que
-**não** existe caso de transferência direta analista→analista cross-team (isso
-foi descartado em favor do workflow via gestor). O plano acima assume o workflow.
+1. **Workflow via gestor (não analista→analista direto):** confirmado. Transferência cross-team vai ao gestor destino, que decide e atribui um analista da própria subárvore.
+2. **Gate RBAC (T12):** `opportunity:transfer` como permission de catálogo + check estrutural por-opp.
+3. **Amplitude de targets (T14):** pares imediatos (unidades-irmãs) + superior direto (unidade-pai). Derivação estrutural via `parent_id`, união por membership quando multi-MANAGER. **Não** é "qualquer manager fora da subárvore".
+4. **Multi-membership:** resolvido estruturalmente (T13/T14) — sources via `getSubtreeMemberIds` (união nativa), targets computados por membership e unidos. Sem tela de escolha de unidade no disparo.
+5. **Kill-switch OFF com PENDING (T16):** badge gateado na flag; zero mutação; rollback continua sendo só virar a flag.
+6. **Guard de write (T15):** choke point na Prisma extension (Modo A), não denylist.
+7. **stageHistory (T17):** troca de owner vai pra audit + trilha de owner, nunca stageHistory.
 
 ---
 

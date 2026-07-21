@@ -123,6 +123,17 @@ const envSchema = z.object({
   // redeploy). Ver docs/Sprint_15G_amendments.md §A1.
   SALES_STRUCTURE_ENABLED: envBoolean(false),
 
+  // Sprint 15G.5 (T3) — Kill-switch do workflow de transferência de
+  // oportunidade. false (default): procedures de transferência
+  // indisponíveis (FORBIDDEN/feature-off), guard de write inerte, badge
+  // "Em transferência" não renderiza (T16) — runtime idêntico ao pré-15G.5.
+  // Migration 0032 cria a tabela vazia sempre. true: chip 2a expõe o router,
+  // chip 2c ativa o guard de write, chip 3a renderiza o badge. Consumer
+  // runtime único no router (padrão P-73). Rollback = flag false (sem
+  // redeploy); PENDING existentes resumem ao religar. Ver
+  // docs/Sprint_15G5_Transferencia_Oportunidade.md §6.
+  OPPORTUNITY_TRANSFER_ENABLED: envBoolean(false),
+
   // Sprint 15E — Kill-switch do RBAC granular (permissions individuais).
   // true (default; P-62): `hasPermission` async respeita role default +
   // overrides individuais + cache (Sprint 15E completo).

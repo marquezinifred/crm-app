@@ -13,12 +13,15 @@ import { PERMISSION_KEYS, type Permission } from '@/lib/auth/permissions-catalog
  * `opportunity:read_all`, `sales_structure:read`, `sales_structure:manage`.
  * Qualquer mudança aqui exige atualização paralela do matrix doc + spec.
  */
+// Sprint 15G.5 (T12): opportunity:transfer somada aos perfis manager-tier
+// (ADMIN/DIRETOR_C/DIRETOR_O/GESTOR) → +1 cada. DIRETOR_F/ANALISTA/PARCEIRO
+// inalterados.
 const EXPECTED_COUNTS: Record<keyof typeof ROLE_DEFAULT_PERMISSIONS, number> = {
-  ADMIN: 63,
-  DIRETOR_COMERCIAL: 41,
-  DIRETOR_OPERACOES: 27,
+  ADMIN: 64,
+  DIRETOR_COMERCIAL: 42,
+  DIRETOR_OPERACOES: 28,
   DIRETOR_FINANCEIRO: 19,
-  GESTOR: 32,
+  GESTOR: 33,
   ANALISTA: 24,
   PARCEIRO: 5,
 };
@@ -79,6 +82,30 @@ describe('ROLE_DEFAULT_PERMISSIONS — Sprint 15E + 15G Fase 1b', () => {
     >) {
       const hasBreaker = ROLE_DEFAULT_PERMISSIONS[role].has('ai:manage_breaker');
       expect(hasBreaker).toBe(role === 'ADMIN');
+    }
+  });
+
+  it('opportunity:transfer default só nos perfis manager-tier (Sprint 15G.5 T12)', () => {
+    // Interruptor de capacidade concedido a ADMIN/DIRETOR_C/DIRETOR_O/GESTOR.
+    // A autoridade real é o check estrutural ltree por-opp (T13). DIRETOR_F
+    // não gerencia squad; ANALISTA/PARCEIRO nunca disparam transferência.
+    const granted: Array<keyof typeof ROLE_DEFAULT_PERMISSIONS> = [
+      'ADMIN',
+      'DIRETOR_COMERCIAL',
+      'DIRETOR_OPERACOES',
+      'GESTOR',
+    ];
+    for (const role of granted) {
+      expect(
+        ROLE_DEFAULT_PERMISSIONS[role].has('opportunity:transfer'),
+        `${role} deveria ter opportunity:transfer`,
+      ).toBe(true);
+    }
+    for (const role of ['DIRETOR_FINANCEIRO', 'ANALISTA', 'PARCEIRO'] as const) {
+      expect(
+        ROLE_DEFAULT_PERMISSIONS[role].has('opportunity:transfer'),
+        `${role} NÃO deveria ter opportunity:transfer`,
+      ).toBe(false);
     }
   });
 });

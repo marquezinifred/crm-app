@@ -43,6 +43,14 @@ describe('permissions catalog — Sprint 15G Fase 1b', () => {
     expect(isValidPermission('opportunity:read_all')).toBe(true);
   });
 
+  it('opportunity:transfer PRESENTE com label PT-BR + category opportunities (Sprint 15G.5 T12)', () => {
+    const entry = PERMISSIONS_CATALOG.find((p) => p.key === 'opportunity:transfer');
+    expect(entry).toBeDefined();
+    expect(entry?.label).toBe('Transferir responsabilidade de oportunidade');
+    expect(entry?.category).toBe('opportunities');
+    expect(isValidPermission('opportunity:transfer')).toBe(true);
+  });
+
   it('sales_structure:read PRESENTE com label PT-BR + category commercial', () => {
     const entry = PERMISSIONS_CATALOG.find((p) => p.key === 'sales_structure:read');
     expect(entry).toBeDefined();
@@ -59,9 +67,9 @@ describe('permissions catalog — Sprint 15G Fase 1b', () => {
     expect(isValidPermission('sales_structure:manage')).toBe(true);
   });
 
-  it('total = 64 permissions distintas (61 baseline − 1 removida + 4 adicionadas)', () => {
-    expect(PERMISSIONS_CATALOG.length).toBe(64);
-    expect(PERMISSION_KEYS.size).toBe(64);
+  it('total = 65 permissions distintas (61 baseline − 1 removida + 4 adicionadas + 1 transfer 15G.5)', () => {
+    expect(PERMISSIONS_CATALOG.length).toBe(65);
+    expect(PERMISSION_KEYS.size).toBe(65);
   });
 
   it('nova category "commercial" existe em CATEGORY_ORDER + CATEGORY_LABELS com 2 permissions', () => {

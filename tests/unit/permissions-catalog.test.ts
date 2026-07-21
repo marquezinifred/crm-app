@@ -8,9 +8,9 @@ import {
 } from '@/lib/auth/permissions-catalog';
 
 describe('permissions catalog — Sprint 15E + 15G Fase 1b', () => {
-  it('tem 64 permissions distintas (Sprint 15G: 61 − 1 + 4)', () => {
-    expect(PERMISSIONS_CATALOG.length).toBe(64);
-    expect(PERMISSION_KEYS.size).toBe(64);
+  it('tem 65 permissions distintas (Sprint 15G: 61 − 1 + 4; 15G.5 +1 transfer)', () => {
+    expect(PERMISSIONS_CATALOG.length).toBe(65);
+    expect(PERMISSION_KEYS.size).toBe(65);
   });
 
   it('todas as keys seguem formato `resource:action`', () => {

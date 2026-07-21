@@ -83,7 +83,7 @@ describe('permissionsRouter.listCatalog', () => {
   it('retorna catálogo completo com categorias', async () => {
     const caller = await makeCaller();
     const out = await caller.listCatalog();
-    expect(out.permissions.length).toBe(64);
+    expect(out.permissions.length).toBe(65);
     expect(out.categoryOrder.length).toBeGreaterThan(0);
     expect(out.categoryLabels).toBeDefined();
   });

@@ -2,9 +2,10 @@
  * Catálogo estático de permissions granulares — Sprint 15E + 15G Fase 1b.
  *
  * Fonte da verdade: `docs/permission-matrix.md` + `docs/Sprint_15G_estrutura_comercial.md` §6.
- * Total: **64 permissions distintas** (Sprint 15G removeu `opportunity:read_others`
+ * Total: **65 permissions distintas** (Sprint 15G removeu `opportunity:read_others`
  * e adicionou `opportunity:read_team`, `opportunity:read_all`,
- * `sales_structure:read`, `sales_structure:manage` — 61 − 1 + 4 = 64).
+ * `sales_structure:read`, `sales_structure:manage` — 61 − 1 + 4 = 64; Sprint
+ * 15G.5 adicionou `opportunity:transfer` (T12) → 65).
  *
  * Formato: `resource:action`. Alinhado com o legado `withCapability`
  * (Sprint 0). Novas features devem adicionar permission nova aqui
@@ -41,7 +42,7 @@ export const PERMISSIONS_CATALOG = [
   { key: 'contact:update', label: 'Editar contatos', category: 'contacts' },
   { key: 'contact:delete', label: 'Desativar contatos', category: 'contacts' },
 
-  // Opportunities (7) — Sprint 15G Fase 1b split visibilidade em team/all
+  // Opportunities (9) — Sprint 15G Fase 1b split visibilidade em team/all; 15G.5 add transfer (T12)
   { key: 'opportunity:create', label: 'Criar oportunidades', category: 'opportunities' },
   { key: 'opportunity:read', label: 'Ver oportunidades', category: 'opportunities' },
   { key: 'opportunity:update', label: 'Editar oportunidades', category: 'opportunities' },
@@ -50,6 +51,7 @@ export const PERMISSIONS_CATALOG = [
   { key: 'opportunity:cancel', label: 'Encerrar como perdida', category: 'opportunities' },
   { key: 'opportunity:read_team', label: 'Ver oportunidades da equipe gerenciada', category: 'opportunities' },
   { key: 'opportunity:read_all', label: 'Ver todas as oportunidades do tenant', category: 'opportunities' },
+  { key: 'opportunity:transfer', label: 'Transferir responsabilidade de oportunidade', category: 'opportunities' },
 
   // Commercial — Sprint 15G Fase 1b estrutura organizacional (2)
   { key: 'sales_structure:read', label: 'Ver estrutura organizacional comercial', category: 'commercial' },

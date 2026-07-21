@@ -379,6 +379,16 @@ enum UnitMemberRole {
   MEMBER
 }
 
+// Sprint 15G.5 — máquina de estado do workflow de transferência de
+// oportunidade. PENDING → APPROVED | REJECTED | CANCELLED | TIMED_OUT.
+enum TransferStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  TIMED_OUT
+  CANCELLED
+}
+
 // ---------------------------------------------------------------------
 // Tenant (raiz da árvore — único modelo SEM tenant_id)
 // ---------------------------------------------------------------------
@@ -477,6 +487,7 @@ model Tenant {
   salesUnitTypes          SalesUnitType[]
   salesUnits              SalesUnit[]
   salesUnitMembers        SalesUnitMember[]
+  opportunityTransfers    OpportunityTransfer[]
 
   @@map("tenants")
 }
@@ -519,8 +530,8 @@ model User {
   // Duas colunas porque Prisma não suporta `String[]?` — sem essa separação,
   // não conseguimos distinguir "não computado" de "computado vazio" e
   // PARCEIRO com [] rodaria recompute em loop. Ver docs/Sprint_15E_RBAC_Granular.md §6.6.
-  cachedPermissions          String[]                  @default([]) @map("cached_permissions")
-  cachedPermissionsAt        DateTime?                 @map("cached_permissions_at")
+  cachedPermissions   String[]  @default([]) @map("cached_permissions")
+  cachedPermissionsAt DateTime? @map("cached_permissions_at")
 
   ownedOpportunities         Opportunity[]             @relation("OpportunityOwner")
   teamMemberships            OpportunityTeam[]
@@ -537,16 +548,28 @@ model User {
   auditLogs                  AuditLog[]
 
   // Sprint 15E — overrides individuais + histórico de quem concedeu.
-  permissionOverrides        UserPermissionOverride[]  @relation("PermissionForUser")
-  grantedPermissionOverrides UserPermissionOverride[]  @relation("PermissionGrantedBy")
+  permissionOverrides        UserPermissionOverride[] @relation("PermissionForUser")
+  grantedPermissionOverrides UserPermissionOverride[] @relation("PermissionGrantedBy")
 
   // Sprint 15G Fase 1a — membros de sales units (unidade comercial).
   //   `salesUnitMemberships` = unidades onde este user é MANAGER ou MEMBER.
   //   `salesUnitAssignments` = ações "assigned_by" (histórico de quem
   //   adicionou este user a unidades). SET NULL preserva registro se o
   //   admin que atribuiu for deletado.
-  salesUnitMemberships       SalesUnitMember[]         @relation("UnitMemberUser")
-  salesUnitAssignments       SalesUnitMember[]         @relation("UnitMemberAssignedBy")
+  salesUnitMemberships SalesUnitMember[] @relation("UnitMemberUser")
+  salesUnitAssignments SalesUnitMember[] @relation("UnitMemberAssignedBy")
+
+  // Sprint 15G.5 — facetas do workflow de transferência de oportunidade.
+  //   requested  = transferências que este user disparou (ancestor)
+  //   asOriginalOwner = transferências onde era o dono no disparo
+  //   asTargetManager = transferências recebidas como destinatário
+  //   asNewOwner = transferências onde virou o novo dono (no approve)
+  //   decided    = transferências que este user decidiu (approve/reject)
+  transfersRequested       OpportunityTransfer[] @relation("TransferRequestedBy")
+  transfersAsOriginalOwner OpportunityTransfer[] @relation("TransferOriginalOwner")
+  transfersAsTargetManager OpportunityTransfer[] @relation("TransferTargetManager")
+  transfersAsNewOwner      OpportunityTransfer[] @relation("TransferNewOwner")
+  transfersDecided         OpportunityTransfer[] @relation("TransferDecidedBy")
 
   @@unique([tenantId, email])
   // Sprint 15A débito — migration 0026: UNIQUE composto. A constraint
@@ -893,13 +916,18 @@ model Opportunity {
   currentStageEnteredAt DateTime @default(now()) @map("current_stage_entered_at")
 
   // Sprint 15D — rastreio de origem inbound
-  isInbound             Boolean   @default(false) @map("is_inbound")
-  inboundSource         String?   @map("inbound_source")
-  inboundFormId         String?   @map("inbound_form_id")
-  inboundPayload        Json?     @map("inbound_payload")
-  inboundReceivedAt     DateTime? @map("inbound_received_at")
-  inboundParsedBy       String?   @map("inbound_parsed_by")
-  inboundConfidence     Decimal?  @map("inbound_confidence") @db.Decimal(3, 2)
+  isInbound         Boolean   @default(false) @map("is_inbound")
+  inboundSource     String?   @map("inbound_source")
+  inboundFormId     String?   @map("inbound_form_id")
+  inboundPayload    Json?     @map("inbound_payload")
+  inboundReceivedAt DateTime? @map("inbound_received_at")
+  inboundParsedBy   String?   @map("inbound_parsed_by")
+  inboundConfidence Decimal?  @map("inbound_confidence") @db.Decimal(3, 2)
+
+  // Sprint 15G.5 — flag "em transferência" (T2). Não-NULL = há um
+  // OpportunityTransfer PENDING; o guard de write (chip 2c) bloqueia
+  // edição de quem não é o disparador. Limpo em approve/reject/cancel/timeout.
+  currentTransferId String? @map("current_transfer_id") @db.Uuid
 
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -921,6 +949,12 @@ model Opportunity {
   contracts          Contract[]
   stageHistory       OpportunityStageHistory[]
   partnerEngagements PartnerEngagement[]
+
+  // Sprint 15G.5 — duas relações distintas com OpportunityTransfer:
+  //   currentTransfer = o transfer PENDING ativo (FK current_transfer_id nesta opp)
+  //   transfers       = todas as transferências que já referenciaram esta opp
+  currentTransfer OpportunityTransfer?  @relation("OpportunityCurrentTransfer", fields: [currentTransferId], references: [id])
+  transfers       OpportunityTransfer[] @relation("OpportunityTransfers")
 
   @@index([tenantId, stage, status])
   @@index([tenantId, ownerId])
@@ -1419,23 +1453,23 @@ model Embedding {
 // ---------------------------------------------------------------------
 
 model ApprovalRule {
-  id               String               @id @default(uuid()) @db.Uuid
-  tenantId         String               @map("tenant_id") @db.Uuid
-  name             String
-  criteria         ApprovalRuleCriteria
-  thresholdNumeric Decimal?             @map("threshold_numeric") @db.Decimal(15, 2)
+  id                 String               @id @default(uuid()) @db.Uuid
+  tenantId           String               @map("tenant_id") @db.Uuid
+  name               String
+  criteria           ApprovalRuleCriteria
+  thresholdNumeric   Decimal?             @map("threshold_numeric") @db.Decimal(15, 2)
   // Sprint 15E — approverRoles OR approverPermission (mutuamente exclusivos
   // via CHECK constraint em migration 0030). Rules antigas continuam com
   // approverRoles preenchido; rules novas podem apontar pra uma permission
   // granular (ex: 'proposal:approve') pra abranger overrides individuais.
-  approverRoles       UserRole[]         @map("approver_roles")
-  approverPermission  String?            @map("approver_permission")
-  enabled          Boolean              @default(true)
-  createdAt        DateTime             @default(now()) @map("created_at")
-  updatedAt        DateTime             @updatedAt @map("updated_at")
-  createdBy        String?              @map("created_by") @db.Uuid
-  updatedBy        String?              @map("updated_by") @db.Uuid
-  deletedAt        DateTime?            @map("deleted_at")
+  approverRoles      UserRole[]           @map("approver_roles")
+  approverPermission String?              @map("approver_permission")
+  enabled            Boolean              @default(true)
+  createdAt          DateTime             @default(now()) @map("created_at")
+  updatedAt          DateTime             @updatedAt @map("updated_at")
+  createdBy          String?              @map("created_by") @db.Uuid
+  updatedBy          String?              @map("updated_by") @db.Uuid
+  deletedAt          DateTime?            @map("deleted_at")
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -1454,14 +1488,14 @@ model UserPermissionOverride {
   userId     String   @map("user_id") @db.Uuid
   tenantId   String   @map("tenant_id") @db.Uuid
   permission String
-  action     String   // 'granted' | 'revoked' — validado em app (CHECK no SQL)
+  action     String // 'granted' | 'revoked' — validado em app (CHECK no SQL)
   grantedBy  String?  @map("granted_by") @db.Uuid
   grantedAt  DateTime @default(now()) @map("granted_at")
   reason     String?  @db.Text
 
-  user          User    @relation("PermissionForUser", fields: [userId], references: [id], onDelete: Cascade)
-  tenant        Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  grantedByUser User?   @relation("PermissionGrantedBy", fields: [grantedBy], references: [id], onDelete: SetNull)
+  user          User   @relation("PermissionForUser", fields: [userId], references: [id], onDelete: Cascade)
+  tenant        Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  grantedByUser User?  @relation("PermissionGrantedBy", fields: [grantedBy], references: [id], onDelete: SetNull)
 
   @@unique([userId, permission], name: "user_permission_unique")
   @@index([userId])
@@ -1596,13 +1630,16 @@ model PushSubscription {
 // ---------------------------------------------------------------------
 
 model TenantSettings {
-  tenantId       String        @id @map("tenant_id") @db.Uuid
-  themeConfig    Json          @map("theme_config")
-  poweredBy      PoweredByMode @default(VISIBLE) @map("powered_by")
-  wcagOverrides  Json          @default("[]") @map("wcag_overrides")
-  themingEnabled Boolean       @default(true) @map("theming_enabled")
-  updatedAt      DateTime      @updatedAt @map("updated_at")
-  updatedBy      String?       @map("updated_by") @db.Uuid
+  tenantId             String        @id @map("tenant_id") @db.Uuid
+  themeConfig          Json          @map("theme_config")
+  poweredBy            PoweredByMode @default(VISIBLE) @map("powered_by")
+  wcagOverrides        Json          @default("[]") @map("wcag_overrides")
+  themingEnabled       Boolean       @default(true) @map("theming_enabled")
+  // Sprint 15G.5 (T3) — horas até uma transferência PENDING auto-expirar
+  // (TIMED_OUT). Worker verifica de hora em hora. Default 72h (3 dias).
+  transferTimeoutHours Int           @default(72) @map("transfer_timeout_hours")
+  updatedAt            DateTime      @updatedAt @map("updated_at")
+  updatedBy            String?       @map("updated_by") @db.Uuid
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -2001,28 +2038,30 @@ model SalesUnitType {
 }
 
 model SalesUnit {
-  id        String    @id @default(uuid()) @db.Uuid
-  tenantId  String    @map("tenant_id") @db.Uuid
-  typeId    String    @map("type_id") @db.Uuid
+  id        String               @id @default(uuid()) @db.Uuid
+  tenantId  String               @map("tenant_id") @db.Uuid
+  typeId    String               @map("type_id") @db.Uuid
   name      String
-  shortId   String    @map("short_id")
+  shortId   String               @map("short_id")
   // path é `ltree` do Postgres. Prisma não tem tipo nativo — `Unsupported`
   // vira `never` no cliente TS. Operações (INSERT/SELECT com queries
   // hierárquicas) rodam via `$queryRaw` no SalesUnitRepository.
   // Convenção A7 acima: nunca criar SalesUnit direto pelo Prisma.
   path      Unsupported("ltree")
   depth     Int
-  parentId  String?   @map("parent_id") @db.Uuid
-  active    Boolean   @default(true)
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
+  parentId  String?              @map("parent_id") @db.Uuid
+  active    Boolean              @default(true)
+  createdAt DateTime             @default(now()) @map("created_at")
+  updatedAt DateTime             @updatedAt @map("updated_at")
+  deletedAt DateTime?            @map("deleted_at")
 
-  tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  type     SalesUnitType     @relation(fields: [typeId], references: [id], onDelete: Restrict)
-  parent   SalesUnit?        @relation("SalesUnitParent", fields: [parentId], references: [id], onDelete: Restrict)
-  children SalesUnit[]       @relation("SalesUnitParent")
-  members  SalesUnitMember[]
+  tenant            Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  type              SalesUnitType         @relation(fields: [typeId], references: [id], onDelete: Restrict)
+  parent            SalesUnit?            @relation("SalesUnitParent", fields: [parentId], references: [id], onDelete: Restrict)
+  children          SalesUnit[]           @relation("SalesUnitParent")
+  members           SalesUnitMember[]
+  // Sprint 15G.5 — unidade-alvo (auditoria) das transferências (target_unit_id)
+  transfersTargeted OpportunityTransfer[]
 
   @@unique([tenantId, shortId], map: "sales_units_tenant_short_id_unique")
   @@index([tenantId])
@@ -2046,10 +2085,10 @@ model SalesUnitMember {
   assignedBy String?        @map("assigned_by") @db.Uuid
   assignedAt DateTime       @default(now()) @map("assigned_at")
 
-  user       User      @relation("UnitMemberUser", fields: [userId], references: [id], onDelete: Cascade)
-  unit       SalesUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
-  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  assignedByUser User? @relation("UnitMemberAssignedBy", fields: [assignedBy], references: [id], onDelete: SetNull)
+  user           User      @relation("UnitMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+  unit           SalesUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assignedByUser User?     @relation("UnitMemberAssignedBy", fields: [assignedBy], references: [id], onDelete: SetNull)
 
   @@unique([userId, unitId], map: "sales_unit_members_user_unit_unique")
   @@index([userId])
@@ -2057,4 +2096,58 @@ model SalesUnitMember {
   @@index([tenantId])
   @@index([unitId, role])
   @@map("sales_unit_members")
+}
+
+// ---------------------------------------------------------------------
+// OpportunityTransfer (Sprint 15G.5) — solicitação de transferência
+//   cross-team de responsabilidade de uma oportunidade.
+//   Disparador (ancestor na árvore ltree) → destinatário (par/superior),
+//   que decide e escolhe o novo dono da própria subárvore.
+//   status = máquina de estado (T8). partial UNIQUE (opportunity_id)
+//   WHERE PENDING impede race (T1) — fonte da verdade é a migration 0032
+//   (Prisma não expressa partial unique). Sem soft delete: o ciclo de vida
+//   é o enum, não deleted_at (como opportunity_stage_history / audit_logs).
+// ---------------------------------------------------------------------
+model OpportunityTransfer {
+  id              String         @id @default(uuid()) @db.Uuid
+  tenantId        String         @map("tenant_id") @db.Uuid
+  opportunityId   String         @map("opportunity_id") @db.Uuid
+  requestedById   String         @map("requested_by_id") @db.Uuid
+  originalOwnerId String         @map("original_owner_id") @db.Uuid
+  targetManagerId String         @map("target_manager_id") @db.Uuid
+  targetUnitId    String?        @map("target_unit_id") @db.Uuid
+  newOwnerId      String?        @map("new_owner_id") @db.Uuid
+  status          TransferStatus @default(PENDING)
+  reason          String?        @db.Text
+  decisionReason  String?        @map("decision_reason") @db.Text
+  decidedById     String?        @map("decided_by_id") @db.Uuid
+  requestedAt     DateTime       @default(now()) @map("requested_at")
+  decidedAt       DateTime?      @map("decided_at")
+  expiresAt       DateTime       @map("expires_at")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @default(now()) @updatedAt @map("updated_at")
+
+  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  opportunity   Opportunity @relation("OpportunityTransfers", fields: [opportunityId], references: [id], onDelete: Cascade)
+  requestedBy   User        @relation("TransferRequestedBy", fields: [requestedById], references: [id])
+  originalOwner User        @relation("TransferOriginalOwner", fields: [originalOwnerId], references: [id])
+  targetManager User        @relation("TransferTargetManager", fields: [targetManagerId], references: [id])
+  targetUnit    SalesUnit?  @relation(fields: [targetUnitId], references: [id])
+  newOwner      User?       @relation("TransferNewOwner", fields: [newOwnerId], references: [id])
+  decidedBy     User?       @relation("TransferDecidedBy", fields: [decidedById], references: [id])
+
+  // Reverso da flag opportunities.current_transfer_id (relação distinta
+  // de `opportunity` acima — aqui a opp aponta pra ESTE transfer).
+  currentForOpportunities Opportunity[] @relation("OpportunityCurrentTransfer")
+
+  // Só os índices PLAIN vão aqui (Prisma não expressa partial index). Os 3
+  // índices PARCIAIS (idx_transfers_pending_target / _pending_expiry /
+  // _active_per_opp WHERE status='PENDING') vivem SÓ na migration 0032 —
+  // fonte da verdade — cobrindo os hot paths (fila do destinatário, worker
+  // de timeout, guard de race T1). Mesmo pattern do partial unique de
+  // sales_unit_members.is_primary (0031).
+  @@index([tenantId])
+  @@index([tenantId, opportunityId])
+  @@index([tenantId, requestedById])
+  @@map("opportunity_transfers")
 }

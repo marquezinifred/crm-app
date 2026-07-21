@@ -92,10 +92,13 @@ Mesmo padrão de `companies`. FINANCEIRO leitura pra reports.
 | `opportunity:advance_stage` | ✅ | ✅ | — | — | ✅ | ✅ | — |
 | `opportunity:cancel` | ✅ | ✅ | — | — | ✅ | ✅ | — |
 | `opportunity:read_others` | ✅ | ✅ | ✅ | ✅ | ✅ | — | — |
+| `opportunity:transfer` | ✅ | ✅ | ✅ | — | ✅ | — | — |
 
 *PARCEIRO só as próprias (engajamento aprovado).
 
 Rationale: `read_others` separa "vê tudo" (ADMIN/DIRETOR/GESTOR) de "vê só minhas" (ANALISTA). Antes era hardcoded em query — agora fica granular. DIRETOR_OPERACOES lê pra handoff mas não cria/edita.
+
+`opportunity:transfer` (Sprint 15G.5, T12): concedida aos perfis manager-tier (ADMIN/DIRETOR_C/DIRETOR_O/GESTOR). É só o **interruptor de capacidade** — a autoridade real é o check estrutural ltree por-opp (caller é ancestor do dono daquela opp específica), nunca o nome do perfil (T13). ANALISTA/PARCEIRO não recebem; DIRETOR_FINANCEIRO não gerencia squad. Admin revoga de um gestor específico via `user_permission_overrides`.
 
 ---
 

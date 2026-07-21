@@ -301,6 +301,67 @@ describe('SalesUnitRepository.getAncestors', () => {
   });
 });
 
+describe('SalesUnitRepository.resolveTransferTargets (15G.5 T14)', () => {
+  const CALLER = 'caller-uuid-0000-0000-000000000001';
+  const PEER = 'peer-uuid-0000-0000-000000000002';
+  const SUPERIOR = 'superior-uuid-0000-0000-000000000003';
+
+  it('retorna user ids distintos dos managers-alvo', async () => {
+    queryRawSpy.mockResolvedValueOnce([{ user_id: PEER }, { user_id: SUPERIOR }]);
+
+    const { SalesUnitRepository } = await import('@/server/db/repositories/sales-unit.repository');
+    const result = await SalesUnitRepository.resolveTransferTargets(CALLER, TENANT);
+
+    expect(result).toEqual([PEER, SUPERIOR]);
+  });
+
+  it('estrutura da query: irmãs (parent_id) + pai (id=parent_id) + união DISTINCT', async () => {
+    queryRawSpy.mockResolvedValueOnce([]);
+
+    const { SalesUnitRepository } = await import('@/server/db/repositories/sales-unit.repository');
+    await SalesUnitRepository.resolveTransferTargets(CALLER, TENANT);
+
+    const combined = combineSqlCall(queryRawSpy.mock.calls[0]!);
+    // Tie-break multi-membership: união dos alvos de todas as memberships MANAGER.
+    expect(combined).toContain('SELECT DISTINCT target_member.user_id');
+    // Irmãs: mesmo parent_id (IS NOT DISTINCT FROM cobre raízes NULL), exceto a própria.
+    expect(combined).toContain('target_unit.parent_id IS NOT DISTINCT FROM managed_unit.parent_id');
+    expect(combined).toContain('target_unit.id <> managed_unit.id');
+    // Pai: superior direto (o nó cujo id = parent_id da unidade gerida).
+    expect(combined).toContain('target_unit.id = managed_unit.parent_id');
+    // Só managers são alvo (papel-na-unidade, NÃO users.role — T13).
+    expect(combined).toContain("mgr_membership.role = 'MANAGER'");
+    expect(combined).toContain("target_member.role = 'MANAGER'");
+    // Exclui o próprio caller (não é alvo de si mesmo).
+    expect(combined).toContain('target_member.user_id <>');
+  });
+
+  it('filtra users ativos + não-deletados (par/superior inativo não é alvo)', async () => {
+    queryRawSpy.mockResolvedValueOnce([]);
+
+    const { SalesUnitRepository } = await import('@/server/db/repositories/sales-unit.repository');
+    await SalesUnitRepository.resolveTransferTargets(CALLER, TENANT);
+
+    const combined = combineSqlCall(queryRawSpy.mock.calls[0]!);
+    expect(combined).toContain('target_user.deleted_at IS NULL');
+    expect(combined).toContain('target_user.active = true');
+  });
+
+  it('filtro tenant aplicado em todos os JOINs (cross-tenant defense)', async () => {
+    queryRawSpy.mockResolvedValueOnce([]);
+
+    const { SalesUnitRepository } = await import('@/server/db/repositories/sales-unit.repository');
+    await SalesUnitRepository.resolveTransferTargets(CALLER, TENANT);
+
+    const combined = combineSqlCall(queryRawSpy.mock.calls[0]!);
+    // managed_unit + target_unit + target_member + target_user + mgr_membership = 5 pontos.
+    const occurrences = combined.split(`<<"${TENANT}">>`).length - 1;
+    expect(occurrences).toBeGreaterThanOrEqual(5);
+    // NUNCA indexa autoridade por users.role (T13).
+    expect(combined).not.toContain('users.role');
+  });
+});
+
 describe('SalesUnitRepository.getChildren', () => {
   it('retorna filhos diretos por parent_id (não recursivo)', async () => {
     queryRawSpy.mockResolvedValueOnce([

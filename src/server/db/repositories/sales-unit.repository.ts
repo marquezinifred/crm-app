@@ -221,6 +221,63 @@ export const SalesUnitRepository = {
   },
 
   /**
+   * Sprint 15G.5 (T14) — Managers-alvo válidos de uma transferência disparada
+   * por `callerId`. Autoridade 100% estrutural (T13): NUNCA indexa por
+   * `users.role`; deriva de `sales_unit_members.role='MANAGER'` + posição ltree
+   * (`parent_id`).
+   *
+   * Para CADA unidade onde o caller é MANAGER (`managed_unit`), os alvos são:
+   *   - **irmãs**: managers de unidades com o mesmo `parent_id` da `managed_unit`
+   *     (exceto a própria). `IS NOT DISTINCT FROM` casa raízes com `parent_id`
+   *     NULL entre si — dois nós-raiz são pares no topo da árvore.
+   *   - **pai**: manager da unidade cujo `id = managed_unit.parent_id` (o
+   *     superior direto na cadeia). Nós-raiz não têm pai → sem alvo superior.
+   *
+   * Tie-break multi-membership (T14): o `SELECT DISTINCT` une os alvos de TODAS
+   * as memberships MANAGER do caller num único conjunto. O próprio `callerId`
+   * é excluído (não é alvo de si mesmo, mesmo que co-gerencie uma irmã).
+   *
+   * Filtros: tenant em todos os JOINs + `deleted_at IS NULL` (units e users) +
+   * `users.active` — um par/superior inativo ou soft-deleted não é alvo válido.
+   * Retorna user ids distintos.
+   */
+  async resolveTransferTargets(
+    callerId: string,
+    tenantId: string,
+  ): Promise<string[]> {
+    const rows = await prisma.$queryRaw<Array<{ user_id: string }>>`
+      SELECT DISTINCT target_member.user_id::text AS user_id
+      FROM sales_unit_members mgr_membership
+      JOIN sales_units managed_unit
+        ON managed_unit.id = mgr_membership.unit_id
+       AND managed_unit.tenant_id = ${tenantId}::uuid
+       AND managed_unit.deleted_at IS NULL
+      JOIN sales_units target_unit
+        ON target_unit.tenant_id = ${tenantId}::uuid
+       AND target_unit.deleted_at IS NULL
+       AND (
+         (target_unit.parent_id IS NOT DISTINCT FROM managed_unit.parent_id
+           AND target_unit.id <> managed_unit.id)
+         OR target_unit.id = managed_unit.parent_id
+       )
+      JOIN sales_unit_members target_member
+        ON target_member.unit_id = target_unit.id
+       AND target_member.tenant_id = ${tenantId}::uuid
+       AND target_member.role = 'MANAGER'
+      JOIN users target_user
+        ON target_user.id = target_member.user_id
+       AND target_user.tenant_id = ${tenantId}::uuid
+       AND target_user.deleted_at IS NULL
+       AND target_user.active = true
+      WHERE mgr_membership.user_id = ${callerId}::uuid
+        AND mgr_membership.tenant_id = ${tenantId}::uuid
+        AND mgr_membership.role = 'MANAGER'
+        AND target_member.user_id <> ${callerId}::uuid
+    `;
+    return rows.map((r) => r.user_id);
+  },
+
+  /**
    * Retorna toda a árvore do tenant ordenada por `path`. Cada nó vem com
    * dados do tipo (name/level/color/icon) e `memberCount` (só ativos).
    * Nós soft-deleted são excluídos.

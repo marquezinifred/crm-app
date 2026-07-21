@@ -24,6 +24,8 @@ export const QUEUE_NAMES = {
   healthScoreRollup: 'health-score-rollup',
   // Sprint 15D — captura automática de leads inbound
   inboundLeadCreate: 'inbound-lead-create',
+  // Sprint 15G.5 — expira transferências de oportunidade PENDING vencidas
+  opportunityTransferTimeout: 'opportunity-transfer-timeout',
 } as const;
 
 export function makeQueue<T = unknown>(name: string): Queue<T> {
@@ -105,4 +107,10 @@ export interface InboundLeadCreateJobData {
   raw: string | Record<string, unknown>;
   receivedAt: string; // ISO string — Bull serializa datas como string
   originIdentifier?: string;
+}
+
+// Sprint 15G.5 — worker de timeout de transferência (cross-tenant, hourly)
+export interface OpportunityTransferTimeoutJobData {
+  /** ISO string opcional para sobrescrever "agora" em runs ad-hoc/testes. */
+  now?: string;
 }

@@ -23,6 +23,11 @@ import {
 } from './health-score-rollup.worker';
 // Sprint 15D — captura de leads inbound
 import { startInboundLeadCreateWorker } from './inbound-lead-create.worker';
+// Sprint 15G.5 — timeout de transferência de oportunidade
+import {
+  startOpportunityTransferTimeoutWorker,
+} from './opportunity-transfer-timeout.worker';
+import type { OpportunityTransferTimeoutJobData } from './queues';
 
 async function main() {
   const scanWorker = startAlertsScanWorker();
@@ -31,6 +36,7 @@ async function main() {
   const aiRollupWorker = startAiUsageRollupWorker();
   const healthRollupWorker = startHealthScoreRollupWorker();
   const inboundLeadWorker = startInboundLeadCreateWorker();
+  const transferTimeoutWorker = startOpportunityTransferTimeoutWorker();
 
   scanWorker.on('failed', (job, err) =>
     console.error(`[alerts-scan] job ${job?.id} falhou:`, err.message),
@@ -49,6 +55,9 @@ async function main() {
   );
   inboundLeadWorker.on('failed', (job, err) =>
     console.error(`[inbound-lead-create] job ${job?.id} falhou:`, err.message),
+  );
+  transferTimeoutWorker.on('failed', (job, err) =>
+    console.error(`[transfer-timeout] job ${job?.id} falhou:`, err.message),
   );
 
   // Agendamentos diários (BRT)
@@ -75,10 +84,22 @@ async function main() {
     removeOnFail: 200,
   });
 
-  console.info(
-    '[workers] alerts-scan + email-send + import-run + ai-usage-rollup + health-score-rollup + inbound-lead-create rodando',
+  // Sprint 15G.5 — expira transferências PENDING vencidas de hora em hora.
+  const transferTimeoutQueue = makeQueue<OpportunityTransferTimeoutJobData>(
+    QUEUE_NAMES.opportunityTransferTimeout,
   );
-  console.info('[workers] crons: scan 07:00 BRT · ai-rollup 00:30 BRT · health-rollup 02:00 BRT');
+  await transferTimeoutQueue.add('hourly-timeout', {}, {
+    repeat: { pattern: '0 * * * *', tz: 'America/Sao_Paulo' },
+    removeOnComplete: 100,
+    removeOnFail: 200,
+  });
+
+  console.info(
+    '[workers] alerts-scan + email-send + import-run + ai-usage-rollup + health-score-rollup + inbound-lead-create + opportunity-transfer-timeout rodando',
+  );
+  console.info(
+    '[workers] crons: scan 07:00 BRT · ai-rollup 00:30 BRT · health-rollup 02:00 BRT · transfer-timeout hourly',
+  );
 
   // Shutdown gracioso
   const shutdown = async () => {
@@ -90,6 +111,7 @@ async function main() {
       aiRollupWorker.close(),
       healthRollupWorker.close(),
       inboundLeadWorker.close(),
+      transferTimeoutWorker.close(),
     ]);
     process.exit(0);
   };

@@ -94,6 +94,7 @@ Onde houver conflito, T11–T17 vencem.
 | **T16** | **Kill-switch OFF congela `current_transfer_id`** → badge "Em transferência" mente (opp editável, guard inerte). | Frontend renderiza o badge **apenas** se `OPPORTUNITY_TRANSFER_ENABLED` estiver ON. Guard inerte + badge honesto + **zero mutação de dado** + rollback continua sendo só virar a flag. As PENDING resumem intactas ao religar (worker expira as vencidas). Sem drain script. |
 | **T17** | **`approve` gravava em `stageHistory`** — transferência é troca de owner, não de estágio; polui relatório de tempo-por-estágio (`reports.ts`). | `approve` grava a troca de owner em `audit()` + trilha de owner dedicada. **Nunca** em `stageHistory` (estágio é preservado — regra 4 do §2; não há evento de funil). |
 | **T18** | **Sequenciamento da Fase 2 (gestão, 2026-07-20 — aprovado Fred).** O plano §5 não cravava se o chip 2c (guard na extension, Modo A) roda junto ou depois de 2a+2b. Risco: misturar mudança de módulo core (`db/client.ts`, mesma área do incidente P-42) com o resto num único ciclo de QA. | **2c é sequenciado por último, isolado.** Ordem: (1) **2a + 2b em paralelo** (Modo B, disjuntos) → (2) **QA Modo B intermediário** (router+worker) → (3) só então **2c** (guard extension, Modo A, worktree isolado) → (4) **QA Modo A** dedicado do 2c. O guard entra numa base já estável e verde; o QA do módulo core é isolado, com atenção redobrada ao backstop P-42. Custo: +1 ciclo de QA na Fase 2 (2 QAs em vez de 1). Substitui a leitura de "QA Fase 2 único" da §5. |
+| **T19** | **Carve-out obrigatório do guard 2c (gestão, 2026-07-24).** O `approve`/`reject` (chip 2a) são executados pelo **destinatário** (`ctx.user.id = targetManagerId ≠ requestedById`) e escrevem em `opportunity` (troca `ownerId`, seta `currentTransferId = null`) **enquanto `current_transfer_id` ainda está setado** no banco. O `cancel` é do requester (passa), mas o `timeout` roda como **sistema** (`runAsSystem`, sem `userId`). Um guard ingênuo `current_transfer_id != null && ctx.userId != requestedById` **bloquearia o próprio approve/reject** e possivelmente o worker. | O guard 2c **deve** liberar: (a) writes cujo payload transiciona `currentTransferId` (a máquina de estado resolvendo a transferência — approve/reject/cancel setam para `null`); (b) contexto de sistema/plataforma (`ctx.userId` ausente → bypass, worker é confiável). A condição de bloqueio lê o valor **commitado** (pré-write) de `current_transfer_id` no banco, **não** o payload. Provas obrigatórias no chip: teste "destinatário consegue `approve` com `current_transfer_id` setado e `userId != requester`", idem reject, idem worker timeout; e o inverso — "dono (owner) NÃO consegue editar business fields / criar task / proposta / documento durante PENDING". |
 
 ---
 
@@ -255,6 +256,29 @@ Delta vs v1 (~6 dias): +permission de catálogo (T12) + guard promovido a choke 
 5. **Kill-switch OFF com PENDING (T16):** badge gateado na flag; zero mutação; rollback continua sendo só virar a flag.
 6. **Guard de write (T15):** choke point na Prisma extension (Modo A), não denylist.
 7. **stageHistory (T17):** troca de owner vai pra audit + trilha de owner, nunca stageHistory.
+
+---
+
+## 9.1. Débitos residuais (pós-QA Modo B Fase 2 — 2026-07-24)
+
+Levantados pelo QA de integração (`docs/qa-sessions/auto-report-2026-07-21-15g5-fase2.md`).
+Nenhum bloqueia o 2c; registrados para fechamento antes da Fase 4.
+
+- **P-99 — `transfer-notification.service.ts` sem teste dedicado (0% coverage) · média.**
+  O service é mockado no router test, então a orquestração real (`resolveRecipients`
+  + dedup por userId, `pickTemplate` evento×papel, `loadInvolvedUsers` filtro
+  tenant+active, barreira best-effort T5) não é exercitada. T5/T6 satisfeitos por
+  inspeção, mas bug de destinatário passaria despercebido. Fix: teste puro dedicado
+  (mockar `sendEmail`/`sendPushToUser`/`prisma.user.findMany`; asserir destinatários
+  por evento, dedup, e que falha de push/e-mail não rejeita). Chip pequeno Modo B —
+  **pode rodar em paralelo ao 2c** (arquivos disjuntos: só um test file novo).
+- **P-100 — Caminho TIMED_OUT duplicado (worker vs service) · baixa.** O worker (2b)
+  compõe a notificação de TIMED_OUT direto via `renderTransferTimedOut`/`transferTimedOutPush`
+  em `notifyTimedOut`, em vez de chamar `notifyTransferEvent('TIMED_OUT', …)` do service
+  (2a). Costura intencional e documentada (o service 2a não existia no pull do 2b).
+  Risco de longo prazo: divergência de copy/destinatários. Fix: unificar o worker para
+  consumir `notifyTransferEvent('TIMED_OUT', ctx)` quando a Fase 2 estabilizar (fecha,
+  de quebra, parte do P-99 ao dar ao service um 2º consumidor real).
 
 ---
 

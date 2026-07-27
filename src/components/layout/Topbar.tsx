@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { UserButton } from '@clerk/nextjs';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { CommandPalette } from '@/components/search/CommandPalette';
+import { trpc } from '@/lib/trpc/client';
 
 const HIDDEN_ON = [
   '/sign-in', '/sign-up', '/onboarding', '/p/',
@@ -97,6 +98,7 @@ export function Topbar({
             <kbd className="text-[10px] px-1.5 py-0.5 rounded bg-hover border border-border font-mono">⌘K</kbd>
           </button>
         )}
+        <TransferBell />
         <ThemeToggle />
         <UserButton
           afterSignOutUrl="/sign-in"
@@ -156,4 +158,41 @@ function breadcrumbsFor(pathname: string): Array<{ label: string; href: string }
 
 function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/**
+ * Sino de transferências recebidas — Sprint 15G.5 Fase 3b.
+ *
+ * Conta `opportunityTransfers.pendingForMe` e leva pra fila do destinatário.
+ * Só é montado em rotas autenticadas (fica dentro do header, que retorna null
+ * nas rotas HIDDEN_ON). Degrada gracioso: com o kill-switch OFF ou sem a
+ * permission `opportunity:transfer` a query devolve FORBIDDEN → tratamos como
+ * 0 (`retry: false`) e o sino simplesmente não aparece. Também some quando a
+ * fila está vazia — só surge quando há algo aguardando decisão.
+ */
+export function TransferBell() {
+  const q = trpc.opportunityTransfers.pendingForMe.useQuery(undefined, {
+    retry: false,
+    staleTime: 30_000,
+  });
+  const count = q.error ? 0 : q.data?.length ?? 0;
+  if (count === 0) return null;
+
+  const label = `${count} transferência${count > 1 ? 's' : ''} aguardando sua decisão`;
+  return (
+    <Link
+      href="/inbox/transferencias-recebidas"
+      aria-label={label}
+      title={label}
+      className="relative rounded p-1.5 text-text-2 hover:bg-hover hover:text-text-1"
+    >
+      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8z" />
+        <path d="M10 21a2 2 0 0 0 4 0" />
+      </svg>
+      <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-brand-primary px-1 text-[10px] font-bold leading-none text-white">
+        {count > 9 ? '9+' : count}
+      </span>
+    </Link>
+  );
 }

@@ -46,6 +46,12 @@ const SECTIONS: Section[] = [
       { href: '/companies', label: 'Empresas', Icon: IconBuilding },
       { href: '/inbox', label: 'Inbox', Icon: IconMail },
       { href: '/inbox/prospects', label: 'Fila inbound', Icon: IconInbox, permission: 'inbound:view_queue' },
+      // Sprint 15G.5 (Fase 3b/3c) — workflow de transferência de oportunidade.
+      // Gated por opportunity:transfer (ADMIN + DIRETOR_C/O + GESTOR). Backend
+      // re-valida por-opp via TransferScopeService. O route de "em andamento"
+      // é do chip 3c — o link fica válido quando aquela tela mergear.
+      { href: '/inbox/transferencias-recebidas', label: 'Transferências recebidas', Icon: IconTransferIn, permission: 'opportunity:transfer' },
+      { href: '/pipeline/transferencias-em-andamento', label: 'Transferências em andamento', Icon: IconTransferClock, permission: 'opportunity:transfer' },
       { href: '/search', label: 'Buscar', Icon: IconSearch },
     ],
   },
@@ -278,3 +284,5 @@ function IconFiles(p: { className?: string }) { return <I {...p}><path d="M9 3h7
 function IconLock(p: { className?: string }) { return <I {...p}><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></I>; }
 function IconUpload(p: { className?: string }) { return <I {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5M12 3v12"/></I>; }
 function IconHierarchy(p: { className?: string }) { return <I {...p}><rect x="9" y="3" width="6" height="6" rx="1"/><rect x="3" y="15" width="6" height="6" rx="1"/><rect x="15" y="15" width="6" height="6" rx="1"/><path d="M12 9v3M6 15v-3h12v3"/></I>; }
+function IconTransferIn(p: { className?: string }) { return <I {...p}><path d="M4 8h13l-3-3M20 16H7l3 3"/></I>; }
+function IconTransferClock(p: { className?: string }) { return <I {...p}><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></I>; }

@@ -280,6 +280,44 @@ Nenhum bloqueia o 2c; registrados para fechamento antes da Fase 4.
   consumir `notifyTransferEvent('TIMED_OUT', ctx)` quando a Fase 2 estabilizar (fecha,
   de quebra, parte do P-99 ao dar ao service um 2º consumidor real).
 
+## 9.2. Débitos residuais do guard 2c (QA Modo A — 2026-07-24)
+
+Levantados pelo QA adversarial (`docs/qa-sessions/auto-report-2026-07-24-15g5-2c-guard.md`).
+Veredito 🟢 VERDE — mergeado em `ecc1c97`. Nenhum toca correção/segurança do
+invariante read-only nem o backstop P-42. **R1 + R2 são gate obrigatório da Fase 4
+(antes de virar `OPPORTUNITY_TRANSFER_ENABLED=true` em prod).**
+
+- **R1 · média · GATE Fase 4.** Runtime real da extension não exercitado —
+  `tests/integration/opportunity-transfer-guard.test.ts` (7 cenários) ficou **SKIPPED**
+  (sem `DATABASE_URL_TEST` no ambiente). Não foram exercitados em runtime real:
+  anti-recursão (o `base` não re-entrar no hook), gate do kill-switch no nível da
+  extension, `throw ForbiddenError` propagando pra `mapErrors`→FORBIDDEN, e a leitura
+  do valor commitado de `current_transfer_id` numa transação interativa. **Ação:** rodar
+  o integration contra um Postgres de teste na Fase 4, antes do flag flip.
+- **R2 · média · GATE Fase 4.** Kill-switch **OFF** + `isTransferGuardEnabled()` (parse
+  literal P-60, `true|1|yes|on`→true) verificados **só por leitura** — nenhum teste
+  executável do OFF. Como é o mecanismo que garante "merge = zero mudança em prod",
+  merece prova executável. **Ação:** exportar `isTransferGuardEnabled` + unit test do
+  parse literal (incl. OFF), **ou** cenário flag-OFF no integration. Barato, sem DB.
+- **R3 · baixa.** `documents.addVersion` é não-transacional: `documentVersion.create`
+  (2º-grau, fora dos 5 modelos guardados) roda ANTES do `document.update` guardado →
+  dono é bloqueado no `document.update`, mas uma linha órfã `DocumentVersion` pode
+  persistir. Benigno (`currentVersionId` não avança; dedup sha256 no retry). **Ação:**
+  envolver `addVersion` em `$transaction` OU guardar `DocumentVersion`/`ProposalVersion`
+  (escopo dos 5 modelos é decisão da T15).
+- **R4 · muito baixa.** `setContextUserId` sem unit test dedicado (setter trivial;
+  coberto pelo integration quando DB presente).
+- **R5 · muito baixa.** O `cause` técnico do guard-block é descartado no `mapErrors`
+  (FORBIDDEN não vai pro Sentry) → detalhe (opp/disparador/ator) não é capturado
+  server-side. Mais seguro, mas enfraquece a debugabilidade do P-98. **Ação:**
+  breadcrumb com o cause se debug importar.
+- **R6 · observação.** `partner-engagements.revoke` (`opportunity.updateMany({where:{id}})`)
+  será **bloqueado** para um admin não-disparador durante PENDING. Consistente com
+  regra 5 (read-only p/ não-disparador), mas pode surpreender. Documentar como esperado.
+- **R7 · observação · load-test.** O guard adiciona `base.findMany` **dentro** de
+  transações interativas (approve/reject/cancel/request/`proposals.addVersion`/
+  `documents.create`) → +1 conexão mid-tx. OK com pool default; incluir no k6 da Fase 4.
+
 ---
 
 ## 10. Referências

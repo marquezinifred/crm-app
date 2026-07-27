@@ -12,6 +12,10 @@ import { CommunicationIntake } from '@/components/pipeline/CommunicationIntake';
 import { DocumentsSection } from '@/components/pipeline/DocumentsSection';
 import { ProposalsSection } from '@/components/pipeline/ProposalsSection';
 import { TasksSection } from '@/components/pipeline/TasksSection';
+import { TransferBadge } from '@/components/transfers/TransferBadge';
+import { TransferActionButton } from '@/components/transfers/TransferActionButton';
+import { CancelTransferButton } from '@/components/transfers/CancelTransferButton';
+import { TransferHistorySection } from '@/components/transfers/TransferHistorySection';
 import { useToast } from '@/components/ui/toast';
 import { ErrorState } from '@/components/ui/empty-state';
 import { OpportunityLossReason } from '@prisma/client';
@@ -22,6 +26,7 @@ export default function OpportunityDetailPage() {
   const utils = trpc.useUtils();
   const { toast } = useToast();
   const { data: opp, isLoading, error, refetch } = trpc.opportunities.byId.useQuery({ id: params.id });
+  const { data: me } = trpc.users.me.useQuery();
 
   const [showCancel, setShowCancel] = useState(false);
   const [cancelForm, setCancelForm] = useState({ reason: '', lossReason: '' as string });
@@ -75,6 +80,15 @@ export default function OpportunityDetailPage() {
   const next = STAGES[currentIdx + 1];
   const prev = STAGES[currentIdx - 1];
 
+  // Sprint 15G.5 Fase 3a — transferência PENDING congela a edição da opp
+  // (fonte da verdade é o guard 2c; a UI só reflete + explica). `activeTransfer`
+  // já vem flag-gated do byId (T16 — null no rollback), então `frozen` some
+  // sozinho quando a flag desliga.
+  const activeTransfer = opp.activeTransfer;
+  const frozen = activeTransfer != null;
+  const iAmRequester =
+    activeTransfer != null && me?.id != null && me.id === activeTransfer.requestedById;
+
   return (
     <main className="mx-auto max-w-4xl p-4 md:p-6">
       <button
@@ -120,7 +134,30 @@ export default function OpportunityDetailPage() {
           )}
         </div>
 
-        {opp.status === 'ACTIVE' && (
+        {activeTransfer ? (
+          <div className="mt-4 rounded-md border border-warning bg-warning-bg/40 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <TransferBadge toName={activeTransfer.toName} />
+              {iAmRequester && (
+                <CancelTransferButton
+                  transferId={activeTransfer.transferId}
+                  opportunityId={opp.id}
+                />
+              )}
+            </div>
+            <p className="mt-2 text-xs text-warning-text">
+              Edição bloqueada enquanto a transferência estiver pendente.
+            </p>
+          </div>
+        ) : (
+          opp.status === 'ACTIVE' && (
+            <div className="mt-4">
+              <TransferActionButton opportunityId={opp.id} />
+            </div>
+          )
+        )}
+
+        {opp.status === 'ACTIVE' && !frozen && (
           <div className="mt-4 flex flex-wrap gap-2">
             {prev && (
               <button
@@ -168,8 +205,13 @@ export default function OpportunityDetailPage() {
         <p className="mb-3 text-xs text-text-3">
           Estágio: {STAGE_LABELS[opp.stage]}
         </p>
-        <StageFields opp={opp} edits={editStageFields} setEdits={setEditStageFields} />
-        {Object.keys(editStageFields).length > 0 && (
+        <StageFields
+          opp={opp}
+          edits={editStageFields}
+          setEdits={setEditStageFields}
+          disabled={frozen}
+        />
+        {!frozen && Object.keys(editStageFields).length > 0 && (
           <div className="mt-3 flex justify-end gap-2">
             <button
               type="button"
@@ -227,6 +269,8 @@ export default function OpportunityDetailPage() {
           ))}
         </ol>
       </section>
+
+      <TransferHistorySection opportunityId={opp.id} />
 
       {showCancel && (
         <div
@@ -294,10 +338,12 @@ function StageFields({
   opp,
   edits,
   setEdits,
+  disabled = false,
 }: {
   opp: { stage: string; meetingScheduledAt: Date | null; meetingHappened: boolean | null; briefing: string | null; estimatedValue: unknown; expectedCloseDate: Date | null; proposalPresentedAt: Date | null; decisionExpectedAt: Date | null; acceptedAt: Date | null };
   edits: Record<string, string>;
   setEdits: (e: Record<string, string>) => void;
+  disabled?: boolean;
 }) {
   const v = (k: string, fallback: unknown): string => {
     if (k in edits) return edits[k]!;
@@ -316,7 +362,8 @@ function StageFields({
               type="datetime-local"
               value={v('meetingScheduledAt', opp.meetingScheduledAt)}
               onChange={(e) => set('meetingScheduledAt', e.target.value)}
-              className="w-full rounded border px-2 py-1.5"
+              disabled={disabled}
+              className="w-full rounded border px-2 py-1.5 disabled:cursor-not-allowed disabled:opacity-60"
             />
           </label>
           <label>
@@ -324,7 +371,8 @@ function StageFields({
             <select
               value={v('meetingHappened', opp.meetingHappened)}
               onChange={(e) => set('meetingHappened', e.target.value)}
-              className="w-full rounded border px-2 py-1.5"
+              disabled={disabled}
+              className="w-full rounded border px-2 py-1.5 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <option value="">—</option>
               <option value="true">Sim</option>
@@ -342,7 +390,8 @@ function StageFields({
               rows={4}
               value={v('briefing', opp.briefing)}
               onChange={(e) => set('briefing', e.target.value)}
-              className="w-full rounded border px-2 py-1.5"
+              disabled={disabled}
+              className="w-full rounded border px-2 py-1.5 disabled:cursor-not-allowed disabled:opacity-60"
             />
           </label>
           <div className="grid grid-cols-2 gap-3">
@@ -353,7 +402,8 @@ function StageFields({
                 inputMode="decimal"
                 value={formatBRLInput(v('estimatedValue', opp.estimatedValue))}
                 onChange={(e) => set('estimatedValue', formatBRLInput(e.target.value))}
-                className="w-full rounded border px-2 py-1.5"
+                disabled={disabled}
+                className="w-full rounded border px-2 py-1.5 disabled:cursor-not-allowed disabled:opacity-60"
               />
             </label>
             <label>
@@ -362,7 +412,8 @@ function StageFields({
                 type="date"
                 value={v('expectedCloseDate', opp.expectedCloseDate)?.slice(0, 10)}
                 onChange={(e) => set('expectedCloseDate', e.target.value)}
-                className="w-full rounded border px-2 py-1.5"
+                disabled={disabled}
+                className="w-full rounded border px-2 py-1.5 disabled:cursor-not-allowed disabled:opacity-60"
               />
             </label>
           </div>
@@ -377,7 +428,8 @@ function StageFields({
               type="date"
               value={v('proposalPresentedAt', opp.proposalPresentedAt)?.slice(0, 10)}
               onChange={(e) => set('proposalPresentedAt', e.target.value)}
-              className="w-full rounded border px-2 py-1.5"
+              disabled={disabled}
+              className="w-full rounded border px-2 py-1.5 disabled:cursor-not-allowed disabled:opacity-60"
             />
           </label>
           <label>
@@ -386,7 +438,8 @@ function StageFields({
               type="date"
               value={v('decisionExpectedAt', opp.decisionExpectedAt)?.slice(0, 10)}
               onChange={(e) => set('decisionExpectedAt', e.target.value)}
-              className="w-full rounded border px-2 py-1.5"
+              disabled={disabled}
+              className="w-full rounded border px-2 py-1.5 disabled:cursor-not-allowed disabled:opacity-60"
             />
           </label>
         </div>
@@ -399,7 +452,8 @@ function StageFields({
             type="datetime-local"
             value={v('acceptedAt', opp.acceptedAt)}
             onChange={(e) => set('acceptedAt', e.target.value)}
-            className="w-full rounded border px-2 py-1.5"
+            disabled={disabled}
+            className="w-full rounded border px-2 py-1.5 disabled:cursor-not-allowed disabled:opacity-60"
           />
         </label>
       );

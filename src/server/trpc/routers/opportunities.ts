@@ -21,6 +21,7 @@ import {
   opportunityTeamMemberInput,
 } from '@/lib/validators/opportunity';
 import { zUuid } from '@/lib/validators';
+import { env } from '@/lib/env';
 import { Prisma, type UserRole } from '@prisma/client';
 
 const canRead = withPermission('opportunity:read');
@@ -172,10 +173,38 @@ export const opportunitiesRouter = router({
         owner: { select: { id: true, fullName: true, email: true } },
         team: { include: { user: { select: { id: true, fullName: true, email: true } } } },
         stageHistory: { orderBy: { at: 'desc' }, take: 50 },
+        // Sprint 15G.5 Fase 3a — estado de transferência ativo (P-87). O
+        // guard de write 2c usa `currentTransfer` como fonte da verdade;
+        // aqui expomos um resumo **flag-gated** que até o dono ANALISTA
+        // consegue ler (ele NÃO tem `opportunity:transfer`, então não pode
+        // chamar as queries do router de transferência).
+        currentTransfer: {
+          select: {
+            id: true,
+            status: true,
+            requestedById: true,
+            targetManagerId: true,
+            targetManager: { select: { fullName: true } },
+          },
+        },
       },
     });
     if (!opp) throw new TRPCError({ code: 'NOT_FOUND' });
-    return opp;
+
+    // T16 — o badge não mente no rollback: flag OFF → `activeTransfer` sempre
+    // null (opp editável, guard 2c inerte). Só um transfer PENDING congela a UI.
+    const activeTransfer =
+      env.OPPORTUNITY_TRANSFER_ENABLED &&
+      opp.currentTransfer &&
+      opp.currentTransfer.status === 'PENDING'
+        ? {
+            transferId: opp.currentTransfer.id,
+            toName: opp.currentTransfer.targetManager?.fullName ?? null,
+            requestedById: opp.currentTransfer.requestedById,
+          }
+        : null;
+
+    return { ...opp, activeTransfer };
   }),
 
   create: canCreate.input(opportunityCreateInput).mutation(async ({ input, ctx }) => {

@@ -50,7 +50,14 @@ const oppFixture = {
   decisionExpectedAt: null,
   acceptedAt: null,
   stageHistory: [],
+  activeTransfer: null as
+    | null
+    | { transferId: string; toName: string | null; requestedById: string },
 };
+
+// Fixture swappável — os testes de frozen (transferência pendente) trocam
+// `currentOpp` antes de renderizar; beforeEach reseta pra opp editável.
+let currentOpp: typeof oppFixture = oppFixture;
 
 vi.mock('@/lib/trpc/client', () => {
   const useQueryReturn = (data: unknown) => ({
@@ -73,9 +80,13 @@ vi.mock('@/lib/trpc/client', () => {
         opportunities: { byId: { invalidate: invalidateSpy } },
         tasks: { list: { invalidate: vi.fn() } },
         documents: { listByOpportunity: { invalidate: vi.fn() } },
+        opportunityTransfers: {
+          targetsForOpportunity: { invalidate: vi.fn() },
+          historyForOpportunity: { invalidate: vi.fn() },
+        },
       }),
       opportunities: {
-        byId: { useQuery: () => useQueryReturn(oppFixture) },
+        byId: { useQuery: () => useQueryReturn(currentOpp) },
         update: {
           useMutation: (opts: MutationOpts) => {
             captured.update = opts;
@@ -107,7 +118,20 @@ vi.mock('@/lib/trpc/client', () => {
         delete: { useMutation: noopMutation },
         updateStatus: { useMutation: noopMutation },
       },
-      users: { list: { useQuery: () => useQueryReturn([]) } },
+      users: {
+        list: { useQuery: () => useQueryReturn([]) },
+        me: { useQuery: () => useQueryReturn({ id: 'me-1', fullName: 'Fred', role: 'ADMIN' }) },
+      },
+      opportunityTransfers: {
+        targetsForOpportunity: {
+          useQuery: () => ({ data: [], error: null, isLoading: false }),
+        },
+        historyForOpportunity: {
+          useQuery: () => ({ data: [], error: null, isLoading: false }),
+        },
+        request: { useMutation: noopMutation },
+        cancel: { useMutation: noopMutation },
+      },
       documents: {
         listByOpportunity: { useQuery: () => useQueryReturn([]) },
         getUploadIntent: { useMutation: noopMutation },
@@ -138,6 +162,7 @@ beforeEach(() => {
   captured.cancel = null;
   invalidateSpy.mockClear();
   routerPush.mockClear();
+  currentOpp = oppFixture;
 });
 
 afterEach(() => {
@@ -305,5 +330,52 @@ describe('/pipeline/[id] page (P-54)', () => {
 
     expect(routerPush).toHaveBeenCalledWith('/pipeline');
     expect(invalidateSpy).toHaveBeenCalledWith({ id: 'opp-1' });
+  });
+});
+
+/**
+ * Sprint 15G.5 Fase 3a — read-only quando `activeTransfer != null`.
+ * O `me` do mock é `{ id: 'me-1' }`; frozen = transferência PENDING (byId
+ * flag-gated). Badge aparece, barra de estágio some, campos desabilitam;
+ * "Cancelar transferência" só quando `requestedById === me.id`.
+ */
+describe('/pipeline/[id] — transferência pendente (frozen)', () => {
+  const frozenBy = (requestedById: string) => ({
+    ...oppFixture,
+    activeTransfer: { transferId: 'tr-1', toName: 'Ana Gestora', requestedById },
+  });
+
+  function buttonTexts(): (string | null)[] {
+    return Array.from(container.querySelectorAll('button')).map((b) => b.textContent);
+  }
+
+  it('badge "Em transferência" aparece e a barra de avançar/cancelar-opp some', async () => {
+    currentOpp = frozenBy('me-1');
+    await render(<OpportunityDetailPage />);
+
+    expect(container.textContent).toContain('Em transferência para Ana Gestora');
+    expect(buttonTexts().some((t) => t?.includes('Avançar para'))).toBe(false);
+    expect(buttonTexts()).not.toContain('Cancelar oportunidade');
+  });
+
+  it('campos de estágio ficam desabilitados (read-only)', async () => {
+    currentOpp = frozenBy('me-1');
+    await render(<OpportunityDetailPage />);
+
+    const select = container.querySelector<HTMLSelectElement>('select');
+    expect(select).toBeTruthy();
+    expect(select!.disabled).toBe(true);
+  });
+
+  it('"Cancelar transferência" aparece quando sou o disparador', async () => {
+    currentOpp = frozenBy('me-1');
+    await render(<OpportunityDetailPage />);
+    expect(buttonTexts()).toContain('Cancelar transferência');
+  });
+
+  it('"Cancelar transferência" NÃO aparece quando não sou o disparador', async () => {
+    currentOpp = frozenBy('outro-usuario');
+    await render(<OpportunityDetailPage />);
+    expect(buttonTexts()).not.toContain('Cancelar transferência');
   });
 });

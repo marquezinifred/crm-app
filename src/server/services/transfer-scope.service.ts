@@ -104,6 +104,23 @@ export const TransferScopeService = {
   },
 
   /**
+   * Sprint 15G.5 Fase 3 — candidatos a novo owner de uma opp recebida pelo
+   * destinatário: a subárvore que ele mesmo gerencia. É EXATAMENTE o conjunto
+   * que `canReceiveAsNewOwner` valida (mesmo `getSubtreeMemberIds`), então o
+   * Select do modal de aceite (3b) nunca oferece alguém que o `approve`
+   * rejeitaria. Wrapper fino sobre o repo pra o router delegar só ao service
+   * (nunca importar `SalesUnitRepository` nem duplicar lógica ltree). O próprio
+   * destinatário vem incluído (ele é membro das unidades que gerencia — pode se
+   * auto-atribuir). Subárvore vazia → `[]` (não é erro).
+   */
+  async resolveNewOwnerCandidates(
+    targetManagerId: string,
+    tenantId: string,
+  ): Promise<string[]> {
+    return SalesUnitRepository.getSubtreeMemberIds(targetManagerId, tenantId);
+  },
+
+  /**
    * Valida o destino do disparo (usado pelo `request` — chip 2a): o
    * `targetManagerId` precisa ser um par imediato ou superior direto do caller
    * (∈ `resolveTransferTargets`). Fecha a regra §2.2 (nunca subordinado, nunca

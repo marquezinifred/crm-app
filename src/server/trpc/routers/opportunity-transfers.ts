@@ -556,4 +556,79 @@ export const opportunityTransfersRouter = router({
         orderBy: { requestedAt: 'desc' },
       });
     }),
+
+  // ================================================================
+  // queries de hidratação p/ os Selects da Fase 3 (read-only, sem audit)
+  // ================================================================
+
+  /**
+   * Fase 3a — popula o Select de destino do modal de disparo. Autoridade
+   * avaliada **por-opp** (T13): valida `canTransferOpportunity` (não decide
+   * por flag global), depois resolve os managers-alvo (pares imediatos +
+   * superior direto, T14) e os hidrata em `{ id, fullName, role }`. Ids que
+   * não hidratam (user inativo/soft-deleted) simplesmente não aparecem.
+   */
+  targetsForOpportunity: canTransfer
+    .input(z.object({ opportunityId: zUuid }))
+    .query(async ({ input, ctx }) => {
+      assertFeatureEnabled();
+
+      const ok = await TransferScopeService.canTransferOpportunity(
+        ctx.user.id,
+        input.opportunityId,
+        ctx.tenantId,
+      );
+      if (!ok) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: FORBIDDEN_MESSAGE,
+          cause: `targetsForOpportunity: user=${ctx.user.id} não pode transferir a opp ${input.opportunityId}`,
+        });
+      }
+
+      const ids = await TransferScopeService.resolveTransferTargets(
+        ctx.user.id,
+        ctx.tenantId,
+      );
+      if (ids.length === 0) return [];
+
+      return prisma.user.findMany({
+        where: {
+          id: { in: ids },
+          tenantId: ctx.tenantId,
+          deletedAt: null,
+          active: true,
+        },
+        select: { id: true, fullName: true, role: true },
+        orderBy: { fullName: 'asc' },
+      });
+    }),
+
+  /**
+   * Fase 3b — popula o Select de novo owner do modal de aceite. O caller é o
+   * destinatário decidindo a quem atribuir; os candidatos são a própria
+   * subárvore que ele gerencia — mesmo conjunto que o `approve` valida via
+   * `canReceiveAsNewOwner` (T10), então o Select nunca oferece alguém que o
+   * approve rejeitaria. Subárvore vazia → `[]` (não é erro).
+   */
+  newOwnerCandidates: canTransfer.query(async ({ ctx }) => {
+    assertFeatureEnabled();
+
+    const ids = await TransferScopeService.resolveNewOwnerCandidates(
+      ctx.user.id,
+      ctx.tenantId,
+    );
+    if (ids.length === 0) return [];
+
+    return prisma.user.findMany({
+      where: {
+        id: { in: ids },
+        tenantId: ctx.tenantId,
+        deletedAt: null,
+        active: true,
+      },
+      select: { id: true, fullName: true, role: true },
+      orderBy: { fullName: 'asc' },
+    });
+  }),
 });

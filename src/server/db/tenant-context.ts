@@ -20,6 +20,26 @@ export function getTenantContext(): TenantContext | undefined {
   return storage.getStore();
 }
 
+/**
+ * Sprint 15G.5 (T15/T19) — popula o `userId` do `TenantContext` já ativo.
+ *
+ * Necessário porque o route handler tRPC (`app/api/trpc/[trpc]/route.ts`)
+ * inicia `runWithTenant({ tenantId, userId: null, role })` — o User do
+ * banco só é resolvido depois, em `createContext`. O guard de transferência
+ * em `db/client.ts` lê `getTenantContext().userId` pra distinguir o
+ * disparador da transferência (pode escrever durante a pendência) do dono /
+ * terceiros (read-only). Sem popular aqui, `userId` ficaria `null` no path
+ * tRPC e o guard bypassaria TODA escrita humana (worker/sistema legítimo).
+ *
+ * No-op se não há store ativo. Não altera `tenantId` nem `role` — só o
+ * `userId`, e apenas quando `createContext` resolve um tenant user real
+ * (contexto de sistema/plataforma não passa por aqui).
+ */
+export function setContextUserId(userId: string | null): void {
+  const store = storage.getStore();
+  if (store) store.userId = userId;
+}
+
 export function getTenantId(): string | undefined {
   return storage.getStore()?.tenantId;
 }

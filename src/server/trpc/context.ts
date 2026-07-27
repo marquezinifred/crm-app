@@ -1,5 +1,6 @@
 import type { FetchCreateContextFnOptions } from '@trpc/server/adapters/fetch';
 import { prisma } from '@/server/db/client';
+import { setContextUserId } from '@/server/db/tenant-context';
 import type { User, UserRole, PlatformRole } from '@prisma/client';
 
 export interface Context {
@@ -61,6 +62,13 @@ export async function createContext({ req }: FetchCreateContextFnOptions): Promi
       LIMIT 1
     `;
     user = rows[0] ?? null;
+
+    // Sprint 15G.5 (T15) — propaga o userId resolvido pro AsyncLocalStorage
+    // que o route handler iniciou com userId=null. O guard de transferência
+    // (db/client.ts) precisa do ator pra distinguir disparador vs dono
+    // durante uma pendência. Como bônus, dá atribuição de actor ao audit()
+    // (que já lê ctx.userId — antes sempre null no path tRPC).
+    if (user) setContextUserId(user.id);
   }
 
   let platformUser: Context['platformUser'] = null;

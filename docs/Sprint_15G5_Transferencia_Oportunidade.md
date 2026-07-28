@@ -318,6 +318,21 @@ invariante read-only nem o backstop P-42. **R1 + R2 são gate obrigatório da Fa
   transações interativas (approve/reject/cancel/request/`proposals.addVersion`/
   `documents.create`) → +1 conexão mid-tx. OK com pool default; incluir no k6 da Fase 4.
 
+## 9.3. Débitos residuais da Fase 3 (QA Modo B — 2026-07-24)
+
+Levantados pelo QA de integração (`docs/qa-sessions/auto-report-2026-07-24-15g5-fase3.md`).
+Veredito 🟢 VERDE. Todos cosméticos/higiene — nenhum bloqueia rollout.
+
+- **P-101 · baixa.** Inconsistência `mutation.isLoading` (3a — `@deprecated` no
+  `@tanstack/query-core@4`) vs `mutation.isPending` (3b/3c). Ambos funcionam hoje
+  (coexistem no v4); padronizar em `.isPending` antes de um upgrade v5 (que remove
+  `isLoading`).
+- **P-102 · baixa.** Warning `act()` em `tests/component/outgoing-transfers.test.tsx`
+  (update de estado assíncrono fora de `act(...)`). Higiene de teste; não falha.
+- **P-103 · baixa/opcional.** Branch coverage parcial em `transferencias-recebidas/page.tsx`
+  (66,66% br — buckets de `expiryInfo`/`relativeTime`) e `TransferHistorySection.tsx`
+  (71,42% br — `reason`/`decisionReason`/`newOwner` opcionais). Caminhos não-críticos.
+
 ---
 
 ## 10. Referências

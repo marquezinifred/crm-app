@@ -133,7 +133,7 @@ const TRANSFER_GUARD_FORBIDDEN_MESSAGE = 'Seu perfil não tem acesso a esta oper
  * `env.OPPORTUNITY_TRANSFER_ENABLED` (env.ts parseia o mesmo process.env no
  * import; process.env não muda em runtime na app).
  */
-function isTransferGuardEnabled(): boolean {
+export function isTransferGuardEnabled(): boolean {
   const raw = process.env.OPPORTUNITY_TRANSFER_ENABLED;
   if (raw == null) return false;
   const s = raw.trim().toLowerCase();

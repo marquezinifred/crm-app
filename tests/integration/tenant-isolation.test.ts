@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 
 /**
  * Teste de isolamento de tenant — exige Postgres rodando.
@@ -47,11 +47,11 @@ describeIfDb('tenant isolation (integration)', () => {
 
   afterAll(async () => {
     if (prismaModule) {
-      await ctxModule.runAsSystem(() =>
-        prismaModule.prisma.tenant.deleteMany({
+      await ctxModule.runAsSystem(async () => {
+        await prismaModule.prisma.tenant.deleteMany({
           where: { slug: { in: ['iso-test-a', 'iso-test-b'] } },
-        }),
-      );
+        });
+      });
       await prismaModule.prisma.$disconnect();
     }
   });
@@ -71,20 +71,26 @@ describeIfDb('tenant isolation (integration)', () => {
     // Em runWithTenant(A), bob não deve aparecer
     const aResults = await ctxModule.runWithTenant(
       { tenantId: tenantA, userId: null, role: 'ADMIN' },
-      () => prismaModule.prisma.contact.findMany(),
+      async () => {
+        const rows = await prismaModule.prisma.contact.findMany();
+        return rows;
+      },
     );
     expect(aResults.some((c) => c.fullName === 'Bob from B')).toBe(false);
   });
 
   it('extension bloqueia write sem tenantId quando tentado em test mode', async () => {
-    const oldEnv = process.env.NODE_ENV;
-    Object.defineProperty(process.env, 'NODE_ENV', { value: 'test', configurable: true });
+    // vi.stubEnv força NODE_ENV='test' de forma tipada e restaura via
+    // unstubAllEnvs. Evita tanto o TypeError de Object.defineProperty (Node
+    // atual exige descriptor writable+enumerable) quanto o erro de tipo
+    // read-only da atribuição direta a `process.env.NODE_ENV`.
+    vi.stubEnv('NODE_ENV', 'test');
     try {
       await expect(
         prismaModule.prisma.contact.findMany(),
       ).rejects.toThrow(/tenant context/i);
     } finally {
-      Object.defineProperty(process.env, 'NODE_ENV', { value: oldEnv, configurable: true });
+      vi.unstubAllEnvs();
     }
   });
 });

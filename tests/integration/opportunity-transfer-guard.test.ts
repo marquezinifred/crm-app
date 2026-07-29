@@ -133,8 +133,17 @@ describeIfDb('Guard de transferência via extension real (T19)', () => {
     await prisma.$disconnect();
   });
 
+  // O callback DEVE aguardar (`await`) a chamada Prisma DENTRO do escopo de
+  // `runWithTenant`. Passar um thunk lazy (`() => prisma.x()`) devolve uma
+  // PrismaPromise não-aguardada: ela só executa no `await` externo, DEPOIS que
+  // `storage.run` já saiu do AsyncLocalStorage — o extension lê contexto vazio
+  // e o fail-closed do P-79 dispara. Aguardar aqui mantém o ALS ativo até a
+  // query rodar (mesmo padrão dos `beforeAll` que sempre funcionaram).
   const asUser = <T>(userId: string, fn: () => Promise<T>) =>
-    runWithTenant({ tenantId: tenant, userId, role: 'GESTOR' }, fn);
+    runWithTenant({ tenantId: tenant, userId, role: 'GESTOR' }, async () => {
+      const result = await fn();
+      return result;
+    });
 
   it('dono NÃO edita business field durante PENDING → ForbiddenError', async () => {
     await expect(
@@ -186,20 +195,21 @@ describeIfDb('Guard de transferência via extension real (T19)', () => {
   });
 
   it('worker (runAsSystem, userId null) CONSEGUE zerar currentTransferId — T19b', async () => {
-    const res = await runAsSystem(() =>
-      prisma.opportunity.updateMany({
+    const res = await runAsSystem(async () => {
+      const result = await prisma.opportunity.updateMany({
         where: { id: oppPending, currentTransferId: transferId },
         data: { currentTransferId: null },
-      }),
-    );
+      });
+      return result;
+    });
     expect(res.count).toBe(1);
     // Restaura.
-    await runAsSystem(() =>
-      prisma.opportunity.update({
+    await runAsSystem(async () => {
+      await prisma.opportunity.update({
         where: { id: oppPending },
         data: { currentTransferId: transferId },
-      }),
-    );
+      });
+    });
   });
 
   it('opp SEM transferência → dono edita livremente', async () => {
@@ -221,11 +231,11 @@ describeIfDb('Guard de transferência via extension real (T19)', () => {
       }),
     );
     expect(updated.currentTransferId).toBeNull();
-    await runAsSystem(() =>
-      prisma.opportunity.update({
+    await runAsSystem(async () => {
+      await prisma.opportunity.update({
         where: { id: oppPending },
         data: { currentTransferId: transferId },
-      }),
-    );
+      });
+    });
   });
 });

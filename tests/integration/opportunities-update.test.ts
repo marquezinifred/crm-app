@@ -168,11 +168,11 @@ describeIfDb('Opportunity.update via createCaller (P-42 + P-44)', () => {
       ].filter(Boolean) as string[],
     );
 
-    await ctxModule.runAsSystem(() =>
-      prismaModule.prisma.tenant.deleteMany({
+    await ctxModule.runAsSystem(async () => {
+      await prismaModule.prisma.tenant.deleteMany({
         where: { slug: { in: ['p42-p44-tenant-a', 'p42-p44-tenant-b'] } },
-      }),
-    );
+      });
+    });
 
     await prismaModule.prisma.$disconnect();
   });
@@ -258,11 +258,12 @@ describeIfDb('Opportunity.update via createCaller (P-42 + P-44)', () => {
     expect(created.clientCompanyId).toBe(companyA);
     expect(created.stage).toBe('PROSPECT');
 
-    const stageRow = await ctxModule.runAsSystem(() =>
-      prismaModule.prisma.opportunityStageHistory.findFirst({
+    const stageRow = await ctxModule.runAsSystem(async () => {
+      const row = await prismaModule.prisma.opportunityStageHistory.findFirst({
         where: { opportunityId: created.id },
-      }),
-    );
+      });
+      return row;
+    });
     expect(stageRow?.tenantId).toBe(tenantA);
     expect(stageRow?.toStage).toBe('PROSPECT');
   });
@@ -270,8 +271,8 @@ describeIfDb('Opportunity.update via createCaller (P-42 + P-44)', () => {
   it('caller: ANALISTA sem opportunity:read_others só enxerga próprias opps no list', async () => {
     // Cria uma opp de propriedade do ANALISTA para garantir contraste com
     // as seed (oppA + a criada no teste anterior por ADMIN).
-    const ownOpp = await ctxModule.runAsSystem(() =>
-      prismaModule.prisma.opportunity.create({
+    const ownOpp = await ctxModule.runAsSystem(async () => {
+      const opp = await prismaModule.prisma.opportunity.create({
         data: {
           tenantId: tenantA,
           title: 'Opp própria do ANALISTA',
@@ -281,8 +282,9 @@ describeIfDb('Opportunity.update via createCaller (P-42 + P-44)', () => {
           stage: 'LEAD',
           status: 'ACTIVE',
         } as never,
-      }),
-    );
+      });
+      return opp;
+    });
 
     const result = await analistaA.run(() =>
       analistaA.caller.opportunities.list({ page: 1, pageSize: 50 }),
@@ -311,16 +313,17 @@ describeIfDb('Opportunity.update via createCaller (P-42 + P-44)', () => {
       }),
     );
 
-    const auditRow = await ctxModule.runAsSystem(() =>
-      prismaModule.prisma.auditLog.findFirst({
+    const auditRow = await ctxModule.runAsSystem(async () => {
+      const row = await prismaModule.prisma.auditLog.findFirst({
         where: {
           recordId: oppA,
           action: 'opportunity.update',
           tenantId: tenantA,
         },
         orderBy: { at: 'desc' },
-      }),
-    );
+      });
+      return row;
+    });
 
     expect(auditRow).not.toBeNull();
     expect(auditRow?.tenantId).toBe(tenantA);

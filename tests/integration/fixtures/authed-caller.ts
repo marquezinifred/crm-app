@@ -66,8 +66,11 @@ export async function buildAuthedCaller(
   const emailPrefix = opts.emailPrefix ?? 'authed';
   const email = `${emailPrefix}+${suffix}@p44.test`;
 
-  const user = await runAsSystem(() =>
-    prisma.user.create({
+  // Aguardar (`await`) DENTRO do `runAsSystem` — thunk lazy (`() => prisma.x()`)
+  // executaria a PrismaPromise só no `await` externo, fora do AsyncLocalStorage,
+  // disparando o fail-closed do P-79 em `db/client.ts`.
+  const user = await runAsSystem(async () => {
+    const created = await prisma.user.create({
       data: {
         tenantId: opts.tenantId,
         email,
@@ -76,12 +79,18 @@ export async function buildAuthedCaller(
         partnerCompanyId: opts.partnerCompanyId ?? null,
         active: true,
       } as never,
-    }),
-  );
+    });
+    return created;
+  });
 
   // Popula cachedPermissions antes de qualquer chamada tRPC pra evitar
   // cache-miss no primeiro `withPermission` (que popularia lazy).
-  await computeAndCacheUserPermissions(user.id);
+  // Precisa de contexto de tenant ativo: internamente faz `prisma.user.findUnique`
+  // + update, que sem contexto disparam o fail-closed do P-79 em `db/client.ts`.
+  // runAsSystem satisfaz o choke point (bypass via sentinel de sistema).
+  await runAsSystem(async () => {
+    await computeAndCacheUserPermissions(user.id);
+  });
 
   const ctx: Context = {
     req: new Request('http://localhost/test/p44'),
@@ -105,7 +114,10 @@ export async function buildAuthedCaller(
   const run = <T>(fn: () => Promise<T>): Promise<T> =>
     runWithTenant(
       { tenantId: opts.tenantId, userId: user.id, role: opts.role },
-      fn,
+      async () => {
+        const result = await fn();
+        return result;
+      },
     );
 
   return {
@@ -128,7 +140,7 @@ export async function cleanupTestUsers(userIds: string[]): Promise<void> {
   if (userIds.length === 0) return;
   const { prisma } = await import('@/server/db/client');
   const { runAsSystem } = await import('@/server/db/tenant-context');
-  await runAsSystem(() =>
-    prisma.user.deleteMany({ where: { id: { in: userIds } } }),
-  );
+  await runAsSystem(async () => {
+    await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+  });
 }

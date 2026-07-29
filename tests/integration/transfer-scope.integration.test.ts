@@ -113,17 +113,18 @@ describeIfDb('SalesUnitRepository.resolveTransferTargets (integração ltree)', 
   afterAll(async () => {
     if (!TEST_DB || !prismaModule) return;
     // CASCADE do tenant remove units/members/users seedados.
-    await ctxModule.runAsSystem(() =>
-      prismaModule.prisma.tenant.deleteMany({ where: { slug: SLUG } }),
-    );
+    await ctxModule.runAsSystem(async () => {
+      await prismaModule.prisma.tenant.deleteMany({ where: { slug: SLUG } });
+    });
     await prismaModule.prisma.$disconnect();
   });
 
   it('une irmãs + pai das DUAS subárvores geridas (tie-break multi-membership T14)', async () => {
     const { SalesUnitRepository } = repoModule;
-    const targets = await ctxModule.runAsSystem(() =>
-      SalesUnitRepository.resolveTransferTargets(ids.caller, tenantId),
-    );
+    const targets = await ctxModule.runAsSystem(async () => {
+      const result = await SalesUnitRepository.resolveTransferTargets(ids.caller, tenantId);
+      return result;
+    });
 
     // {managerB1, managerR1} vêm de A1; {managerB2, managerR2} vêm de A2.
     expect(new Set(targets)).toEqual(
@@ -133,9 +134,10 @@ describeIfDb('SalesUnitRepository.resolveTransferTargets (integração ltree)', 
 
   it('exclui o próprio caller, subordinados (MEMBER) e managers inativos', async () => {
     const { SalesUnitRepository } = repoModule;
-    const targets = await ctxModule.runAsSystem(() =>
-      SalesUnitRepository.resolveTransferTargets(ids.caller, tenantId),
-    );
+    const targets = await ctxModule.runAsSystem(async () => {
+      const result = await SalesUnitRepository.resolveTransferTargets(ids.caller, tenantId);
+      return result;
+    });
 
     expect(targets).not.toContain(ids.caller); // não é alvo de si mesmo
     expect(targets).not.toContain(ids.analistaA1); // subordinado ≠ transferência
@@ -145,9 +147,10 @@ describeIfDb('SalesUnitRepository.resolveTransferTargets (integração ltree)', 
   it('user sem membership MANAGER → sem targets (autoridade é estrutural, T13)', async () => {
     const { SalesUnitRepository } = repoModule;
     // analistaA1 é MEMBER, nunca MANAGER → não dispara, sem alvos.
-    const targets = await ctxModule.runAsSystem(() =>
-      SalesUnitRepository.resolveTransferTargets(ids.analistaA1, tenantId),
-    );
+    const targets = await ctxModule.runAsSystem(async () => {
+      const result = await SalesUnitRepository.resolveTransferTargets(ids.analistaA1, tenantId);
+      return result;
+    });
     expect(targets).toEqual([]);
   });
 });

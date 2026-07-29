@@ -15,7 +15,8 @@ Spec: `docs/Sprint_15G5_Transferencia_Oportunidade.md`.
 | Deploy código (`dpl_7yazhGtCiinu9TfDvVhA8bMA4TUY`, HEAD `b7e4a43`) | ✅ **READY**, aliased `crm-app-pi-eight.vercel.app` |
 | `OPPORTUNITY_TRANSFER_ENABLED` em prod | **AUSENTE** → default `false` → feature inerte |
 | Smoke `/api/v1/health` | ✅ `db: ok` (warm ~124ms) |
-| **Flag flip** (`=true`) | ⏳ **PENDENTE** — gated por R1 + R2 (ver abaixo) |
+| **R1 + R2** (gates de teste do flip) | ✅ **FECHADOS** (2026-07-29) — ver abaixo |
+| **Flag flip** (`=true`) | ⏳ **PENDENTE** — falta só P-36 (worker, soft) + o flip |
 
 O código está 100% em prod, **dormente**: guard de write inerte (lê a flag e
 retorna cedo), procedures retornam FORBIDDEN, badge não renderiza (`activeTransfer`
@@ -58,18 +59,21 @@ aplicar no DB errado.
 
 ## Flag flip (ativação) — PENDENTE, com 2 gates
 
-Antes de setar `OPPORTUNITY_TRANSFER_ENABLED=true` em prod, fechar os dois débitos
-do QA Modo A do guard 2c (spec §9.2):
+Os dois gates de teste do QA Modo A do guard 2c (spec §9.2) estão **fechados**:
 
-- **R1 · GATE** — rodar o integration test do guard contra um Postgres real
-  (o runtime da extension ficou SKIPPED por falta de `DATABASE_URL_TEST`):
+- ✅ **R1** — integration do guard contra Postgres real (branch Neon `r1-15g5-test`):
+  **7/7 verde** (2026-07-29, commit `37c40eb`). Provou anti-recursão + carve-outs
+  T19 no runtime. Fechou de quebra o **P-104** (harness de integração: thunk lazy
+  perdia o AsyncLocalStorage; fix em testes/fixtures, P-79 intocado). Re-rodar:
   ```bash
-  DATABASE_URL_TEST=<neon-branch-de-teste> npx vitest run tests/integration/opportunity-transfer-guard.test.ts
+  # com .env.test apontando pro branch Neon de teste:
+  npx vitest run tests/integration/opportunity-transfer-guard.test.ts
   ```
-  Esperado: 7/7 pass (dono bloqueado, disparador passa, approve/reject carve-out,
-  worker `runAsSystem`, opp livre). Prova anti-recursão + carve-outs T19 no runtime.
-- **R2 · GATE** — teste executável do kill-switch OFF (`isTransferGuardEnabled`).
-  Fechado pelo chip `test(15g5): R2 …` (parse literal, P-60). Confirmar verde.
+- ✅ **R2** — kill-switch OFF executável (`isTransferGuardEnabled`, parse literal
+  P-60). Commit `e5da586`, verde.
+
+**Falta só P-36** (worker Railway) pro timeout automático — **não bloqueia** o flip
+(sem ele, PENDING vencidas se resolvem manualmente).
 
 ### Procedimento do flip (quando R1+R2 verdes)
 

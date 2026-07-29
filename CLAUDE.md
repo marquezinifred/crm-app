@@ -88,25 +88,33 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 >  - ✅ Código deployado prod (`dpl_7yazhG…`, HEAD `b7e4a43`, flag OFF). Feature
 >    **inerte** em prod. Smoke health verde.
 >  - ✅ **R2** (kill-switch OFF executável, `e5da586`) — gate fechado.
->  - ❌ **R1** (integration runtime do guard) — **BLOQUEADO**: ao rodar os
->    integration tests contra DB real (branch Neon efêmero) pela 1ª vez no projeto,
->    TODA a suíte de integração falha com "outside tenant context" (fail-closed
->    P-79). Não é bug do guard/15G.5 — é o **harness de integração que nunca rodou**
->    (sempre skipado por falta de `DATABASE_URL_TEST`); suspeita de dupla instância
->    do AsyncLocalStorage (client.ts importa tenant-context por caminho relativo,
->    testes por alias `@/`). Chip de fix em andamento. **P-36** (worker Railway)
->    também pendente pro timeout automático.
+>  - ✅ **R1** (integration runtime do guard, `37c40eb`) — **FECHADO** em 2026-07-29.
+>    Rodado contra DB real (branch Neon efêmero `r1-15g5-test`): **7/7 verde** —
+>    carve-outs T19 provadas no runtime (dono bloqueado, disparador/worker/approve/
+>    reject liberados, anti-recursão, ForbiddenError→FORBIDDEN). **P-104 resolvido
+>    de quebra:** a 1ª execução dos integration tests contra DB revelou que TODA a
+>    suíte (incl. `tenant-isolation` do Sprint 1) falhava com "outside tenant
+>    context" — causa raiz **thunk lazy** (`() => prisma.x()` avaliado fora do
+>    escopo do `runWithTenant`, perdendo o ALS; ver [[als-lazy-thunk-fail-closed]]),
+>    NÃO relativo-vs-alias. Fix 100% em testes/fixtures — **P-79 e client.ts
+>    intocados**. Suíte de integração inteira verde (23 passed / 5 skipped).
 >
-> **Flag flip (ligar a feature) PENDENTE** — gated por R1 (harness) + P-36
-> (worker). Procedimento em `ROLLOUT_Sprint_15G5_Prod.md`. Prod seguro/inerte
-> enquanto isso.
+> **Flag flip (ligar a feature) — R1+R2 verdes; falta só P-36** (worker Railway,
+> pro timeout automático — **não bloqueia** o flip; sem ele, PENDING vencidas se
+> resolvem manualmente). Procedimento em `ROLLOUT_Sprint_15G5_Prod.md`: setar
+> `OPPORTUNITY_TRANSFER_ENABLED=true` + redeploy + smoke autenticado. Prod
+> seguro/inerte enquanto isso.
+>
+> **Baseline pós-R1/R2:** **1463 passing / 0 / 185 skipped** sem `DATABASE_URL_TEST`
+> (CI/dev normal — integração skipa); com DB de teste a integração RODA e passa.
 >
 > **Débitos abertos do sprint:** P-100 (TIMED_OUT duplicado worker×service, baixa),
 > P-101/102/103 (cosméticos Fase 3: isLoading vs isPending, act() warning, branch
-> coverage), R3–R7 (follow-ups do guard 2c), **P-104** (harness de integração
-> quebrado — afeta suíte inteira, não só 15G.5). Detalhes em spec §9.1/§9.2/§9.3.
+> coverage), R3–R7 (follow-ups do guard 2c). **P-104 fechado** (harness). Detalhes
+> em spec §9.1/§9.2/§9.3.
 >
-> 🎉 **15G.5 código completo.** Falta fechar R1 + P-36 pra ligar a feature em prod.
+> 🎉 **15G.5 código completo, R1+R2 verdes, em prod inerte.** Falta só P-36
+> (worker) + o flag flip pra ligar a feature em prod.
 
 > **Sprint 15G — Estrutura Comercial e Visibilidade Hierárquica:
 > ✅ CONCLUÍDO em 2026-07-08** (aguarda rollout prod)

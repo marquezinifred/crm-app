@@ -11,6 +11,103 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 ## Sprint atual
 
+> **Sprint 15G.5 — Workflow de Transferência de Oportunidade (P-87):
+> ✅ CÓDIGO COMPLETO + EM PROD (flag OFF) em 2026-07-29.**
+> Aguarda 2 gates (R1 + P-36) antes do flag flip.
+>
+> Spec: `docs/Sprint_15G5_Transferencia_Oportunidade.md` (emendas T1–T19,
+> aprovadas PO/Fred). Rollout: `docs/ROLLOUT_Sprint_15G5_Prod.md`.
+>
+> **Regra de negócio:** ancestor da estrutura comercial (15G) dispara a
+> transferência de uma opp → destino é par imediato (unidade-irmã) ou superior
+> direto (T14, derivação ltree via `parent_id`) → destinatário aceita e atribui
+> a um analista da PRÓPRIA subárvore (T10 anti-escalada) → durante a pendência o
+> dono vê **read-only** (guard) → rejeição/timeout/cancelamento devolve pro
+> disparador. Autoridade é **estrutural** (`sales_unit_members.role` MANAGER +
+> ltree), NUNCA `users.role` (T13).
+>
+> **Kill-switch:** `OPPORTUNITY_TRANSFER_ENABLED` (default `false`, `envBoolean`).
+> OFF → tudo inerte (guard, procedures, badge). Rollback = flag OFF.
+>
+> **Entregue em 4 fases (11 chips + 4 QAs em 3 dias):**
+>
+> **Fase 1 — Fundação** (`1a7d7a3` + migration):
+>  - Migration `0032_opportunity_transfers` (arquivo único, T11): enum
+>    `TransferStatus`, tabela `opportunity_transfers` + RLS + partial UNIQUE
+>    `WHERE status='PENDING'` (T1: 1 pendente por opp), coluna
+>    `opportunities.current_transfer_id`, `tenant_settings.transfer_timeout_hours`.
+>  - `permissions-catalog.ts` +`opportunity:transfer` (65→66). `rbac.ts`:
+>    ADMIN/DIRETOR_C/DIRETOR_O/GESTOR têm; DIRETOR_F/ANALISTA/PARCEIRO não.
+>  - `TransferScopeService` (funções puras) — `canTransferOpportunity` (por-opp),
+>    `resolveTransferTargets` (T14), `resolveNewOwnerCandidates`/`canReceiveAsNewOwner`
+>    (subárvore, T10). `SalesUnitRepository.resolveTransferTargets` ($queryRaw ltree).
+>  - QA Modo B verde: baseline 1264.
+>
+> **Fase 2 — Backend** (`de70f0e` 2a + `1d88447` 2b + `3c8c60b`→`ecc1c97` 2c):
+>  - **2a** router `opportunityTransfers` (9 procedures): request/cancel/approve/
+>    reject/pendingForMe/myOutgoing/historyForOpportunity + (Fase 3-backend)
+>    targetsForOpportunity/newOwnerCandidates. Todas gated `withPermission
+>    ('opportunity:transfer')` + kill-switch `assertFeatureEnabled()` + cross-tenant
+>    explícito + audit `tenantIdOverride`. T17: approve troca owner via audit,
+>    NUNCA `stageHistory`. `transfer-notification.service.ts` (T5 best-effort).
+>  - **2b** worker `opportunity-transfer-timeout` (expira PENDING vencidas,
+>    idempotente `updateMany WHERE PENDING`, no-op sob flag OFF, best-effort por
+>    tenant) + 7 templates de e-mail/push.
+>  - **2c (Modo A — módulo core)** guard de write na **Prisma extension**
+>    (`db/client.ts`, choke point / área P-42). Bloqueia writes em
+>    opportunity/proposal/activity/task/document quando a opp tem transfer PENDING
+>    e o ator ≠ disparador. **Carve-outs T19** (obrigatórias): sistema/worker
+>    (userId null) → libera; payload zera `currentTransferId` (máquina de estado
+>    approve/reject/cancel) → libera; disparador → libera. Anti-recursão via `base`
+>    (client não-estendido); cross-tenant no lookup; `ForbiddenError`→FORBIDDEN
+>    sem vazar cause (P-98). `setContextUserId` novo popula `userId` no ALS no path
+>    tRPC. **P-42 preservado byte-a-byte.**
+>  - QAs: Modo B 2a+2b (`a62809c` 🟢) + **Modo A 2c** (`cd813ab` 🟢, adversarial
+>    na branch antes do merge). P-99 (`6bf74e1`) cobre notification service.
+>
+> **Fase 3 — Frontend** (`b950f34` 3c + `73e8cf3` 3b + `6ef77e5` 3a):
+>  - **3a** `/pipeline/[id]`: botão "Transferir responsabilidade" (só se
+>    `targetsForOpportunity` retorna targets — por-opp), modal de disparo, badge
+>    "Em transferência" + read-only do dono, "Cancelar transferência", aba
+>    Histórico. Estendeu `opportunities.byId` com `activeTransfer` **flag-gated**
+>    (T16 — o dono ANALISTA não tem `opportunity:transfer`, então o sinal vem pelo
+>    byId, e com flag OFF é sempre null → badge não mente no rollback).
+>  - **3b** `/inbox/transferencias-recebidas`: fila do destinatário, aceitar
+>    (Select newOwner da subárvore) + rejeitar. Dono da nav: Sidebar (2 itens
+>    gated) + sino no Topbar.
+>  - **3c** `/pipeline/transferencias-em-andamento`: acompanhamento do disparador
+>    (myOutgoing + filtro status + cancelar).
+>  - Padrões: toast + `friendlyTrpcError` + AlertDialog + ErrorState.
+>  - QA Modo B Fase 3 verde (`85c2656` 🟢). Baseline **1449 passing / 0 / 185**
+>    (integration skipada sem DB). type-check zero, lint zero.
+>
+> **Fase 4 — Rollout (parcial):**
+>  - ✅ Migration 0032 aplicada em `production-live` (ordem crítica: migration
+>    ANTES do código — o `include: currentTransfer` no byId é INCONDICIONAL, exige
+>    o schema mesmo com flag OFF; ver [[migration-before-code-deploy]]).
+>  - ✅ Código deployado prod (`dpl_7yazhG…`, HEAD `b7e4a43`, flag OFF). Feature
+>    **inerte** em prod. Smoke health verde.
+>  - ✅ **R2** (kill-switch OFF executável, `e5da586`) — gate fechado.
+>  - ❌ **R1** (integration runtime do guard) — **BLOQUEADO**: ao rodar os
+>    integration tests contra DB real (branch Neon efêmero) pela 1ª vez no projeto,
+>    TODA a suíte de integração falha com "outside tenant context" (fail-closed
+>    P-79). Não é bug do guard/15G.5 — é o **harness de integração que nunca rodou**
+>    (sempre skipado por falta de `DATABASE_URL_TEST`); suspeita de dupla instância
+>    do AsyncLocalStorage (client.ts importa tenant-context por caminho relativo,
+>    testes por alias `@/`). Chip de fix em andamento. **P-36** (worker Railway)
+>    também pendente pro timeout automático.
+>
+> **Flag flip (ligar a feature) PENDENTE** — gated por R1 (harness) + P-36
+> (worker). Procedimento em `ROLLOUT_Sprint_15G5_Prod.md`. Prod seguro/inerte
+> enquanto isso.
+>
+> **Débitos abertos do sprint:** P-100 (TIMED_OUT duplicado worker×service, baixa),
+> P-101/102/103 (cosméticos Fase 3: isLoading vs isPending, act() warning, branch
+> coverage), R3–R7 (follow-ups do guard 2c), **P-104** (harness de integração
+> quebrado — afeta suíte inteira, não só 15G.5). Detalhes em spec §9.1/§9.2/§9.3.
+>
+> 🎉 **15G.5 código completo.** Falta fechar R1 + P-36 pra ligar a feature em prod.
+
 > **Sprint 15G — Estrutura Comercial e Visibilidade Hierárquica:
 > ✅ CONCLUÍDO em 2026-07-08** (aguarda rollout prod)
 >

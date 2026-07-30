@@ -36,7 +36,20 @@ migration quebraria todo `/pipeline/[id]` em prod (relation/coluna inexistente).
 1. `prisma migrate deploy` → aplica `0032` no `production-live`.
 2. `vercel --prod` → deploy do código (flag OFF).
 3. Smoke `/api/v1/health` (tolerar 1ª falha por cold-start do Neon; re-testar).
-4. [depois] Flip da flag — **gated por R1/R2**.
+4. **`npm run rbac:backfill-cache`** → recomputa `cached_permissions` de todos os
+   users ativos. **OBRIGATÓRIO** porque a 0032 adiciona a permission nova
+   `opportunity:transfer` ao catálogo/role-defaults; sem o backfill, o cache
+   fica stale e `withPermission('opportunity:transfer')` **FORBID todo mundo**
+   (ADMIN/DIRETOR/GESTOR inclusive) — a nav aparece (gate client-side síncrono via
+   role-default) mas o servidor nega (gate async lê o cache). Ver
+   [[rbac-granular-pattern]] (backfill obrigatório pós-migration de permission).
+5. [depois] Flip da flag — **gated por R1/R2**.
+
+> ⚠️ **Lição do rollout (2026-07-30):** o passo 4 foi **esquecido** no primeiro
+> rollout. O smoke autenticado pegou: `/inbox/transferencias-recebidas` dava
+> "Seu perfil não tem acesso" mesmo pro DIRETOR_COMERCIAL. Rodar o backfill
+> (`37 users, 37 sucesso`) corrigiu na hora. Toda migration que adiciona
+> permission ao catálogo exige este passo.
 
 ### Comando prod-safe da migration (NUNCA imprimir o secret)
 

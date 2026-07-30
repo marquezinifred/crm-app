@@ -12,8 +12,8 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 ## Sprint atual
 
 > **Sprint 15G.5 — Workflow de Transferência de Oportunidade (P-87):
-> ✅ CÓDIGO COMPLETO + EM PROD (flag OFF) em 2026-07-29.**
-> Aguarda 2 gates (R1 + P-36) antes do flag flip.
+> ✅ ENTREGUE e LIGADO em prod em 2026-07-30** (flag ON). R1+R2 verdes.
+> Pendente: smoke autenticado (Fred) + worker P-36 (timeout automático).
 >
 > Spec: `docs/Sprint_15G5_Transferencia_Oportunidade.md` (emendas T1–T19,
 > aprovadas PO/Fred). Rollout: `docs/ROLLOUT_Sprint_15G5_Prod.md`.
@@ -99,22 +99,23 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 >    NÃO relativo-vs-alias. Fix 100% em testes/fixtures — **P-79 e client.ts
 >    intocados**. Suíte de integração inteira verde (23 passed / 5 skipped).
 >
-> **Flag flip (ligar a feature) — R1+R2 verdes; falta só P-36** (worker Railway,
-> pro timeout automático — **não bloqueia** o flip; sem ele, PENDING vencidas se
-> resolvem manualmente). Procedimento em `ROLLOUT_Sprint_15G5_Prod.md`: setar
-> `OPPORTUNITY_TRANSFER_ENABLED=true` + redeploy + smoke autenticado. Prod
-> seguro/inerte enquanto isso.
+> **✅ Flag flip FEITO em 2026-07-30** — `OPPORTUNITY_TRANSFER_ENABLED=true` em
+> Production + redeploy (`dpl_3it9WSic…`, `crm-jm1oyo0bx`) + health verde. **Feature
+> LIGADA em prod.** Guard 2c ativo, telas/botões visíveis pra quem tem
+> `opportunity:transfer`. Rollback = flag OFF. Pendente: **smoke autenticado**
+> (Fred, ponta a ponta) + monitorar `audit_logs`/Sentry 24-48h.
 >
 > **Baseline pós-R1/R2:** **1463 passing / 0 / 185 skipped** sem `DATABASE_URL_TEST`
 > (CI/dev normal — integração skipa); com DB de teste a integração RODA e passa.
 >
 > **Débitos abertos do sprint:** P-100 (TIMED_OUT duplicado worker×service, baixa),
 > P-101/102/103 (cosméticos Fase 3: isLoading vs isPending, act() warning, branch
-> coverage), R3–R7 (follow-ups do guard 2c). **P-104 fechado** (harness). Detalhes
-> em spec §9.1/§9.2/§9.3.
+> coverage), R3–R7 (follow-ups do guard 2c), **P-36** (worker Railway — timeout
+> automático; sem ele PENDING vencidas se resolvem manual). **P-104 fechado**
+> (harness). Detalhes em spec §9.1/§9.2/§9.3.
 >
-> 🎉 **15G.5 código completo, R1+R2 verdes, em prod inerte.** Falta só P-36
-> (worker) + o flag flip pra ligar a feature em prod.
+> 🎉 **15G.5 ENTREGUE e LIGADO em prod (2026-07-30).** Falta só o smoke autenticado
+> do Fred + subir o worker P-36 pro timeout automático.
 
 > **Sprint 15G — Estrutura Comercial e Visibilidade Hierárquica:
 > ✅ CONCLUÍDO em 2026-07-08** (aguarda rollout prod)

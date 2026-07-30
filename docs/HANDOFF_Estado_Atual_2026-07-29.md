@@ -116,3 +116,16 @@ npx vitest run tests/integration/opportunity-transfer-guard.test.ts
 **Fim 2026-07-29.** 15G.5 código completo + em prod inerte. **R1 + R2 fechados**
 (gates de teste verdes). Ligar a feature depende só de P-36 (worker, pro timeout)
 + o flag flip. Prod seguro com flag OFF.
+
+---
+
+## Adendo 2026-07-30 — 🎉 FEATURE LIGADA EM PROD
+
+- **Flag flip executado:** `OPPORTUNITY_TRANSFER_ENABLED=true` (Production) +
+  redeploy `dpl_3it9WSicGfypbjZMpaufdHsatWzY` (`crm-jm1oyo0bx`, aliased). Health
+  db ok (122ms). Feature de transferência **ativa** — guard 2c ligado, nav/botões
+  visíveis pra quem tem `opportunity:transfer`. Rollback = flag OFF + redeploy.
+- **Pendente:** (1) **smoke autenticado** ponta a ponta (Fred logado: disparar →
+  aceitar com newOwner → read-only do dono → rejeitar/cancelar); (2) **P-36**
+  (worker Railway) pro timeout automático; (3) monitorar `audit_logs`
+  (`opportunity.owner_transferred`) + Sentry 24-48h.

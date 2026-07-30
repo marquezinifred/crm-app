@@ -16,7 +16,7 @@ Spec: `docs/Sprint_15G5_Transferencia_Oportunidade.md`.
 | `OPPORTUNITY_TRANSFER_ENABLED` em prod | **AUSENTE** → default `false` → feature inerte |
 | Smoke `/api/v1/health` | ✅ `db: ok` (warm ~124ms) |
 | **R1 + R2** (gates de teste do flip) | ✅ **FECHADOS** (2026-07-29) — ver abaixo |
-| **Flag flip** (`=true`) | ⏳ **PENDENTE** — falta só P-36 (worker, soft) + o flip |
+| **Flag flip** (`=true`) | ✅ **FEITO 2026-07-30** — `dpl_3it9WSic…`, health verde. Feature LIGADA. Pendente: smoke autenticado + P-36 (worker) |
 
 O código está 100% em prod, **dormente**: guard de write inerte (lê a flag e
 retorna cedo), procedures retornam FORBIDDEN, badge não renderiza (`activeTransfer`

@@ -333,6 +333,34 @@ Veredito 🟢 VERDE. Todos cosméticos/higiene — nenhum bloqueia rollout.
   (66,66% br — buckets de `expiryInfo`/`relativeTime`) e `TransferHistorySection.tsx`
   (71,42% br — `reason`/`decisionReason`/`newOwner` opcionais). Caminhos não-críticos.
 
+## 9.4. Débitos do smoke autenticado em prod (2026-07-30)
+
+Achados pelo smoke ponta a ponta do Fred + gestão em produção (estrutura de teste
+criada no tenant `marquezini`).
+
+- **P-105 · média · defeito real.** O guard read-only (2c) bloqueia o dono durante
+  uma transferência PENDING, mas o `ForbiddenError` lançado **dentro da Prisma
+  extension** (em `opportunities.update`) sobe como **`INTERNAL_SERVER_ERROR` (500)**
+  em vez de **`FORBIDDEN` (403)**. O Prisma embrulha o erro lançado no
+  `$allOperations`, então o `runMapErrors` (trpc.ts) não reconhece o
+  `instanceof ForbiddenError` → cai no re-throw genérico → 500. A **mensagem**
+  pro cliente está correta (P-98 "Seu perfil não tem acesso a esta operação."), só
+  o **código HTTP** está errado (+ vira ruído no Sentry, que reporta 500s).
+  **O R1 não pegou** porque o teste do guard usa `.rejects.toThrow(MSG)` (checa a
+  mensagem, não o código). Impacto de usuário baixo (a UI do 3a já desabilita a
+  edição do dono; o guard é backstop). **Fix sugerido:** no `runMapErrors`,
+  desembrulhar o erro do Prisma (checar `err.cause instanceof ForbiddenError` além
+  do `err instanceof`), OU o guard lançar de um jeito que sobreviva ao wrap.
+  Adicionar teste que assevera **code === 'FORBIDDEN'** (não só a mensagem).
+  Verificado ao vivo em prod via `createCaller`.
+- **Positivos validados ao vivo:** T13 (botão só aparece com autoridade estrutural),
+  T14 (destino inválido → FORBIDDEN), T10 (newOwner fora da subárvore → FORBIDDEN),
+  não-destinatário aprova → FORBIDDEN, T1 dupla transferência → CONFLICT, cancel
+  devolve owner + limpa flag. Todas as mensagens corretas.
+- **Nota operacional — `vercel env add` via CLI:** ver memory
+  [[vercel-env-add-cli-empty]]. Setar flag booleana pelo dashboard, não pelo CLI
+  piped neste ambiente (grava vazio).
+
 ---
 
 ## 10. Referências

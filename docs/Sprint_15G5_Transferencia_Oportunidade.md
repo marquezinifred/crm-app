@@ -360,6 +360,18 @@ criada no tenant `marquezini`).
 - **Nota operacional — `vercel env add` via CLI:** ver memory
   [[vercel-env-add-cli-empty]]. Setar flag booleana pelo dashboard, não pelo CLI
   piped neste ambiente (grava vazio).
+- **P-106 · baixa/média · robustez (achado 2026-08-01).** O app **trava inteiro**
+  quando `navigator.onLine` reporta `false` — mesmo com internet real. Reproduzido
+  em prod: banner "Sem conexão" (OfflineBanner, Sprint 14.5) + todas as queries
+  eternamente "Carregando…" (React Query padrão `networkMode: 'online'` **pausa**
+  queries quando offline), em DOIS navegadores na mesma máquina, enquanto
+  `curl`/chat tinham internet. Causa raiz do trigger é externa (macOS reportando
+  falso-offline pro `navigator.onLine`, que a própria spec avisa ser não-confiável),
+  mas o app é **frágil demais** a esse sinal. **Fix sugerido:** detecção de offline
+  por **heartbeat real** (ping periódico no `/api/v1/health`) em vez de confiar só
+  no `navigator.onLine`; e/ou `networkMode: 'always'` no QueryClient pra as queries
+  não pausarem por um sinal falível. Fora do escopo 15G.5 (é do design system /
+  Sprint 14.5), mas registrado aqui por ter aparecido no smoke.
 
 ---
 

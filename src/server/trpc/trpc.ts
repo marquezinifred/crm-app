@@ -13,6 +13,7 @@ import {
   TENANT_ISOLATION_PUBLIC_MESSAGE,
   type TenantIsolationInfo,
 } from '@/lib/trpc/tenant-isolation-error';
+import { USER_NOT_PROVISIONED_MARKER } from '@/lib/trpc/auth-markers';
 
 // P-61 — Handlers exportados pra permitir cobertura direta por
 // `tests/unit/trpc-middlewares.test.ts` sem instanciar servidor tRPC.
@@ -54,14 +55,24 @@ export function formatTrpcError(input: {
 /**
  * Handler puro do middleware `enforceAuth`. Lança `UNAUTHORIZED`
  * quando o contexto não tem user + tenantId.
+ *
+ * P-82 — quando o caller está autenticado no Clerk mas sem row local
+ * (`authState === 'NOT_PROVISIONED'`), o `message` carrega o marcador
+ * estável `USER_NOT_PROVISIONED`. O HTTP continua 401 (code UNAUTHORIZED,
+ * não reportado ao Sentry — é esperado); o diferenciador vive no corpo,
+ * que o `sessionAwareFetch` inspeciona para redirecionar em vez de
+ * recarregar em loop. Sem PII no marcador.
  */
 export function assertAuthContext(ctx: {
   user: Context['user'];
   tenantId: Context['tenantId'];
+  authState?: Context['authState'];
 }): void {
-  if (!ctx.user || !ctx.tenantId) {
-    throw new TRPCError({ code: 'UNAUTHORIZED' });
+  if (ctx.user && ctx.tenantId) return;
+  if (ctx.authState === 'NOT_PROVISIONED') {
+    throw new TRPCError({ code: 'UNAUTHORIZED', message: USER_NOT_PROVISIONED_MARKER });
   }
+  throw new TRPCError({ code: 'UNAUTHORIZED' });
 }
 
 /**

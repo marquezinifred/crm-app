@@ -179,6 +179,67 @@ describe('trpc.ts — assertAuthContext (enforceAuth handler)', () => {
       expect((err as TRPCError).code).toBe('UNAUTHORIZED');
     }
   });
+
+  // ── P-82 — authState distingue "sessão expirada" de "sem provisionamento"
+
+  it('authState OK (user + tenantId) → passa', async () => {
+    const { assertAuthContext } = await import('@/server/trpc/trpc');
+    expect(() =>
+      assertAuthContext({
+        user: {
+          id: 'u1',
+          email: 'a@b',
+          fullName: 'X',
+          role: 'ADMIN',
+          tenantId: 't1',
+          partnerCompanyId: null,
+        },
+        tenantId: 't1',
+        authState: 'OK',
+      }),
+    ).not.toThrow();
+  });
+
+  it('authState ANONYMOUS (sem user) → UNAUTHORIZED comum, SEM marcador P-82', async () => {
+    const { assertAuthContext } = await import('@/server/trpc/trpc');
+    const { USER_NOT_PROVISIONED_MARKER } = await import('@/lib/trpc/auth-markers');
+    try {
+      assertAuthContext({ user: null, tenantId: null, authState: 'ANONYMOUS' });
+      expect.fail('esperava throw');
+    } catch (err) {
+      expect(err).toBeInstanceOf(TRPCError);
+      expect((err as TRPCError).code).toBe('UNAUTHORIZED');
+      // Não carrega o marcador — sessão expirada/ausente, não "sem provisionamento"
+      expect((err as TRPCError).message).not.toContain(USER_NOT_PROVISIONED_MARKER);
+    }
+  });
+
+  it('authState NOT_PROVISIONED → UNAUTHORIZED com marcador USER_NOT_PROVISIONED', async () => {
+    const { assertAuthContext } = await import('@/server/trpc/trpc');
+    const { USER_NOT_PROVISIONED_MARKER } = await import('@/lib/trpc/auth-markers');
+    try {
+      // clerkId+tenantId chegaram (sessão Clerk válida) mas row local ausente
+      assertAuthContext({ user: null, tenantId: 't1', authState: 'NOT_PROVISIONED' });
+      expect.fail('esperava throw');
+    } catch (err) {
+      expect(err).toBeInstanceOf(TRPCError);
+      // Mantém HTTP 401 — o diferenciador é o marcador no corpo
+      expect((err as TRPCError).code).toBe('UNAUTHORIZED');
+      expect((err as TRPCError).message).toBe(USER_NOT_PROVISIONED_MARKER);
+    }
+  });
+
+  it('sem authState (mock legado) → UNAUTHORIZED comum quando falta user', async () => {
+    const { assertAuthContext } = await import('@/server/trpc/trpc');
+    const { USER_NOT_PROVISIONED_MARKER } = await import('@/lib/trpc/auth-markers');
+    try {
+      assertAuthContext({ user: null, tenantId: 't1' });
+      expect.fail('esperava throw');
+    } catch (err) {
+      expect((err as TRPCError).code).toBe('UNAUTHORIZED');
+      expect((err as TRPCError).message).not.toContain(USER_NOT_PROVISIONED_MARKER);
+    }
+  });
 });
 
 describe('trpc.ts — assertPlatformContext (enforcePlatform handler, Sprint 15A)', () => {

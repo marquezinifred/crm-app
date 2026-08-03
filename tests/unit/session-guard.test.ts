@@ -26,7 +26,7 @@ function mockResponse(status: number, body?: unknown): Response {
 
 function setLocation(pathname: string): void {
   Object.defineProperty(window, 'location', {
-    value: { ...window.location, pathname, reload: vi.fn() },
+    value: { ...window.location, pathname, reload: vi.fn(), assign: vi.fn() },
     writable: true,
   });
 }
@@ -183,6 +183,106 @@ describe('sessionAwareFetch', () => {
     expect(res.status).toBe(403);
     vi.advanceTimersByTime(2000);
     expect(window.location.reload).not.toHaveBeenCalled();
+  });
+
+  // ── P-82 — 401 "autenticado mas sem provisionamento" ──────────────
+
+  it('401 com marcador USER_NOT_PROVISIONED (formato middleware) → redireciona, NÃO recarrega', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      mockResponse(401, {
+        error: { code: 'UNAUTHORIZED', message: 'USER_NOT_PROVISIONED' },
+      }),
+    );
+
+    const res = await sessionAwareFetch('/api/trpc/opportunities.list');
+
+    expect(res.status).toBe(401);
+    expect(window.location.assign).toHaveBeenCalledTimes(1);
+    expect(window.location.assign).toHaveBeenCalledWith('/account-not-found');
+    // NÃO recarrega — reload seria o loop infinito do P-82
+    vi.advanceTimersByTime(2000);
+    expect(window.location.reload).not.toHaveBeenCalled();
+  });
+
+  it('401 com marcador no envelope tRPC batch → redireciona (parse robusto ao formato)', async () => {
+    // Formato real do httpBatchLink: array de resultados com error.json.message
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      mockResponse(401, [
+        {
+          error: {
+            json: {
+              message: 'USER_NOT_PROVISIONED',
+              code: -32001,
+              data: { code: 'UNAUTHORIZED', httpStatus: 401, path: 'users.me' },
+            },
+          },
+        },
+      ]),
+    );
+
+    await sessionAwareFetch('/api/trpc/users.me?batch=1');
+
+    expect(window.location.assign).toHaveBeenCalledWith('/account-not-found');
+    vi.advanceTimersByTime(2000);
+    expect(window.location.reload).not.toHaveBeenCalled();
+  });
+
+  it('marcador + batch com N procedures → redireciona só uma vez (idempotente)', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      mockResponse(401, {
+        error: { code: 'UNAUTHORIZED', message: 'USER_NOT_PROVISIONED' },
+      }),
+    );
+
+    await sessionAwareFetch('/api/trpc/a');
+    await sessionAwareFetch('/api/trpc/b');
+    await sessionAwareFetch('/api/trpc/c');
+
+    expect(window.location.assign).toHaveBeenCalledTimes(1);
+  });
+
+  it('já em /account-not-found → 401 com marcador é no-op (não redireciona em loop)', async () => {
+    setLocation('/account-not-found');
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      mockResponse(401, {
+        error: { code: 'UNAUTHORIZED', message: 'USER_NOT_PROVISIONED' },
+      }),
+    );
+
+    const res = await sessionAwareFetch('/api/trpc/anything');
+
+    expect(res.status).toBe(401);
+    expect(window.location.assign).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(2000);
+    expect(window.location.reload).not.toHaveBeenCalled();
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it('já em /account-not-found → 401 comum também é no-op', async () => {
+    setLocation('/account-not-found');
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      mockResponse(401, { error: { code: 'UNAUTHORIZED', message: 'x' } }),
+    );
+
+    await sessionAwareFetch('/api/trpc/anything');
+
+    vi.advanceTimersByTime(2000);
+    expect(window.location.reload).not.toHaveBeenCalled();
+    expect(window.location.assign).not.toHaveBeenCalled();
+  });
+
+  it('401 comum (sem marcador) → recarrega, NÃO redireciona (P-13 preservado)', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      mockResponse(401, {
+        error: { code: 'UNAUTHORIZED', message: 'Sessão expirada ou ausente. Faça login novamente.' },
+      }),
+    );
+
+    await sessionAwareFetch('/api/trpc/opportunities.byId');
+
+    expect(window.location.assign).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(800);
+    expect(window.location.reload).toHaveBeenCalledTimes(1);
   });
 
   it('reset da flag entre testes funciona', async () => {

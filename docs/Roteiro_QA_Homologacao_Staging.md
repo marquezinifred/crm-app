@@ -1054,6 +1054,16 @@ Comportamentos esperados quando algo cai. Bom validar de vez em quando pra garan
   - **Falha se (regressão P-82):** a página entra em **loop de reload infinito** (o antigo comportamento — o 401 do `enforceAuth` disparava `window.location.reload()` e o estado nunca mudava). Nesse caso o diferenciador `USER_NOT_PROVISIONED` no corpo do 401 não está sendo lido.
   - **Nota:** `/account-not-found` não faz chamadas tRPC autenticadas (existe justamente porque o tRPC devolve 401), então renderiza sem row local. O 401 comum (sessão expirada, sem o marcador) continua recarregando — os dois caminhos convivem.
 
+- [ ] **Falso-offline não trava o app; banner reflete heartbeat real** (P-106)
+  - Contexto: `navigator.onLine` é falível (macOS às vezes reporta `false` com internet real). Antes do P-106 isso combinava com o React Query pausando queries (`networkMode: 'online'`) e travava o app inteiro em "Carregando…" + banner falso "Sem conexão".
+  - **Cenário A — falso-offline não trava:** com internet **funcionando**, forçar `navigator.onLine=false` via DevTools console (`Object.defineProperty(navigator,'onLine',{value:false,configurable:true}); window.dispatchEvent(new Event('offline'))`) e navegar pela app (abrir `/pipeline`, `/dashboard`).
+    - **Passa se:** as telas **continuam carregando dados normalmente** (queries não pausam — `networkMode: 'always'`) e o banner "Sem conexão" **NÃO** aparece (o heartbeat no `/api/v1/health` segue respondendo 200). Network tab mostra pings periódicos a `/api/v1/health` (~a cada 25s) retornando 200.
+    - **Falha se (regressão P-106):** app trava em "Carregando…" e/ou banner "Sem conexão" aparece só por causa do `navigator.onLine=false`.
+  - **Cenário B — offline real mostra o banner:** DevTools → Network → **Offline** de verdade (bloqueia todas as requests). Aguardar ~2 ciclos de heartbeat (~50s) ou disparar o evento `offline`.
+    - **Passa se:** após **2 falhas consecutivas** de rede, o banner "Sem conexão." aparece (warning, não descartável). Ao voltar Network → **Online**, o banner **some sozinho** no primeiro heartbeat OK.
+    - **Falha se:** banner aparece na 1ª falha (deveria absorver blip único) ou não some ao reconectar.
+  - **Cenário C — latência não é offline (cold-start Neon, P-110):** se o `/api/v1/health` demorar (cold-start) mas ainda responder 200/503 dentro de ~9s, o banner **NÃO** deve aparecer — só rejeição de rede/timeout conta como offline.
+
 - [ ] **Zod error renderiza mensagem legível** (P-21 friendlyTrpcError)
   - Tentar criar company com CNPJ inválido "123".
   - **Passa se:** mensagem "CNPJ inválido" limpa aparece.

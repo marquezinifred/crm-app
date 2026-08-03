@@ -11,6 +11,14 @@ Leia esse documento antes de qualquer tarefa. Ele tem duas partes:
 
 ## Sprint atual
 
+> **▶ ARRANQUE 2026-08-03 (sessão "CRM Dev V4"):** ler
+> **`docs/HANDOFF_Estado_Atual_2026-08-03.md`** — é o kickoff da sessão atual
+> (mesmo papel gestão/QA/arquiteto). Modus operandi: `docs/Metodologia_Desenvolvimento_Venzo.md`
+> + memory `role-separation` (QA automatizado usa o skill `qa-automation`).
+> **Prioridade:** (1) infra P-36 (worker Railway) + P-85 (Clerk Production) e (2)
+> débitos 15G.5 (P-105/106/107) → depois (3) Sprint 15H (Metas + Reconcile, spec
+> `docs/Sprint_15H_Metas_e_Approvals.md`, migrations 0033/0034).
+
 > **Sprint 15G.5 — Workflow de Transferência de Oportunidade (P-87):
 > ✅ ENTREGUE e LIGADO em prod em 2026-07-30** (flag ON). R1+R2 verdes.
 > Pendente: smoke autenticado (Fred) + worker P-36 (timeout automático).

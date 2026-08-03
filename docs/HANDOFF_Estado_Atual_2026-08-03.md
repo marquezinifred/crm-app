@@ -91,13 +91,24 @@ Spec pronta: **[Sprint_15H_Metas_e_Approvals.md](Sprint_15H_Metas_e_Approvals.md
   `/admin/sales-quotas` + drill-down `/reports/quota-tree`.
 - **Bloco C** — estender `opportunities.list` com `owner.primaryUnit.name` (ativa o
   badge da Fase 4b do 15G).
-- Decomposição: 6 chips Modo B (spec §7). Migrations 0033/0034 (numeração já
-  reconciliada com 15G.5 que ficou com 0032).
+- Decomposição: 6 chips Modo B (spec §7). Migrations **0034/0035** (renumeradas:
+  o housekeeping P-83 pegou `0033` em 2026-08-03; 15G.5 ficou com 0032).
 
 ## 3. Housekeeping antigo (paralelo, sem urgência)
-P-81 (runbook recovery Neon), P-82 (loop 401 → tela dedicada, Sprint 16), P-83
-(partial UNIQUE `(tenant_id,email)`), P-84 (convidar reativa soft-deleted),
-P-03/P-05 (visual baseline / Lighthouse — dependem de staging).
+**Revisão de alinhamento 2026-08-03:** os 4 itens foram verificados contra o
+código atual — todos ainda reproduziam (nenhum obsoleto). Encaminhado:
+- **P-81** ✅ ENTREGUE (gestão) — `docs/Runbook_Recovery_Pos_Neon_Restore.md`
+  (detecção Clerk×banco, SQL de reinserção seletiva, `rbac:backfill-cache`
+  obrigatório, checklist por role).
+- **P-83 + P-84** 🔵 CHIP spawnado (bundle Modo B, `task_240a00d6`) — migration
+  **0033** partial UNIQUE `(tenant_id,email) WHERE deleted_at IS NULL` + reativação
+  de soft-deleted no `users.invite` + UI + testes. Aguarda launch/merge/QA.
+- **P-82** 🔵 CHIP spawnado (antecipado do Sprint 16, `task_25076c4c`) —
+  `authState=NOT_PROVISIONED` no `enforceAuth` + session-guard redireciona pra
+  `/account-not-found` (sign-out) em vez de reload em loop. Aguarda launch/merge/QA.
+- **P-03/P-05** (visual baseline / Lighthouse) — seguem dependendo de staging.
+
+⚠️ P-83 consumiu a migration `0033` → **15H renumerado pra 0034/0035** (ver §2 P3).
 
 ## 4. Dados de teste em prod — ✅ LIMPO (2026-08-03)
 Estrutura criada no tenant `marquezini` pra validar o 15G.5 ao vivo já foi removida

@@ -107,7 +107,7 @@ Estrutura criada no tenant `marquezini` pra validar o 15G.5 ao vivo já foi remo
 - Opp `8f021e6a` → dono revertido **gmail → frederico**, `currentTransferId=null`.
 - Verificação: 0 unidades `Teste*` restantes; prod no estado original + 15G.5 ligado.
 
-**Branch Neon `r1-15g5-test`:** expiração **adiada pra ~2026-08-24** (era Aug 5). Decisão
+**Branch Neon `r1-15g5-test`:** expiração **adiada pra 2026-09-01** (era Aug 5). Decisão
 foi só adiar, não persistir. **Revisitar no kickoff do 15H:** ou promover a
 `DATABASE_URL_TEST` canônica (habilita a suíte de integração que hoje skipa — necessária
 pro teste do **P-105** e pro 15H) **com reset/seed limpo antes do 1º piloto** (a branch é

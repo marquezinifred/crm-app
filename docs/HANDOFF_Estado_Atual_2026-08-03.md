@@ -96,19 +96,38 @@ Spec pronta: **[Sprint_15H_Metas_e_Approvals.md](Sprint_15H_Metas_e_Approvals.md
 
 ## 3. Housekeeping antigo (paralelo, sem urgência)
 **Revisão de alinhamento 2026-08-03:** os 4 itens foram verificados contra o
-código atual — todos ainda reproduziam (nenhum obsoleto). Encaminhado:
+código atual — todos ainda reproduziam (nenhum obsoleto). Estado:
 - **P-81** ✅ ENTREGUE (gestão) — `docs/Runbook_Recovery_Pos_Neon_Restore.md`
   (detecção Clerk×banco, SQL de reinserção seletiva, `rbac:backfill-cache`
   obrigatório, checklist por role).
-- **P-83 + P-84** 🔵 CHIP spawnado (bundle Modo B, `task_240a00d6`) — migration
+- **P-83 + P-84** ✅ MERGEADO + QA VERDE (main local, merge `2f54023`) — migration
   **0033** partial UNIQUE `(tenant_id,email) WHERE deleted_at IS NULL` + reativação
-  de soft-deleted no `users.invite` + UI + testes. Aguarda launch/merge/QA.
-- **P-82** 🔵 CHIP spawnado (antecipado do Sprint 16, `task_25076c4c`) —
+  de soft-deleted no `users.invite` + UI + testes. **Rollout pendente** (migrate
+  deploy 0033 ANTES do código + deploy). QA: `docs/qa-sessions/auto-report-2026-08-03-housekeeping-p82-p83-p84.md`.
+- **P-82** ✅ MERGEADO + QA VERDE (main local, merge `0f588d1`) —
   `authState=NOT_PROVISIONED` no `enforceAuth` + session-guard redireciona pra
-  `/account-not-found` (sign-out) em vez de reload em loop. Aguarda launch/merge/QA.
+  `/account-not-found` (sign-out) em vez de reload em loop. **Rollout pendente** (deploy).
 - **P-03/P-05** (visual baseline / Lighthouse) — seguem dependendo de staging.
 
+**QA integrado Modo B (2026-08-03):** 🟢 OK seguir, zero regressão. Baseline
+**1463 → 1488 (+25)**, 0 failing, 185 skipped estável. Type-check/lint/`prisma
+validate` limpos. Migration 0033 revisada estaticamente.
+
 ⚠️ P-83 consumiu a migration `0033` → **15H renumerado pra 0034/0035** (ver §2 P3).
+
+**Débitos residuais registrados no QA:**
+- **P-108** (baixa) — `context.ts` sem cobertura unit (0%); `authState` só roda
+  em request-time/integração. Extrair função pura testável OU teste de integração
+  gated por `DATABASE_URL_TEST`. Consumidor (`assertAuthContext`) já 100% coberto.
+- **P-109** (informativo) — drift declarativo Prisma: `@@unique` cheio no schema
+  vs índice PARCIAL no banco (mesmo padrão aceito do clerk_id/0026). `prisma
+  migrate dev` futuro pode acusar drift fantasma — esperado.
+- **P-110** (baixa/média, achado no smoke 2026-08-03) — dashboard mostrou erro cru
+  do Prisma (`Can't reach database server` + hostname Neon) num cold-start do
+  compute serverless (autosuspend). Transitório, recuperou sozinho (1213ms→127ms).
+  Robustez: (1) retry/backoff em falha transitória de conexão; (2) estado amigável
+  "reconectando…" sem vazar Prisma/host na UI (primo do P-106). Opcional ops:
+  ajustar autosuspend do Neon prod.
 
 ## 4. Dados de teste em prod — ✅ LIMPO (2026-08-03)
 Estrutura criada no tenant `marquezini` pra validar o 15G.5 ao vivo já foi removida

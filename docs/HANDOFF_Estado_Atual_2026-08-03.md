@@ -107,11 +107,13 @@ Estrutura criada no tenant `marquezini` pra validar o 15G.5 ao vivo já foi remo
 - Opp `8f021e6a` → dono revertido **gmail → frederico**, `currentTransferId=null`.
 - Verificação: 0 unidades `Teste*` restantes; prod no estado original + 15G.5 ligado.
 
-**Branch Neon `r1-15g5-test`:** expiração **adiada pra 2026-09-01** (era Aug 5). Decisão
-foi só adiar, não persistir. **Revisitar no kickoff do 15H:** ou promover a
-`DATABASE_URL_TEST` canônica (habilita a suíte de integração que hoje skipa — necessária
-pro teste do **P-105** e pro 15H) **com reset/seed limpo antes do 1º piloto** (a branch é
-clone de `production-live` → carrega dados de prod), ou deixar auto-deletar.
+**Branch Neon `r1-15g5-test`:** expiração **adiada pra 2026-09-01 17:07 GMT-3** (era Aug 5).
+ID `br-plain-hat-aj7j1eb5`, **filha de `staging`** no projeto **CRM-DEV** (dev) — isolada de
+produção, carrega dados de staging/teste (**sem PII de prod**). Compute ociosa/autosuspendida
+(custo ≈ 0). Decisão foi só adiar, não persistir. **Revisitar no kickoff do 15H:** promovê-la
+a `DATABASE_URL_TEST` canônica (habilita a suíte de integração que hoje skipa — necessária pro
+teste do **P-105** e pro 15H; candidata limpa já que não tem dado de prod) ou deixar
+auto-deletar.
 
 ## 5. Referências
 - Metodologia: [Metodologia_Desenvolvimento_Venzo.md](Metodologia_Desenvolvimento_Venzo.md)

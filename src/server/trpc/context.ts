@@ -1,6 +1,7 @@
 import type { FetchCreateContextFnOptions } from '@trpc/server/adapters/fetch';
 import { prisma } from '@/server/db/client';
 import { setContextUserId } from '@/server/db/tenant-context';
+import type { AuthState } from '@/lib/trpc/auth-markers';
 import type { User, UserRole, PlatformRole } from '@prisma/client';
 
 export interface Context {
@@ -11,6 +12,18 @@ export interface Context {
         partnerCompanyId: string | null;
       })
     | null;
+  /**
+   * P-82 — estado de provisionamento do usuário tenant. `NOT_PROVISIONED`
+   * quando clerkId+tenantId chegaram nos headers (sessão Clerk válida) mas
+   * o lookup local retornou null. Usado por `enforceAuth` para sinalizar a
+   * tela `/account-not-found` em vez de deixar o cliente recarregar em loop.
+   *
+   * `createContext` SEMPRE popula este campo em runtime. É opcional só na
+   * interface para não exigir que mocks de Context em testes (que constroem
+   * um caller autenticado) o declarem — quando ausente, `enforceAuth` trata
+   * como não-provisionamento indeterminado e cai no `UNAUTHORIZED` comum.
+   */
+  authState?: AuthState;
   platformUser:
     | (Pick<User, 'id' | 'email' | 'fullName'> & { platformRole: PlatformRole })
     | null;
@@ -43,6 +56,7 @@ export async function createContext({ req }: FetchCreateContextFnOptions): Promi
   const userAgent = headers.get('user-agent');
 
   let user: Context['user'] = null;
+  let authState: AuthState = 'ANONYMOUS';
   if (clerkId && tenantId) {
     const rows = await prisma.$queryRaw<
       Array<
@@ -62,6 +76,9 @@ export async function createContext({ req }: FetchCreateContextFnOptions): Promi
       LIMIT 1
     `;
     user = rows[0] ?? null;
+    // P-82 — clerkId+tenantId presentes mas sem row local = conta Clerk
+    // autenticada porém não provisionada neste workspace (ex.: restore PITR).
+    authState = user ? 'OK' : 'NOT_PROVISIONED';
 
     // Sprint 15G.5 (T15) — propaga o userId resolvido pro AsyncLocalStorage
     // que o route handler iniciou com userId=null. O guard de transferência
@@ -93,6 +110,7 @@ export async function createContext({ req }: FetchCreateContextFnOptions): Promi
     req,
     tenantId,
     user,
+    authState,
     platformUser,
     platformRole: platformUser?.platformRole ?? null,
     ip,

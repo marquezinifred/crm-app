@@ -1007,6 +1007,13 @@ Comportamentos esperados quando algo cai. Bom validar de vez em quando pra garan
   - **Passa se:** console.warn com mensagem "Sessão expirada" + página recarrega automaticamente em ~800ms.
   - **Passa se pop-up cru:** vai pra sign-in.
 
+- [ ] **Conta Clerk autenticada sem row local → tela dedicada, não loop** (P-82 session-guard)
+  - Cenário real: pós-restore Neon PITR (ver [`Runbook_Recovery_Pos_Neon_Restore.md`](Runbook_Recovery_Pos_Neon_Restore.md)) a sessão Clerk continua válida (JWT com `public_metadata.tenantId`) mas o row em `users` sumiu.
+  - Reproduzir em staging: com um user logado e navegando normalmente, `DELETE FROM users WHERE id = '<seu-user-id>'` (ou `deleted_at = now()` / `active = false`) no branch de teste. Recarregar a app.
+  - **Passa se:** a app redireciona **uma vez** para `/account-not-found` (tela Venzo "Conta sem acesso a este workspace" com botão **Sair**). O botão Sair leva ao `/sign-in` pra trocar de conta.
+  - **Falha se (regressão P-82):** a página entra em **loop de reload infinito** (o antigo comportamento — o 401 do `enforceAuth` disparava `window.location.reload()` e o estado nunca mudava). Nesse caso o diferenciador `USER_NOT_PROVISIONED` no corpo do 401 não está sendo lido.
+  - **Nota:** `/account-not-found` não faz chamadas tRPC autenticadas (existe justamente porque o tRPC devolve 401), então renderiza sem row local. O 401 comum (sessão expirada, sem o marcador) continua recarregando — os dois caminhos convivem.
+
 - [ ] **Zod error renderiza mensagem legível** (P-21 friendlyTrpcError)
   - Tentar criar company com CNPJ inválido "123".
   - **Passa se:** mensagem "CNPJ inválido" limpa aparece.

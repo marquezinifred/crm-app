@@ -571,7 +571,14 @@ model User {
   transfersAsNewOwner      OpportunityTransfer[] @relation("TransferNewOwner")
   transfersDecided         OpportunityTransfer[] @relation("TransferDecidedBy")
 
-  @@unique([tenantId, email])
+  // P-83 débito — migration 0033: UNIQUE(tenantId, email) virou PARCIAL
+  // (WHERE deleted_at IS NULL) no banco, pra permitir reconvite de e-mail de
+  // usuário soft-deleted (P-84). O Prisma não suporta partial unique nativo,
+  // então este @@unique é apenas declarativo e a migration SQL é a fonte da
+  // verdade. `map:` alinha o nome do índice ao criado na migration; NÃO uso
+  // `name:` pra preservar o input composto `tenantId_email` (mesma escolha do
+  // clerk_id abaixo usa `name:` por precisar de input renomeado).
+  @@unique([tenantId, email], map: "users_tenant_id_email_active_key")
   // Sprint 15A débito — migration 0026: UNIQUE composto. A constraint
   // REAL no banco é PARTIAL (WHERE clerk_id IS NOT NULL) — users de
   // seed/teste sem clerkId podem existir em N rows por tenant sem

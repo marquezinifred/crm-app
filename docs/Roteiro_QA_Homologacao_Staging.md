@@ -936,6 +936,46 @@ se divergirem, sem bloquear.
 
 ---
 
+### 2.12. Reconvite de e-mail desativado (~5min — P-83/P-84)
+
+**Pré-requisito:** logado como ADMIN em `/admin/users`. Rollout aplicou a
+migration `0033_users_email_partial_unique` (`prisma migrate deploy`) —
+sem ela o índice UNIQUE segue CHEIO e o reconvite quebra.
+
+- [ ] **R1 — Convidar e desativar**
+  Convidar um e-mail novo (ex: `reconvite-qa@venzo.com`, papel ANALISTA).
+  Esperado: toast "Convite enviado."; linha aparece como "Convidado /
+  Inativo". Em seguida clicar "Desativar" e confirmar no AlertDialog.
+  Esperado: toast "Usuário desativado."; a linha some da lista (soft delete).
+- [ ] **R2 — Reconvidar o MESMO e-mail**
+  Clicar "+ Convidar usuário" e usar o mesmo `reconvite-qa@venzo.com`,
+  agora com papel GESTOR e um nome diferente.
+  Esperado: **toast "Convite reenviado — usuário reativado."** (não erro
+  cru). A linha reaparece com o papel GESTOR e o nome novo, status
+  "Convidado / Inativo". Um novo convite Clerk é disparado (checar caixa
+  de entrada / Clerk dashboard → Invitations).
+- [ ] **R3 — E-mail ativo ainda dá CONFLICT**
+  Tentar convidar um e-mail que já existe ATIVO na lista.
+  Esperado: erro amigável inline no modal "E-mail já existe" (não reativa
+  nada, não cria linha duplicada).
+- [ ] **R4 — Isolamento por tenant**
+  (Se houver 2 tenants) desativar `x@venzo.com` no tenant A e convidar
+  `x@venzo.com` no tenant B.
+  Esperado: no tenant B é um convite NOVO (toast "Convite enviado.", não
+  "reativado") — a linha soft-deleted do tenant A não é tocada.
+
+Automatizado: `tests/unit/users-reinvite.test.ts` (8 casos — reativação,
+CONFLICT ativo, cross-tenant, rollback Clerk) +
+`tests/unit/migration-0033-users-email-partial-unique.test.ts` (6 casos —
+índice parcial + schema map) + `tests/component/admin-users-actions.test.tsx`
+(toast de reativação).
+
+**Bloqueia release se:** R2 mostra erro cru de constraint UNIQUE
+(regressão do bug original — sinal de que a migration 0033 não foi
+aplicada) ou o reconvite cria linha duplicada em vez de reativar.
+
+---
+
 ## 3. Cenários de segurança (bloqueia release se falhar)
 
 Rápidos (~10min total) mas críticos.

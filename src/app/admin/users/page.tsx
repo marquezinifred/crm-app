@@ -48,12 +48,18 @@ export default function AdminUsersPage() {
   const list = trpc.users.list.useQuery({});
   const currentTenant = trpc.tenants.current.useQuery();
   const invite = trpc.users.invite.useMutation({
-    onSuccess: () => {
+    onSuccess: (res) => {
       utils.users.list.invalidate();
       setShowInvite(false);
       setInviteForm({ email: '', fullName: '', role: 'ANALISTA' });
       setInviteError(null);
-      toast({ kind: 'success', title: 'Convite enviado.' });
+      // P-84 — reconvite de e-mail antes desativado reativa a conta.
+      toast({
+        kind: 'success',
+        title: res.reactivated
+          ? 'Convite reenviado — usuário reativado.'
+          : 'Convite enviado.',
+      });
     },
     onError: (e) => setInviteError(friendlyTrpcError(e)),
   });

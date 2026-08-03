@@ -18,7 +18,20 @@ export function TrpcProvider({ children }: { children: ReactNode }) {
     () =>
       new QueryClient({
         defaultOptions: {
-          queries: { staleTime: 30_000, retry: 1, refetchOnWindowFocus: false },
+          // P-106: `networkMode: 'always'` impede o React Query de PAUSAR
+          // queries/mutations quando `navigator.onLine` reporta `false`. Esse
+          // sinal é notoriamente falível (macOS reporta falso-offline mesmo
+          // com internet real), e a pausa deixava o app inteiro travado em
+          // "Carregando…". Com 'always' as requests seguem e falham/reconectam
+          // por conta própria; o veredito real de offline vem do OfflineBanner
+          // (heartbeat no /api/v1/health).
+          queries: {
+            staleTime: 30_000,
+            retry: 1,
+            refetchOnWindowFocus: false,
+            networkMode: 'always',
+          },
+          mutations: { networkMode: 'always' },
         },
       }),
   );

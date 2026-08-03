@@ -1,31 +1,85 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Banner } from '@/components/ui/banner';
 
 /**
- * Banner de offline — Sprint 14.5 (spec §7.3).
+ * Banner de offline — Sprint 14.5 (spec §7.3), endurecido em P-106.
  *
- * Listener `online`/`offline` do window. SSR-safe: assume online no
- * primeiro render, ajusta no useEffect. Não descartável (some sozinho
- * ao reconectar).
+ * ANTES: confiava só em `navigator.onLine` + eventos `online`/`offline`.
+ * Esse sinal é notoriamente falível (macOS reporta falso-offline mesmo com
+ * internet real; a própria spec do `navigator.onLine` avisa que só é
+ * confiável quando reporta `false` por causa de ausência de interface de
+ * rede). O falso-offline combinava com o React Query pausando queries e
+ * travava o app inteiro em "Carregando…" (fix do QueryClient em provider.tsx).
+ *
+ * AGORA: heartbeat real — ping periódico no `/api/v1/health`. Só marca
+ * offline após N falhas de REDE consecutivas; volta a online no primeiro
+ * sucesso. Qualquer RESPOSTA HTTP (mesmo 503 quando o DB falha) prova que a
+ * rede alcança o servidor → online; latência alta que ainda responde NÃO é
+ * offline (cold-start do Neon, P-110). Os eventos `online`/`offline` do
+ * window viram apenas GATILHOS de uma verificação imediata — o veredito
+ * final é sempre do heartbeat.
+ *
+ * SSR-safe: assume online no primeiro render, ajusta no useEffect. Não
+ * descartável (some sozinho ao reconectar).
  */
+
+const HEARTBEAT_INTERVAL_MS = 25_000;
+// Timeout curto o bastante pra detectar rede morta rápido, mas folgado o
+// bastante pra tolerar cold-start do Neon (P-110) sem falso-offline.
+const HEARTBEAT_TIMEOUT_MS = 9_000;
+// Precisa de N falhas consecutivas — absorve blips únicos do navigator.onLine.
+const FAILURES_TO_OFFLINE = 2;
+
 export function OfflineBanner() {
-  const [online, setOnline] = useState(true);
+  const [offline, setOffline] = useState(false);
+  const failuresRef = useRef(0);
 
   useEffect(() => {
-    setOnline(navigator.onLine);
-    const onOnline = () => setOnline(true);
-    const onOffline = () => setOnline(false);
-    window.addEventListener('online', onOnline);
-    window.addEventListener('offline', onOffline);
+    let cancelled = false;
+
+    async function ping() {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), HEARTBEAT_TIMEOUT_MS);
+      try {
+        // Ignoramos o status: qualquer resposta prova alcance de rede. Só
+        // rejeição (falha de rede) ou abort (timeout) conta como falha.
+        await fetch('/api/v1/health', {
+          method: 'GET',
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+        if (cancelled) return;
+        failuresRef.current = 0;
+        setOffline(false);
+      } catch {
+        if (cancelled) return;
+        failuresRef.current += 1;
+        if (failuresRef.current >= FAILURES_TO_OFFLINE) setOffline(true);
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+
+    const verifyNow = () => {
+      void ping();
+    };
+    window.addEventListener('offline', verifyNow);
+    window.addEventListener('online', verifyNow);
+
+    void ping();
+    const interval = setInterval(verifyNow, HEARTBEAT_INTERVAL_MS);
+
     return () => {
-      window.removeEventListener('online', onOnline);
-      window.removeEventListener('offline', onOffline);
+      cancelled = true;
+      clearInterval(interval);
+      window.removeEventListener('offline', verifyNow);
+      window.removeEventListener('online', verifyNow);
     };
   }, []);
 
-  if (online) return null;
+  if (!offline) return null;
 
   return (
     <Banner

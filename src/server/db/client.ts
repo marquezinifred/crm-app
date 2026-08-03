@@ -5,6 +5,7 @@ import {
   PLATFORM_TENANT_SENTINEL,
 } from './tenant-context';
 import { ForbiddenError } from '@/lib/auth/rbac';
+import { withConnectionRetry } from './connection-retry';
 
 // Modelos que NÃO devem receber injeção automática de tenantId
 // (Tenant é raiz; verificação manual fora do extension).
@@ -400,7 +401,29 @@ function createPrismaClient(): PrismaClient {
 
   const base = new PrismaClient({ log });
 
-  return base.$extends({
+  // P-110 — Camada de retry de CONEXÃO (cold-start do Neon serverless).
+  // Aplicada PRIMEIRO no chain de propósito: o runner do Prisma executa
+  // `r[0]` como wrapper externo e `getAllQueryCallbacks` devolve
+  // `[...previous, ...current]`, então a extensão aplicada antes fica
+  // OUTERMOST. Assim o retry envolve TODA a operação — injeção de tenant,
+  // backstop P-42/P-45, guard 15G.5 (2c) e os lookups do guard via `base`
+  // (que, ao falhar com P1001 numa opp em pendência, são re-tentados junto).
+  // `query.$allOperations` (root) dispara para model E raw (`$queryRaw` do
+  // health-check e das queries ltree), cobrindo o cold-start em ambos.
+  // Só re-tenta P1001/P1002 (conexão não estabelecida → nada executou);
+  // ForbiddenError do guard e Error `[tenant-isolation]` propagam intactos
+  // (ver `isTransientConnectionError`). A extension de tenant-isolation
+  // abaixo permanece BYTE-A-BYTE inalterada.
+  const withRetry = base.$extends({
+    name: 'connection-retry',
+    query: {
+      $allOperations({ args, query }) {
+        return withConnectionRetry(() => query(args));
+      },
+    },
+  });
+
+  return withRetry.$extends({
     name: 'tenant-isolation',
     query: {
       $allModels: {
@@ -593,8 +616,16 @@ export async function withTenantTransaction<T>(
   tenantId: string,
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
 ): Promise<T> {
-  return prisma.$transaction(async (tx) => {
-    await tx.$executeRawUnsafe(`SET LOCAL app.tenant_id = '${tenantId.replace(/'/g, "''")}'`);
-    return fn(tx);
-  });
+  // P-110 — o BEGIN de `$transaction` NÃO passa pela query-extension (não é
+  // uma op query-extensible), então o cold-start do Neon aqui não é coberto
+  // pelo retry da extension acima. Envolvemos a transação inteira: uma falha
+  // de conexão (P1001/P1002) ocorre ANTES do BEGIN → a transação não abriu,
+  // nada rodou → re-executar `fn` é seguro (idempotente). Erros não-conexão
+  // (constraint, guard, etc.) propagam imediato, zero retry.
+  return withConnectionRetry(() =>
+    prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(`SET LOCAL app.tenant_id = '${tenantId.replace(/'/g, "''")}'`);
+      return fn(tx);
+    }),
+  );
 }

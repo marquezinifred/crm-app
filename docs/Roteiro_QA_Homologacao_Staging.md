@@ -1065,6 +1065,14 @@ Comportamentos esperados quando algo cai. Bom validar de vez em quando pra garan
 - [ ] **Upload persiste** (só se S3 configurado; staging usa fallback `/tmp` que perde depois de ~1min entre invocations serverless)
   - Se S3 não configurado, esperado: upload funciona mas arquivo some. Documentado em [`Runbook_Staging.md`](Runbook_Staging.md).
 
+- [ ] **Cold-start do Neon é atravessado por retry transparente** (P-110)
+  - Contexto: o compute do Neon serverless auto-suspende após ~5min de inatividade. A 1ª request depois da suspensão pegava o compute acordando e falhava com Prisma `P1001` (Can't reach database server), **vazando o hostname do banco** (`ep-...-pooler...`) crua na UI. O Neon auto-resume na 1ª conexão (~1.2s), então um retry curto atravessa. Fix em [`src/server/db/connection-retry.ts`](../src/server/db/connection-retry.ts) + wrapper OUTERMOST na Prisma extension de [`src/server/db/client.ts`](../src/server/db/client.ts).
+  - Reproduzir em staging: deixar a app ociosa por >5min (sem nenhuma request) até o Neon suspender o compute (Neon dashboard → Branches → compute mostra `Idle`). Depois abrir uma tela que lê dados (ex.: `/pipeline` ou `/dashboard`) OU chamar `GET /api/v1/health`.
+  - **Passa se:** a 1ª request após a suspensão **carrega normalmente** (pode levar ~1.3s a mais que o usual — o retry cruzando o wake), sem erro na tela. Requests seguintes voltam ao normal (~100–150ms).
+  - **Passa também (retry esgotado / banco realmente fora):** se o banco estiver genuinamente indisponível (não só suspenso), a UI mostra **"Serviço temporariamente indisponível. Tente novamente em instantes."** — **NUNCA** o hostname do banco, connection string ou `Invalid prisma.$queryRaw() invocation: Can't reach database server at ep-...`.
+  - **Falha se (regressão P-110):** aparece na tela qualquer string com `ep-`, `pooler`, `neon.tech`, `Can't reach database server` ou `Invalid prisma.$...() invocation`. Isso é vazamento de infra — rollback.
+  - **Segurança do retry (choke point):** só `P1001`/`P1002` (conexão não estabelecida → nada executou) são re-tentados. Erros de constraint/validação (P2xxx), `ForbiddenError` do guard de transferência (15G.5) e backstop de tenant-isolation (P-42) **nunca** são re-tentados — comportamento idêntico ao pré-P-110. Coberto por `tests/unit/connection-retry.test.ts` + integration `opportunity-transfer-guard.test.ts`.
+
 ---
 
 ## 5. Cenários automatizados (referência)

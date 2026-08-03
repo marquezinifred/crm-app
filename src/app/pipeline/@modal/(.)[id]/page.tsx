@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { zUuid } from '@/lib/validators';
 import { trpc } from '@/lib/trpc/client';
 import { friendlyTrpcError } from '@/lib/trpc/error-format';
 import { Sheet, SheetHeader, SheetBody } from '@/components/ui/sheet';
@@ -31,11 +32,31 @@ const STAGE_BADGE_VARIANT: Record<string, 'default' | 'primary' | 'info' | 'warn
  * Renderiza DetailSheet via Radix Dialog (Sheet wrapper) com 4 tabs:
  * Visão Geral / Atividades / Documentos / Histórico. Mantém URL
  * `/pipeline/{id}`. Acesso direto cai em `[id]/page.tsx` full-page.
+ *
+ * P-107 — o intercepting route `(.)[id]` captura QUALQUER segmento
+ * único sob `/pipeline/*` na navegação SPA, inclusive rotas estáticas
+ * como `transferencias-em-andamento` (tela 3c do 15G.5). Sem o guard,
+ * `byId({ id: "transferencias-em-andamento" })` era rejeitado pelo Zod
+ * `zUuid` → "Invalid uuid" transitório. Se `params.id` não for UUID,
+ * retornamos `null` (o slot `@modal` não renderiza nada) e a rota
+ * estática correta assume. Cobre qualquer segmento estático futuro.
+ *
+ * Os hooks são chamados INCONDICIONALMENTE (query desabilitada via
+ * `enabled` quando o id é inválido) e o early-return `null` vem DEPOIS
+ * deles — a navegação uuid→segmento-estático pode reusar a mesma
+ * instância do componente, então guardar antes dos hooks violaria as
+ * rules-of-hooks ("rendered fewer hooks than expected").
  */
 export default function PipelineDetailSheet({ params }: { params: { id: string } }) {
+  const isValidId = zUuid.safeParse(params.id).success;
   const router = useRouter();
   const isMobile = useIsMobile();
-  const oppQ = trpc.opportunities.byId.useQuery({ id: params.id });
+  const oppQ = trpc.opportunities.byId.useQuery(
+    { id: params.id },
+    { enabled: isValidId },
+  );
+
+  if (!isValidId) return null;
 
   const close = () => router.back();
   const opp = oppQ.data;

@@ -790,14 +790,39 @@ nas rotas de operação (`CompanyDetailContent`, `ContactDetailContent`,
      (não `TRPCClientError:` cru, não JSON). `/pipeline/<uuid-inexistente>`
      mostra "Oportunidade não encontrada.".
 
+6. **W6 — Navegação SPA pra /pipeline/transferencias-em-andamento
+   não mostra "Invalid uuid" (P-107 — Sprint 15G.5 tela 3c)**
+   - Login: role com `opportunity:transfer` (ADMIN/GESTOR) e flag
+     `OPPORTUNITY_TRANSFER_ENABLED=true`.
+   - **Client-side (SPA):** a partir de `/pipeline` (ou qualquer rota),
+     navegar via link/Sidebar pra `/pipeline/transferencias-em-andamento`
+     SEM recarregar a página.
+   - **Passa se:** a tela 3c ("Transferências em andamento" —
+     `myOutgoing` + filtro de status) renderiza direto. ZERO painel
+     transitório "Carregando…/Invalid uuid", ZERO ErrorState.
+   - **Contexto do bug:** o intercepting route `@modal/(.)[id]`
+     capturava o segmento `transferencias-em-andamento` como se fosse
+     `[id]` de oportunidade → `opportunities.byId({ id:
+     "transferencias-em-andamento" })` → Zod `zUuid` rejeitava →
+     "Invalid uuid". Só na navegação SPA (reload renderizava a rota
+     estática correta) → intermitente. O guard (`zUuid.safeParse`)
+     retorna `null` no `@modal` pra qualquer segmento não-UUID sob
+     `/pipeline/*` — cobre qualquer rota estática futura, não só
+     `transferencias-em-andamento`.
+   - **Falha se:** o painel "Invalid uuid" pisca durante a navegação
+     (regressão — guard removido/quebrado).
+
 **Automatizado:** `tests/component/companies-new-page.test.tsx` (5
 casos) + `tests/component/detail-error-friendly.test.tsx` (5 casos)
-cobrem W1/W2/W3 em nível de componente. W4/W5 são manuais (dependem
-de rede degradada).
+cobrem W1/W2/W3 em nível de componente.
+`tests/component/pipeline-modal-uuid-guard.test.tsx` (3 casos) cobre
+W6 (guard UUID no intercepting route). W4/W5 são manuais (dependem de
+rede degradada).
 
 **Bloqueia release se:** W1 regride (link quebrado volta) OU W3
 mostra JSON cru (P-95 é a promessa de que erro Zod nunca chega ao
-usuário em rota de operação).
+usuário em rota de operação) OU W6 pisca "Invalid uuid" na navegação
+SPA pra rota estática sob `/pipeline/*`.
 
 ### 2.9. Feedback de erro nas telas /admin (~10min — P-92)
 

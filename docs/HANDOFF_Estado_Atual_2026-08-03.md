@@ -99,14 +99,19 @@ P-81 (runbook recovery Neon), P-82 (loop 401 → tela dedicada, Sprint 16), P-83
 (partial UNIQUE `(tenant_id,email)`), P-84 (convidar reativa soft-deleted),
 P-03/P-05 (visual baseline / Lighthouse — dependem de staging).
 
-## 4. Limpeza pendente (dados de teste criados em prod hoje)
-Criei no tenant `marquezini` pra validar o 15G.5 ao vivo (via APIs A7):
-- Unidades **Teste Transferência / Teste A / Teste B** + memberships.
-- Opp `8f021e6a` teve o dono trocado pra **gmail** (accept de teste) — devolver pro
-  frederico se quiser.
-- Branch Neon `r1-15g5-test` — auto-deleta ~Aug 5 (não precisa fazer nada).
-Gestão pode limpar via script A7 (`SalesStructureService.removeMember` + soft-delete
-das units) quando o Fred autorizar.
+## 4. Dados de teste em prod — ✅ LIMPO (2026-08-03)
+Estrutura criada no tenant `marquezini` pra validar o 15G.5 ao vivo já foi removida
+(script A7 via `runAsSystem`, sem tocar em `audit_logs`):
+- Unidades **Teste Transferência / Teste A / Teste B** + 5 memberships → apagadas.
+- 2 transferências de teste (APPROVED da `8f021e6a` + CANCELLED da `92edb21f`) → apagadas.
+- Opp `8f021e6a` → dono revertido **gmail → frederico**, `currentTransferId=null`.
+- Verificação: 0 unidades `Teste*` restantes; prod no estado original + 15G.5 ligado.
+
+**Branch Neon `r1-15g5-test`:** expiração **adiada pra ~2026-08-24** (era Aug 5). Decisão
+foi só adiar, não persistir. **Revisitar no kickoff do 15H:** ou promover a
+`DATABASE_URL_TEST` canônica (habilita a suíte de integração que hoje skipa — necessária
+pro teste do **P-105** e pro 15H) **com reset/seed limpo antes do 1º piloto** (a branch é
+clone de `production-live` → carrega dados de prod), ou deixar auto-deletar.
 
 ## 5. Referências
 - Metodologia: [Metodologia_Desenvolvimento_Venzo.md](Metodologia_Desenvolvimento_Venzo.md)

@@ -333,6 +333,27 @@ Veredito 🟢 VERDE. Todos cosméticos/higiene — nenhum bloqueia rollout.
   (66,66% br — buckets de `expiryInfo`/`relativeTime`) e `TransferHistorySection.tsx`
   (71,42% br — `reason`/`decisionReason`/`newOwner` opcionais). Caminhos não-críticos.
 
+## 9.5. P-107 — colisão de rota /pipeline/transferencias-em-andamento × @modal/(.)[id]
+
+**Média · defeito real (achado 2026-08-03 no smoke).** Navegar **client-side** pra
+`/pipeline/transferencias-em-andamento` (3c) dispara o **intercepting route**
+`src/app/pipeline/@modal/(.)[id]/page.tsx`, que captura o segmento
+`"transferencias-em-andamento"` como se fosse `[id]` de oportunidade → abre o
+DetailSheet → `opportunities.byId({ id: "transferencias-em-andamento" })` → Zod
+`zUuid` rejeita → **"Invalid uuid"** (ErrorState no conteúdo + painel lateral
+"Carregando…/Invalid uuid"). Reload (carga completa, sem intercept client-side)
+renderiza a rota estática correta — por isso é **intermitente** (só na navegação
+SPA). A tela 3b (`/inbox/transferencias-recebidas`) **não** sofre porque está fora
+de `/pipeline`; só a 3c colide. QA Modo B Fase 3 não pegou (component tests não
+exercitam intercepting routes do Next). **Fix sugerido (menor risco):** o
+`@modal/(.)[id]/page.tsx` validar que `params.id` é UUID antes de renderizar o
+Sheet/chamar `byId` (early-return `null` se não-uuid) — cobre qualquer segmento
+estático futuro sob `/pipeline`. Alternativa: mover a rota 3c pra fora de
+`/pipeline` (ex.: `/transferencias-em-andamento`) OU adicionar entrada
+`transferencias-em-andamento` no slot `@modal` que renderiza `null`. **A feature
+funciona** (disparo cria PENDING, 3c lista no reload) — é só a navegação SPA que
+mostra o erro transitório.
+
 ## 9.4. Débitos do smoke autenticado em prod (2026-07-30)
 
 Achados pelo smoke ponta a ponta do Fred + gestão em produção (estrutura de teste

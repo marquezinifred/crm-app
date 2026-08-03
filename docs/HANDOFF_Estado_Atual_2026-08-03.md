@@ -43,11 +43,12 @@ Referência canônica: **[Metodologia_Desenvolvimento_Venzo.md](Metodologia_Dese
 
 ## 1. Estado técnico atual
 
-- **Main HEAD:** `123129d` (docs). **Baseline testes:** **1463 passing / 0 failing /
-  185 skipped** sem `DATABASE_URL_TEST` (CI/dev normal). Type-check zero, lint zero.
-  Com DB de teste, a integração RODA e passa (harness consertado no P-104).
-- **Prod:** deployment `crm-r1qadw8u6` (Ready, aliased `crm-app-pi-eight.vercel.app`),
-  Neon `production-live` (`ep-rapid-fog-ajm1hdvb`). Health `db:ok`.
+- **Main HEAD:** `2b5519c` (housekeeping P-82/83/84 + QA + docs). **Baseline testes:**
+  **1488 passing / 0 failing / 185 skipped** sem `DATABASE_URL_TEST` (pós-merge P-82/83/84;
+  era 1463). Type-check zero, lint zero. Com DB de teste, a integração RODA e passa.
+- **Prod:** deployment `crm-2vx8fo3s7` (`dpl_FbSTGpwEfPkB2zj4XdhYFopntsBm`, Ready, aliased
+  `crm-app-pi-eight.vercel.app`), Neon `production-live` (`ep-rapid-fog-ajm1hdvb`),
+  **migration `0033` aplicada**. Health `db:ok`. Rollout P-82/83/84 FEITO 2026-08-03.
 - **15G.5 (transferência de oportunidade): ENTREGUE, LIGADO e PROVADO em prod.**
   `OPPORTUNITY_TRANSFER_ENABLED=true` (flag **Sensitive** no Vercel → `vercel env
   pull` mostra vazio, é esperado; o valor real está setado). Fluxo validado ponta a
@@ -100,13 +101,14 @@ código atual — todos ainda reproduziam (nenhum obsoleto). Estado:
 - **P-81** ✅ ENTREGUE (gestão) — `docs/Runbook_Recovery_Pos_Neon_Restore.md`
   (detecção Clerk×banco, SQL de reinserção seletiva, `rbac:backfill-cache`
   obrigatório, checklist por role).
-- **P-83 + P-84** ✅ MERGEADO + QA VERDE (main local, merge `2f54023`) — migration
-  **0033** partial UNIQUE `(tenant_id,email) WHERE deleted_at IS NULL` + reativação
-  de soft-deleted no `users.invite` + UI + testes. **Rollout pendente** (migrate
-  deploy 0033 ANTES do código + deploy). QA: `docs/qa-sessions/auto-report-2026-08-03-housekeeping-p82-p83-p84.md`.
-- **P-82** ✅ MERGEADO + QA VERDE (main local, merge `0f588d1`) —
+- **P-83 + P-84** ✅ ENTREGUE + QA VERDE + **ROLLOUT FEITO em prod (2026-08-03)** — migration
+  **0033** partial UNIQUE `(tenant_id,email) WHERE deleted_at IS NULL` aplicada no
+  `production-live` + reativação de soft-deleted no `users.invite` + UI + testes.
+  QA: `docs/qa-sessions/auto-report-2026-08-03-housekeeping-p82-p83-p84.md`. Falta smoke
+  autenticado (reconvidar e-mail desativado — Fred).
+- **P-82** ✅ ENTREGUE + QA VERDE + **ROLLOUT FEITO em prod (2026-08-03)** —
   `authState=NOT_PROVISIONED` no `enforceAuth` + session-guard redireciona pra
-  `/account-not-found` (sign-out) em vez de reload em loop. **Rollout pendente** (deploy).
+  `/account-not-found` (sign-out) em vez de reload em loop. Falta smoke autenticado.
 - **P-03/P-05** (visual baseline / Lighthouse) — seguem dependendo de staging.
 
 **QA integrado Modo B (2026-08-03):** 🟢 OK seguir, zero regressão. Baseline
@@ -125,9 +127,11 @@ validate` limpos. Migration 0033 revisada estaticamente.
 - **P-110** (baixa/média, achado no smoke 2026-08-03) — dashboard mostrou erro cru
   do Prisma (`Can't reach database server` + hostname Neon) num cold-start do
   compute serverless (autosuspend). Transitório, recuperou sozinho (1213ms→127ms).
-  Robustez: (1) retry/backoff em falha transitória de conexão; (2) estado amigável
-  "reconectando…" sem vazar Prisma/host na UI (primo do P-106). Opcional ops:
-  ajustar autosuspend do Neon prod.
+  **Reincidiu durante o rollout** (`prisma migrate status` deu P1001 até aquecer o
+  compute via health) — ou seja, afeta UI **e** ops. Robustez: (1) retry/backoff em
+  falha transitória de conexão; (2) estado amigável "reconectando…" sem vazar
+  Prisma/host na UI (primo do P-106). **Mitigação ops recomendada:** ajustar/desabilitar
+  o autosuspend do compute Neon prod (reduz cold-starts recorrentes).
 
 ## 4. Dados de teste em prod — ✅ LIMPO (2026-08-03)
 Estrutura criada no tenant `marquezini` pra validar o 15G.5 ao vivo já foi removida

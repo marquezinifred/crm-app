@@ -318,6 +318,104 @@ describe('trpc.ts — runMapErrors (mapErrors handler, P-46)', () => {
     }
   });
 
+  // ── P-105 — ForbiddenError precisa virar FORBIDDEN mesmo quando o
+  // `instanceof` cru falha (identidade de classe divergente do guard de
+  // transferência lançado de dentro da Prisma extension) ou quando embrulhado.
+  // O R1 (integration) só checava a MENSAGEM via `.rejects.toThrow(msg)`, então
+  // não pegava o código 500. Estes testes asseveram `.code`.
+
+  // Simula o ForbiddenError vindo de uma cópia DIFERENTE do módulo rbac:
+  // mesmo `name`, mas NÃO é `instanceof` a classe importada aqui.
+  class ForeignForbiddenError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = 'ForbiddenError';
+    }
+  }
+
+  it('P-105 — ForbiddenError de identidade divergente (name match, instanceof falha) → FORBIDDEN', async () => {
+    const { runMapErrors } = await import('@/server/trpc/trpc');
+    const { ForbiddenError } = await import('@/lib/auth/rbac');
+    const foreign = new ForeignForbiddenError(
+      'Seu perfil não tem acesso a esta operação.',
+    );
+    // Precondição do bug: o instanceof cru NÃO casa.
+    expect(foreign instanceof ForbiddenError).toBe(false);
+    expect(foreign.name).toBe('ForbiddenError');
+    try {
+      await runMapErrors(async () => {
+        throw foreign;
+      });
+      expect.fail('esperava throw');
+    } catch (err) {
+      expect(err).toBeInstanceOf(TRPCError);
+      expect((err as TRPCError).code).toBe('FORBIDDEN');
+      expect((err as TRPCError).message).toBe(
+        'Seu perfil não tem acesso a esta operação.',
+      );
+    }
+  });
+
+  it('P-105 — ForbiddenError embrulhado em cause de Error genérico → FORBIDDEN com message do interno', async () => {
+    const { runMapErrors } = await import('@/server/trpc/trpc');
+    const { ForbiddenError } = await import('@/lib/auth/rbac');
+    const inner = new ForbiddenError('Seu perfil não tem acesso a esta operação.');
+    (inner as { cause?: unknown }).cause = { reason: 'TECH_DETAIL_NAO_VAZA' };
+    const wrapper = new Error('erro genérico do orquestrador');
+    (wrapper as { cause?: unknown }).cause = inner;
+    try {
+      await runMapErrors(async () => {
+        throw wrapper;
+      });
+      expect.fail('esperava throw');
+    } catch (err) {
+      expect(err).toBeInstanceOf(TRPCError);
+      expect((err as TRPCError).code).toBe('FORBIDDEN');
+      // Usa a mensagem do ForbiddenError interno, não a do wrapper.
+      expect((err as TRPCError).message).toBe(
+        'Seu perfil não tem acesso a esta operação.',
+      );
+      // R5 — o cause técnico do guard NÃO vaza na TRPCError pública.
+      expect((err as TRPCError).cause).toBeUndefined();
+    }
+  });
+
+  it('P-105 — ForbiddenError estrangeiro embrulhado fundo na cadeia de cause → FORBIDDEN', async () => {
+    const { runMapErrors } = await import('@/server/trpc/trpc');
+    const foreign = new ForeignForbiddenError(
+      'Seu perfil não tem acesso a esta operação.',
+    );
+    const mid = new Error('camada intermediária');
+    (mid as { cause?: unknown }).cause = foreign;
+    const top = new Error('camada externa');
+    (top as { cause?: unknown }).cause = mid;
+    try {
+      await runMapErrors(async () => {
+        throw top;
+      });
+      expect.fail('esperava throw');
+    } catch (err) {
+      expect((err as TRPCError).code).toBe('FORBIDDEN');
+    }
+  });
+
+  it('P-105 — cadeia de cause com ciclo não trava; erro não-Forbidden re-throw intacto', async () => {
+    const { runMapErrors } = await import('@/server/trpc/trpc');
+    const a = new Error('a');
+    const b = new Error('b');
+    (a as { cause?: unknown }).cause = b;
+    (b as { cause?: unknown }).cause = a; // ciclo
+    try {
+      await runMapErrors(async () => {
+        throw a;
+      });
+      expect.fail('esperava throw');
+    } catch (err) {
+      // Nenhum ForbiddenError no ciclo → re-throw do objeto original intacto.
+      expect(err).toBe(a);
+    }
+  });
+
   it('converte Error("[tenant-isolation] ...") → TRPCError INTERNAL_SERVER_ERROR com cause', async () => {
     const { runMapErrors } = await import('@/server/trpc/trpc');
     const original = new Error(
@@ -366,6 +464,62 @@ describe('trpc.ts — runMapErrors (mapErrors handler, P-46)', () => {
       expect(err).toBe(trpcErr);
       expect((err as TRPCError).code).toBe('NOT_FOUND');
     }
+  });
+});
+
+describe('trpc.ts — findForbiddenError (P-105 helper)', () => {
+  class ForeignForbiddenError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = 'ForbiddenError';
+    }
+  }
+
+  it('acha ForbiddenError direto (instanceof)', async () => {
+    const { findForbiddenError } = await import('@/server/trpc/trpc');
+    const { ForbiddenError } = await import('@/lib/auth/rbac');
+    const e = new ForbiddenError('nope');
+    expect(findForbiddenError(e)).toBe(e);
+  });
+
+  it('acha ForbiddenError estrangeiro por name (instanceof falharia)', async () => {
+    const { findForbiddenError } = await import('@/server/trpc/trpc');
+    const e = new ForeignForbiddenError('nope');
+    expect(findForbiddenError(e)).toBe(e);
+  });
+
+  it('acha ForbiddenError embrulhado em cadeia de cause', async () => {
+    const { findForbiddenError } = await import('@/server/trpc/trpc');
+    const inner = new ForeignForbiddenError('nope');
+    const mid = new Error('mid');
+    (mid as { cause?: unknown }).cause = inner;
+    const top = new Error('top');
+    (top as { cause?: unknown }).cause = mid;
+    expect(findForbiddenError(top)).toBe(inner);
+  });
+
+  it('retorna null quando não há ForbiddenError na cadeia', async () => {
+    const { findForbiddenError } = await import('@/server/trpc/trpc');
+    const e = new Error('comum');
+    (e as { cause?: unknown }).cause = new Error('outra');
+    expect(findForbiddenError(e)).toBeNull();
+  });
+
+  it('não trava com ciclo na cadeia de cause', async () => {
+    const { findForbiddenError } = await import('@/server/trpc/trpc');
+    const a = new Error('a');
+    const b = new Error('b');
+    (a as { cause?: unknown }).cause = b;
+    (b as { cause?: unknown }).cause = a;
+    expect(findForbiddenError(a)).toBeNull();
+  });
+
+  it('lida com entrada null/undefined/não-Error sem crashar', async () => {
+    const { findForbiddenError } = await import('@/server/trpc/trpc');
+    expect(findForbiddenError(null)).toBeNull();
+    expect(findForbiddenError(undefined)).toBeNull();
+    expect(findForbiddenError('string')).toBeNull();
+    expect(findForbiddenError({ name: 'ForbiddenError' })).toBeNull(); // não é Error
   });
 });
 

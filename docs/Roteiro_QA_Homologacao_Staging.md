@@ -976,6 +976,49 @@ aplicada) ou o reconvite cria linha duplicada em vez de reativar.
 
 ---
 
+### 2.13. Guard read-only de transferência devolve 403, não 500 (~5min — Sprint 15G.5 / P-105)
+
+**Pré-requisito:** `OPPORTUNITY_TRANSFER_ENABLED=true` em Production. Uma
+oportunidade com transferência **PENDING** disparada por um gestor
+(disparador) — o dono original fica read-only enquanto pende (guard 2c na
+Prisma extension). Logar como o **dono original** da opp (que NÃO é o
+disparador).
+
+- [ ] **R1 — Dono tenta editar durante PENDING → 403 FORBIDDEN (não 500)**
+  Abrir `/pipeline/<id>` da opp em transferência e tentar salvar qualquer
+  campo de negócio (descrição, valor, briefing) OU criar tarefa/atividade.
+  Esperado: a mutation falha com **HTTP 403 FORBIDDEN** e a mensagem
+  amigável "Seu perfil não tem acesso a esta operação." (toast/inline via
+  `friendlyTrpcError`). **Não** pode retornar 500 "Erro interno" nem
+  "Unable to transform response from server".
+  - **Como confirmar o código (DevTools):** Network → a request
+    `POST /api/trpc/opportunities.update` (ou `activities.*`/`tasks.*`)
+    deve responder **403**, com o corpo tRPC trazendo
+    `error.data.code === 'FORBIDDEN'`. Antes do P-105 vinha **500 /
+    INTERNAL_SERVER_ERROR** com a mensagem certa mas código errado.
+- [ ] **R2 — Sem ruído no Sentry**
+  Após R1, conferir o Sentry (janela do teste): a negação read-only do dono
+  **não** deve gerar evento `captureException` (FORBIDDEN é resposta
+  esperada, filtrada por `shouldReportTrpcError`). Antes do P-105 o 500
+  gerava ruído recorrente.
+- [ ] **R3 — Disparador continua editando (carve-out preservado)**
+  Logar como o **disparador** e editar a mesma opp.
+  Esperado: salva normalmente (200). O guard só bloqueia o dono, não o
+  disparador — a correção do código HTTP não afeta as carve-outs T19.
+
+Automatizado: `tests/unit/trpc-middlewares.test.ts` (bloco P-105 —
+`runMapErrors` + helper `findForbiddenError`: ForbiddenError de identidade
+de classe divergente e/ou embrulhado em `cause` → `code === 'FORBIDDEN'`,
+asseverando o CÓDIGO, não só a mensagem) +
+`tests/integration/opportunity-transfer-guard.test.ts` (assert
+`err.code === 'FORBIDDEN'` no caminho do dono bloqueado via `runMapErrors`
+contra a extension real — gated por `DATABASE_URL_TEST`).
+
+**Bloqueia release se:** R1 retorna 500 em vez de 403 (regressão do P-105 —
+o `ForbiddenError` do guard deixou de ser reconhecido pelo `runMapErrors`).
+
+---
+
 ## 3. Cenários de segurança (bloqueia release se falhar)
 
 Rápidos (~10min total) mas críticos.

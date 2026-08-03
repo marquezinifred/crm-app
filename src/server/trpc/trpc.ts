@@ -89,9 +89,44 @@ export function assertPlatformContext(ctx: {
 }
 
 /**
+ * P-105 — Reconhece um `ForbiddenError` mesmo quando ele não bate no
+ * `instanceof` cru do `mapErrors`. Caminha `err` e a cadeia de `.cause`
+ * (guarda de ciclo + limite de profundidade) e casa por:
+ *
+ *  1. **Identidade de classe** (`instanceof ForbiddenError`) — caminho feliz.
+ *  2. **Marcador estrutural** (`err.name === 'ForbiddenError'`) — cobre o caso
+ *     em que a instância vem de uma cópia DIFERENTE do módulo `@/lib/auth/rbac`.
+ *     O guard de transferência (15G.5 chip 2c) lança de dentro do closure do
+ *     client Prisma, que vive no singleton `globalThis.prisma` e sobrevive a
+ *     HMR/rebuilds; a classe capturada nesse closure pode não ser a mesma
+ *     importada aqui, então `instanceof` retorna `false` mesmo sendo o mesmo
+ *     tipo lógico — e o erro caía no `throw err` genérico, virando 500 (P-105).
+ *  3. **Embrulhado em `cause`** — defesa contra qualquer camada que reembrulhe
+ *     o erro. Confirmado em runtime que o Prisma 5.22 NÃO embrulha hoje, mas o
+ *     walk é barato e à prova de regressão.
+ *
+ * Retorna a instância encontrada (ou null). O caller usa só a `.message`
+ * genérica (P-98) — o `cause` técnico do guard NUNCA vaza pro cliente (R5).
+ */
+export function findForbiddenError(err: unknown): Error | null {
+  const seen = new Set<unknown>();
+  let node: unknown = err;
+  let depth = 0;
+  while (node != null && depth < 10 && !seen.has(node)) {
+    seen.add(node);
+    if (node instanceof ForbiddenError) return node;
+    if (node instanceof Error && node.name === 'ForbiddenError') return node;
+    node = (node as { cause?: unknown }).cause;
+    depth += 1;
+  }
+  return null;
+}
+
+/**
  * Handler puro do middleware `mapErrors`. Executa `runNext` e
  * converte:
- *  • `ForbiddenError` (RBAC) → `TRPCError FORBIDDEN`
+ *  • `ForbiddenError` (RBAC / guard de transferência) → `TRPCError FORBIDDEN`,
+ *    mesmo embrulhado ou de identidade de classe divergente (P-105).
  *  • `Error("[tenant-isolation] ...")` (P-46) → `TRPCError
  *    INTERNAL_SERVER_ERROR` com cause preservado
  *  • Outros erros são re-throwed intactos.
@@ -100,8 +135,9 @@ export async function runMapErrors<R>(runNext: () => Promise<R>): Promise<R> {
   try {
     return await runNext();
   } catch (err) {
-    if (err instanceof ForbiddenError) {
-      throw new TRPCError({ code: 'FORBIDDEN', message: err.message });
+    const forbidden = findForbiddenError(err);
+    if (forbidden) {
+      throw new TRPCError({ code: 'FORBIDDEN', message: forbidden.message });
     }
     // P-46 — Backstop de tenant-isolation (src/server/db/client.ts) dispara
     // Error crua com prefixo `[tenant-isolation]`. Sem esse wrap, a UI mostra

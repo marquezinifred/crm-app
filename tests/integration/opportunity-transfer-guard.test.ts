@@ -156,6 +156,30 @@ describeIfDb('Guard de transferência via extension real (T19)', () => {
     ).rejects.toThrow(FORBIDDEN_MSG);
   });
 
+  it('P-105 — dono bloqueado via runMapErrors → TRPCError code FORBIDDEN (não 500)', async () => {
+    // Prova fim-a-fim: o ForbiddenError lançado pelo guard REAL (Prisma
+    // extension) atravessa `runMapErrors` e vira TRPCError FORBIDDEN — não o
+    // 500 do ramo genérico (P-105). O R1 só checava a mensagem; aqui checamos
+    // o CÓDIGO HTTP, que era o bug.
+    const { runMapErrors } = await import('@/server/trpc/trpc');
+    const { TRPCError } = await import('@trpc/server');
+    try {
+      await runMapErrors(() =>
+        asUser(owner, () =>
+          prisma.opportunity.update({
+            where: { id: oppPending },
+            data: { description: 'tentativa via mapErrors' },
+          }),
+        ),
+      );
+      throw new Error('esperava throw');
+    } catch (err) {
+      expect(err).toBeInstanceOf(TRPCError);
+      expect((err as InstanceType<typeof TRPCError>).code).toBe('FORBIDDEN');
+      expect((err as InstanceType<typeof TRPCError>).message).toBe(FORBIDDEN_MSG);
+    }
+  });
+
   it('dono NÃO cria task na opp durante PENDING → ForbiddenError', async () => {
     await expect(
       asUser(owner, () =>

@@ -98,12 +98,80 @@ export const usersRouter = router({
   // Admin convida via Clerk. O usuário receberá magic link.
   // Quando aceitar, o webhook user.created já vai sincronizar.
   invite: adminOnlyProcedure.input(inviteInput).mutation(async ({ input, ctx }) => {
-    // Cria o User local de antemão, ainda sem clerkId, para reservar a role
-    const existing = await prisma.user.findFirst({
-      where: { email: input.email, deletedAt: null },
+    // tenantId EXPLÍCITO em toda query (P-79 / memory cross-tenant-leak).
+    // CONFLICT quando já existe um usuário ATIVO com o mesmo e-mail.
+    const active = await prisma.user.findFirst({
+      where: { tenantId: ctx.tenantId, email: input.email, deletedAt: null },
     });
-    if (existing) throw new TRPCError({ code: 'CONFLICT', message: 'E-mail já existe' });
+    if (active) throw new TRPCError({ code: 'CONFLICT', message: 'E-mail já existe' });
 
+    // P-84 — reconvite: se existe uma linha SOFT-DELETED com o mesmo e-mail
+    // no tenant, reativa em vez de criar (o índice UNIQUE virou parcial na
+    // migration 0033, então não há mais colisão — mas manteríamos linhas
+    // órfãs sem reativação). Caso raro de múltiplas soft-deleted: pega a
+    // mais recente.
+    const softDeleted = await prisma.user.findFirst({
+      where: { tenantId: ctx.tenantId, email: input.email, deletedAt: { not: null } },
+      orderBy: { deletedAt: 'desc' },
+    });
+
+    if (softDeleted) {
+      const reactivated = await prisma.user.update({
+        where: { id: softDeleted.id },
+        data: {
+          deletedAt: null,
+          role: input.role,
+          fullName: input.fullName,
+          // Segue a semântica do invite: active=false até o webhook
+          // user.created do Clerk marcar ativo no accept.
+          active: false,
+        },
+      });
+
+      try {
+        await clerkClient().invitations.createInvitation({
+          emailAddress: input.email,
+          publicMetadata: {
+            tenantId: ctx.tenantId,
+            role: input.role,
+            localUserId: reactivated.id,
+          },
+          redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/sign-up`,
+        });
+      } catch (err) {
+        // Rollback consistente: restaura o estado soft-deleted anterior
+        // (espelha o rollback que o create faz ao deletar a linha nova).
+        await prisma.user.update({
+          where: { id: softDeleted.id },
+          data: {
+            deletedAt: softDeleted.deletedAt,
+            role: softDeleted.role,
+            fullName: softDeleted.fullName,
+            active: softDeleted.active,
+          },
+        });
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Falha ao enviar convite Clerk',
+          cause: err,
+        });
+      }
+
+      await audit({
+        action: 'user.invite',
+        tableName: 'users',
+        recordId: reactivated.id,
+        before: softDeleted,
+        after: reactivated,
+        ip: ctx.ip,
+        userAgent: ctx.userAgent,
+        tenantIdOverride: ctx.tenantId,
+      });
+      return { id: reactivated.id, email: reactivated.email, reactivated: true };
+    }
+
+    // Fluxo normal — cria o User local de antemão, ainda sem clerkId, para
+    // reservar a role.
     const local = await prisma.user.create({
       data: {
         tenantId: ctx.tenantId,
@@ -143,7 +211,7 @@ export const usersRouter = router({
       userAgent: ctx.userAgent,
       tenantIdOverride: ctx.tenantId,
     });
-    return { id: local.id, email: local.email };
+    return { id: local.id, email: local.email, reactivated: false };
   }),
 
   updateRole: adminOnlyProcedure.input(updateRoleInput).mutation(async ({ input, ctx }) => {

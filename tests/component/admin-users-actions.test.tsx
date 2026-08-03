@@ -429,7 +429,7 @@ describe('/admin/users — convite + ordenação (coverage housekeeping)', () =>
     expect(captured.invite?.onSuccess).toBeTypeOf('function');
 
     await act(async () => {
-      captured.invite!.onSuccess!();
+      captured.invite!.onSuccess!({ id: 'u1', email: 'x@y.co', reactivated: false });
     });
 
     await waitFor(() => {
@@ -439,6 +439,25 @@ describe('/admin/users — convite + ordenação (coverage housekeeping)', () =>
     expect(
       screen.queryByRole('dialog', { name: /Convidar usuário/i }),
     ).not.toBeInTheDocument();
+  });
+
+  it('invite onSuccess com reactivated=true mostra toast de reativação (P-84)', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(
+      screen.getByRole('button', { name: /\+ Convidar usuário/i }),
+    );
+    expect(captured.invite?.onSuccess).toBeTypeOf('function');
+
+    await act(async () => {
+      captured.invite!.onSuccess!({ id: 'u1', email: 'x@y.co', reactivated: true });
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Convite reenviado — usuário reativado\./i),
+      ).toBeInTheDocument();
+    });
   });
 
   it('invite onError renderiza erro inline no modal', async () => {

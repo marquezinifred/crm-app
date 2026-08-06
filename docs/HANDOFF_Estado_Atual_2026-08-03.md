@@ -46,9 +46,9 @@ Referência canônica: **[Metodologia_Desenvolvimento_Venzo.md](Metodologia_Dese
 - **Main HEAD:** `2b5519c` (housekeeping P-82/83/84 + QA + docs). **Baseline testes:**
   **1488 passing / 0 failing / 185 skipped** sem `DATABASE_URL_TEST` (pós-merge P-82/83/84;
   era 1463). Type-check zero, lint zero. Com DB de teste, a integração RODA e passa.
-- **Prod:** deployment `crm-2vx8fo3s7` (`dpl_FbSTGpwEfPkB2zj4XdhYFopntsBm`, Ready, aliased
+- **Prod:** deployment `crm-4e39szxjf` (Ready, aliased
   `crm-app-pi-eight.vercel.app`), Neon `production-live` (`ep-rapid-fog-ajm1hdvb`),
-  **migration `0033` aplicada**. Health `db:ok`. Rollout P-82/83/84 FEITO 2026-08-03.
+  **migration `0033` aplicada**. Health `db:ok`. Rollout P-82/83/84 + débitos 15G.5 (P-105/106/107/110) FEITO 2026-08-03.
 - **15G.5 (transferência de oportunidade): ENTREGUE, LIGADO e PROVADO em prod.**
   `OPPORTUNITY_TRANSFER_ENABLED=true` (flag **Sensitive** no Vercel → `vercel env
   pull` mostra vazio, é esperado; o valor real está setado). Fluxo validado ponta a
@@ -70,7 +70,7 @@ Ordem: **(1) infra/prod + (3) débitos 15G.5 → depois (2) 15H.**
   do 1º cliente-piloto.
 
 ### Prioridade 2 — Débitos do 15G.5 — ✅ TODOS ENTREGUES + QA VERDE (2026-08-03)
-Os 4 mergeados na main (`5d8d791`), aguardando rollout único (push + deploy, SEM migration):
+Os 4 mergeados (`5d8d791`) e **EM PROD** (deploy `crm-4e39szxjf`, health db:ok, sem migration):
 - **P-105** ✅ (merge `8764ea6`) — causa real: NÃO era o Prisma embrulhar (5.22 não
   embrulha) e sim **divergência de identidade de classe** (guard lança do closure do
   `globalThis.prisma` que sobrevive a HMR → `instanceof` falha). Fix `findForbiddenError`

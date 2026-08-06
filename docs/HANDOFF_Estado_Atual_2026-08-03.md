@@ -69,19 +69,30 @@ Ordem: **(1) infra/prod + (3) débitos 15G.5 → depois (2) 15H.**
   `Planejamento_Debitos_Pos_Rollout_15G.md` §P-85). Segurança/prod-readiness antes
   do 1º cliente-piloto.
 
-### Prioridade 2 — Débitos do 15G.5 (achados no smoke de prod, spec §9.2-9.5)
-- **P-105** (média) — guard read-only lança `ForbiddenError` dentro da Prisma
-  extension → sobe como **500** (não 403); mapErrors não reconhece o wrap do Prisma.
-  Mensagem certa, código errado. Fix: `mapErrors` desembrulhar (`err.cause instanceof
-  ForbiddenError`) + teste que assevera `code==='FORBIDDEN'`.
-- **P-106** (baixa/média) — app **trava inteiro** com `navigator.onLine` falso
-  (React Query `networkMode:'online'` pausa queries + OfflineBanner). Fix: heartbeat
-  real no `/api/v1/health` e/ou `networkMode:'always'`. É do design system (14.5).
-- **P-107** (média) — `/pipeline/transferencias-em-andamento` colide com o
-  intercepting route `@modal/(.)[id]` → "Invalid uuid" no SPA nav. Fix: `(.)[id]`
-  validar UUID antes do Sheet/byId (early-return null), OU mover a rota 3c.
-- Residuais menores: **P-100** (TIMED_OUT dup worker×service), **P-101/102/103**
-  (cosméticos Fase 3), **R3-R7** (follow-ups guard 2c).
+### Prioridade 2 — Débitos do 15G.5 — ✅ TODOS ENTREGUES + QA VERDE (2026-08-03)
+Os 4 mergeados na main (`5d8d791`), aguardando rollout único (push + deploy, SEM migration):
+- **P-105** ✅ (merge `8764ea6`) — causa real: NÃO era o Prisma embrulhar (5.22 não
+  embrulha) e sim **divergência de identidade de classe** (guard lança do closure do
+  `globalThis.prisma` que sobrevive a HMR → `instanceof` falha). Fix `findForbiddenError`
+  casa por `instanceof` OU `name==='ForbiddenError'` OU cadeia de `cause`. Teste assevera
+  `code==='FORBIDDEN'`. QA Modo B verde.
+- **P-106** ✅ (merge `4851787`) — `networkMode:'always'` (queries+mutations) +
+  OfflineBanner por heartbeat real no `/api/v1/health` (offline só após 2 falhas; 200
+  lento NÃO marca offline — blindado contra cold-start P-110). QA Modo B verde.
+- **P-107** ✅ (merge `d2d5e84`) — guard UUID (`zUuid.safeParse`) no `(.)[id]/page.tsx`
+  (hooks incondicionais + `enabled` + `return null` pós-hooks). Cobre qualquer segmento
+  estático futuro sob `/pipeline`. QA Modo B verde.
+- **P-110** ✅ (merge `4cc3e80`, **Modo A**) — retry de conexão no cold-start do Neon
+  (`db/client.ts` + `connection-retry.ts`). Só P1001/P1002, tenant/backstop/guard
+  byte-a-byte, ALS preservado, host sanitizado. **QA adversarial na branch: 🟢 SEGURO**
+  (6 ataques refutados). Relatórios: `docs/qa-sessions/auto-report-2026-08-03-*`.
+- Residuais menores ainda abertos: **P-100** (TIMED_OUT dup worker×service),
+  **P-101/102/103** (cosméticos Fase 3), **R3-R7** (follow-ups guard 2c),
+  **P-111** (integration do guard P-105 devolvendo `code FORBIDDEN` não exercido
+  contra DB — rodar contra branch Neon efêmero no padrão do R1).
+
+**Baseline pós-4-débitos:** Modo B 1488→1512 (+24); P-110 +23 (`connection-retry`).
+Type-check e lint zero. `db/client.ts` alterado só pelo P-110 (Modo A, QA verde).
 
 ### Prioridade 3 — Sprint 15H (Metas + Reconcile Approvals) — PO já aprovou (Opção A)
 Spec pronta: **[Sprint_15H_Metas_e_Approvals.md](Sprint_15H_Metas_e_Approvals.md)**.

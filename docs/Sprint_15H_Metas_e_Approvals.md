@@ -1,7 +1,7 @@
 # Sprint 15H — Metas por Unidade + Reconcile de Approvals
 
 **Estimativa:** 8-10 dias úteis · **Spec versão inicial:** 2026-07-08
-**Migration:** ~~0032 (approvals) + 0033 (metas)~~ → **0033 (approvals) + 0034 (metas)** — deslizado porque o Sprint 15G.5 (que precede) reivindicou o `0032` (T11 do `Sprint_15G5_Transferencia_Oportunidade.md`). ✅ Corpo desta spec já reconciliado (2026-07-20): approvals→0033, metas→0034 em todas as seções (§3.2, §4.1, rollout, chips, riscos, rollback).
+**Migration:** ~~0032 (approvals) + 0033 (metas)~~ ~~0033 (approvals) + 0034 (metas)~~ → **⚠️ SEGUNDA RENUMERAÇÃO 2026-09-05: `0034` (approvals) + `0035` (metas)** — o housekeeping **P-83** (`0033_users_email_partial_unique`) reivindicou o `0033` e já está **aplicado em prod** (2026-08-03). Última migration no disco = `0033`. Portanto: **Bloco A (approvals) → `0034`**, **Bloco B (metas) → `0035`**. O corpo desta spec (§3.2, §4.1, §6 rollout, §7 chips, §9 rollback) ainda diz 0033/0034 do reconcile anterior — **os prompts dos chips têm precedência com os números 0034/0035**; ao mexer numa seção, atualize a numeração de passagem.
 **Pré-requisitos:**
 - ✅ Sprint 15G Fases 1-3 mergidas + QA verde
 - 🟡 Sprint 15G Fase 4 em desenvolvimento (paralelo — não bloqueia início do 15H)

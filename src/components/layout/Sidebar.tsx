@@ -88,6 +88,7 @@ const SECTIONS: Section[] = [
       { href: '/admin/ai', label: 'IA', Icon: IconSparkles, permission: 'ai:configure_global' },
       { href: '/admin/alerts', label: 'Alertas', Icon: IconBell, permission: 'alert:configure' },
       { href: '/admin/approval-rules', label: 'Regras de aprovação', Icon: IconShield, permission: 'tenant:update' },
+      { href: '/admin/approvals-orphaned', label: 'Aprovações órfãs', Icon: IconShield, permission: 'approval:reconcile' },
       { href: '/admin/contracts', label: 'Config. contratos', Icon: IconSettings, permission: 'tenant:update' },
       { href: '/admin/conversion-rates', label: 'Taxas de conversão', Icon: IconPercent, permission: 'tenant:update' },
       { href: '/admin/email-inbound', label: 'E-mail inbound', Icon: IconAt, permission: 'inbound:configure' },

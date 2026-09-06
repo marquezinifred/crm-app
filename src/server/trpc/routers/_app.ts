@@ -24,6 +24,7 @@ import { searchRouter as searchGlobalRouter } from './search';
 import { partnersRouter } from './partners';
 import { documentsRouter, templatesRouter } from './documents';
 import { proposalsRouter, approvalsRouter } from './proposals';
+import { approvalsReconcileRouter } from './approvals-reconcile';
 import { approvalRulesRouter, contractsConfigRouter } from './approval-rules';
 import { importsRouter } from './imports';
 import { pushRouter } from './push';
@@ -91,6 +92,7 @@ export const appRouter = router({
   templates: templatesRouter,
   proposals: proposalsRouter,
   approvals: approvalsRouter,
+  approvalsReconcile: approvalsReconcileRouter,
   approvalRules: approvalRulesRouter,
   contractsConfig: contractsConfigRouter,
   imports: importsRouter,

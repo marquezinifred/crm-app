@@ -2,10 +2,11 @@
  * Catálogo estático de permissions granulares — Sprint 15E + 15G Fase 1b.
  *
  * Fonte da verdade: `docs/permission-matrix.md` + `docs/Sprint_15G_estrutura_comercial.md` §6.
- * Total: **65 permissions distintas** (Sprint 15G removeu `opportunity:read_others`
+ * Total: **67 permissions distintas** (Sprint 15G removeu `opportunity:read_others`
  * e adicionou `opportunity:read_team`, `opportunity:read_all`,
  * `sales_structure:read`, `sales_structure:manage` — 61 − 1 + 4 = 64; Sprint
- * 15G.5 adicionou `opportunity:transfer` (T12) → 65).
+ * 15G.5 adicionou `opportunity:transfer` (T12) → 65; Sprint 15H Bloco A
+ * adicionou `approval:reconcile` + `approval:reassign` → 67).
  *
  * Formato: `resource:action`. Alinhado com o legado `withCapability`
  * (Sprint 0). Novas features devem adicionar permission nova aqui
@@ -57,11 +58,13 @@ export const PERMISSIONS_CATALOG = [
   { key: 'sales_structure:read', label: 'Ver estrutura organizacional comercial', category: 'commercial' },
   { key: 'sales_structure:manage', label: 'Gerenciar estrutura e membros', category: 'commercial' },
 
-  // Proposals (4)
+  // Proposals (4) + Approvals reconcile — Sprint 15H Bloco A (2)
   { key: 'proposal:create', label: 'Criar propostas', category: 'proposals' },
   { key: 'proposal:read', label: 'Ver propostas', category: 'proposals' },
   { key: 'proposal:update', label: 'Editar propostas', category: 'proposals' },
   { key: 'proposal:approve', label: 'Aprovar propostas', category: 'proposals' },
+  { key: 'approval:reconcile', label: 'Ver aprovações órfãs (reconcile)', category: 'proposals' },
+  { key: 'approval:reassign', label: 'Reatribuir aprovações órfãs', category: 'proposals' },
 
   // Contracts (3)
   { key: 'contract:create', label: 'Criar contratos', category: 'contracts' },

@@ -1054,8 +1054,14 @@ o `ForbiddenError` do guard deixou de ser reconhecido pelo `runMapErrors`).
 Contexto: approvals guardam `approver_id` fixo. Quando role/rule/user muda, a
 approval fica "órfã" — o novo approver correto não a vê. O worker
 `approvals-reconcile` detecta e marca `status='ORPHANED'` + notifica admin.
-A UI de reatribuição (`/admin/approvals-orphaned`) vem no chip 2a — este chip
-entrega só o backend + worker + migration + flag.
+A UI de reatribuição (`/admin/approvals-orphaned`) é o **chip 2a** (R6–R9
+abaixo); o backend/worker/migration/flag são o chip 1a.
+
+**RBAC do chip 2a:** leitura da fila gateada por `approval:reconcile`;
+reatribuição por `approval:reassign`. Ambas em ADMIN + DIRETOR_COMERCIAL por
+default (concedíveis a outros via override individual). A rota/UI é gateada por
+**permission, NÃO pela flag** — a spec §9 exige que, no rollback (flag OFF),
+o admin ainda possa reatribuir as órfãs já marcadas.
 
 - [ ] **R0 — Flag OFF → worker inerte (default)**
   Com `APPROVAL_RECONCILE_ENABLED=false` (ou ausente), disparar o job ad-hoc
@@ -1086,18 +1092,57 @@ entrega só o backend + worker + migration + flag.
   (nenhuma re-marcação) e **não** gera novas linhas em `audit_logs`.
 - [ ] **R5 — Rollback = flag OFF**
   Setar `APPROVAL_RECONCILE_ENABLED=false` — o worker para. Approvals já
-  marcadas ORPHANED **permanecem** (reatribuir manualmente / via UI do chip
-  2a). Nenhuma migração reversa é necessária.
+  marcadas ORPHANED **permanecem** e continuam **reatribuíveis via UI**
+  (`/admin/approvals-orphaned`), pois a UI é gateada por permission, não pela
+  flag. Nenhuma migração reversa é necessária.
 
-Automatizado: `tests/unit/approval-reconcile-service.test.ts` (21 casos —
-função pura por motivo + precedência + skip de snapshot NULL; orquestrador
-marca/audita/notifica idempotente + isolamento por tenant; worker no-op sob
-flag OFF + best-effort por tenant) + `tests/unit/migration-0034-approvals-reconcile.test.ts`
-(8 casos estruturais) + `tests/integration/approval-reconcile-worker.test.ts`
-(4 casos contra DB real — gated por `DATABASE_URL_TEST`).
+**Chip 2a — UI `/admin/approvals-orphaned` + reatribuição:**
 
-**Bloqueia release se:** R0 marca algo com a flag OFF, ou R3 orfana uma
-approval legada (regressão do fail-safe de snapshot NULL).
+- [ ] **R6 — Fila lista só as órfãs do tenant**
+  Logar como ADMIN (ou DIRETOR_COMERCIAL) e abrir `/admin/approvals-orphaned`.
+  Esperado: cada órfã aparece com badge de motivo legível (Perfil não
+  corresponde mais / Aprovador inativo / Regra removida / Regra desabilitada /
+  Permissão revogada), valor da proposta, oportunidade + empresa, e o aprovador
+  anterior. Sem órfãs → empty state "Sem approvals órfãs. Fila limpa."
+  - **Isolamento:** órfãs de OUTRO tenant NÃO aparecem (a query filtra
+    `tenant_id` explícito).
+  - **Sidebar:** item "Aprovações órfãs" só aparece pra quem tem
+    `approval:reconcile` (ANALISTA/GESTOR/PARCEIRO não veem).
+- [ ] **R7 — Reatribuir a um approver válido → volta a PENDING**
+  Expandir uma órfã de rule role-based, escolher no Select um usuário cujo role
+  satisfaz a rule, confirmar no AlertDialog "Reatribuir". Esperado: toast
+  "Aprovação reatribuída."; a órfã some da fila; a approval vira `PENDING` com
+  o novo `approver_id`; o novo responsável passa a vê-la em `/approvals`.
+  - **Confirmar audit:** `SELECT action FROM audit_logs WHERE
+    action='approval.reassigned'` — 1 linha com `tenant_id` correto,
+    `before.approverId` = antigo, `after.approverId` = novo.
+- [ ] **R8 — Candidato inválido é barrado (defesa server-side)**
+  O Select só oferece candidatos que satisfazem a rule. Se a rule foi
+  removida/desabilitada, a linha mostra o aviso "Nenhum aprovador válido para
+  esta regra" e não há Select (reatribuição impossível — recurso é rejeitar).
+  Backend: mesmo forjando um `newApproverId` que não satisfaz a rule, a
+  `approvalsReconcile.reassign` responde erro legível (não reatribui).
+- [ ] **R9 — RBAC da UI**
+  Usuário sem `approval:reconcile` (ex.: ANALISTA) que force a rota recebe erro
+  de permissão do backend (a fila não carrega). Usuário com `approval:reconcile`
+  mas sem `approval:reassign` vê a fila mas a reatribuição é negada.
+
+Automatizado: `tests/unit/approval-reconcile-service.test.ts` (27 casos —
+função pura por motivo + precedência + skip de snapshot NULL + `approverSatisfiesRule`
+do reassign; orquestrador marca/audita/notifica idempotente + isolamento por
+tenant; worker no-op sob flag OFF) + `tests/unit/approvals-reconcile-router.test.ts`
+(16 casos — listOrphaned isolado por tenant + FORBIDDEN; candidatesForReassign
+role/permission/rule-deletada; reassign válido → PENDING + audit, candidato
+inválido → BAD_REQUEST, non-orphaned → BAD_REQUEST, cross-tenant → NOT_FOUND,
+corrida → CONFLICT, RBAC FORBIDDEN) + `tests/component/approvals-orphaned.test.tsx`
+(4 casos — empty state, render de linha, fluxo reassign com toast, aviso sem
+candidatos) + `tests/unit/migration-0034-approvals-reconcile.test.ts` (8 casos
+estruturais) + `tests/integration/approval-reconcile-worker.test.ts` (4 casos
+contra DB real — gated por `DATABASE_URL_TEST`).
+
+**Bloqueia release se:** R0 marca algo com a flag OFF, R3 orfana uma approval
+legada (regressão do fail-safe de snapshot NULL), R6 vaza órfã cross-tenant, ou
+R8 reatribui a um approver que não satisfaz a rule.
 
 **⚠️ Dependência P-36:** sem o worker BullMQ no ar (Railway), o cron 03:00 BRT
 não roda — as órfãs não são detectadas automaticamente. O worker fica

@@ -16,9 +16,11 @@ import { PERMISSION_KEYS, type Permission } from '@/lib/auth/permissions-catalog
 // Sprint 15G.5 (T12): opportunity:transfer somada aos perfis manager-tier
 // (ADMIN/DIRETOR_C/DIRETOR_O/GESTOR) → +1 cada. DIRETOR_F/ANALISTA/PARCEIRO
 // inalterados.
+// Sprint 15H Bloco A: approval:reconcile + approval:reassign em ADMIN e
+// DIRETOR_COMERCIAL → +2 cada.
 const EXPECTED_COUNTS: Record<keyof typeof ROLE_DEFAULT_PERMISSIONS, number> = {
-  ADMIN: 64,
-  DIRETOR_COMERCIAL: 42,
+  ADMIN: 66,
+  DIRETOR_COMERCIAL: 44,
   DIRETOR_OPERACOES: 28,
   DIRETOR_FINANCEIRO: 19,
   GESTOR: 33,

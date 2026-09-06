@@ -48,6 +48,7 @@ vi.mock('@/server/services/push-sender.service', () => ({
 
 import {
   evaluateApprovalOrphan,
+  approverSatisfiesRule,
   reconcileApprovalsForTenant,
   type ApprovalOrphanInput,
 } from '@/server/services/approval-reconcile.service';
@@ -195,6 +196,49 @@ describe('evaluateApprovalOrphan — função pura', () => {
 });
 
 // ── orquestrador ─────────────────────────────────────────────────────
+
+// Sprint 15H Bloco A (chip 2a) — inverso puro usado no reassign da UI.
+describe('approverSatisfiesRule — função pura (reuse do reassign)', () => {
+  it('candidato ativo com role da rule → satisfaz', () => {
+    expect(approverSatisfiesRule(orphanInput())).toBe(true);
+  });
+
+  it('candidato inativo → NÃO satisfaz', () => {
+    expect(
+      approverSatisfiesRule(
+        orphanInput({ approver: { active: false, deletedAt: null, role: 'DIRETOR_COMERCIAL' } }),
+      ),
+    ).toBe(false);
+  });
+
+  it('role fora de approverRoles → NÃO satisfaz', () => {
+    expect(
+      approverSatisfiesRule(
+        orphanInput({ approver: { active: true, deletedAt: null, role: 'ANALISTA' } }),
+      ),
+    ).toBe(false);
+  });
+
+  it('rule permission-based: com permission → satisfaz; sem → NÃO', () => {
+    const permRule = orphanInput({
+      rule: { deletedAt: null, enabled: true, approverRoles: [], approverPermission: 'proposal:approve' },
+    });
+    expect(approverSatisfiesRule({ ...permRule, approverHasPermission: true })).toBe(true);
+    expect(approverSatisfiesRule({ ...permRule, approverHasPermission: false })).toBe(false);
+  });
+
+  it('rule deletada → NINGUÉM satisfaz (recurso é rejeitar)', () => {
+    expect(
+      approverSatisfiesRule(orphanInput({ applicableRuleId: 'rule-1', rule: null })),
+    ).toBe(false);
+  });
+
+  it('sem snapshot da rule (applicableRuleId null) → qualquer ativo satisfaz', () => {
+    expect(
+      approverSatisfiesRule(orphanInput({ applicableRuleId: null, rule: null })),
+    ).toBe(true);
+  });
+});
 
 describe('reconcileApprovalsForTenant', () => {
   it('marca ORPHANED (updateMany WHERE PENDING) + audita com tenantIdOverride', async () => {

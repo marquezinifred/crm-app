@@ -226,6 +226,10 @@ export async function getApprovalState(
     APPROVED: 0,
     REJECTED: 0,
     CHANGES_REQUESTED: 0,
+    // Sprint 15H — ORPHANED é tratado fora de banda pelo fluxo de reconcile
+    // (worker + UI chip 2a); NÃO conta em total/blockers aqui, pra preservar
+    // a semântica pré-15H de "estado das aprovações de uma ProposalVersion".
+    ORPHANED: 0,
   };
   for (const r of rows) by[r.status] = r._count._all;
   const total = by.PENDING + by.APPROVED + by.REJECTED + by.CHANGES_REQUESTED;

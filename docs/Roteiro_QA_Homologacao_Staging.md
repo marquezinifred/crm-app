@@ -1044,6 +1044,56 @@ o `ForbiddenError` do guard deixou de ser reconhecido pelo `runMapErrors`).
 
 ---
 
+### 2.14. Metas por Unidade — progresso (Sprint 15H Bloco B)
+
+**Estado (Chip 1b):** apenas a FUNDAÇÃO está entregue — migration `0035`
+(`sales_quotas` + `tenants.quota_period_type`) + `quota.service` base. O
+**router `quotas` (7 procedures)** vem no Chip 2b e as telas
+(`/admin/sales-quotas` + `/reports/quota-tree`) nas Fases 3. Kill-switch:
+`SALES_QUOTAS_ENABLED` (default `false`).
+
+**Pré-requisito:** migration `0035` aplicada nos dois branches Neon
+(staging + production-live). Estrutura comercial do 15G já criada (§2.7 —
+árvore com pelo menos 1 unit e membros; opps WON atribuídas a membros).
+
+- [ ] **F1 — Migration aplicada, feature inerte com flag OFF**
+  Com `SALES_QUOTAS_ENABLED=false` (default), o app sobe normal e nenhuma
+  rota nova aparece (router/UI só chegam nas próximas fases). Confirmar no
+  banco: `\d sales_quotas` existe, tem RLS habilitado, e o índice
+  `sales_quotas_tenant_unit_period_active_key` é **parcial** (`WHERE
+  deleted_at IS NULL`). `SELECT quota_period_type FROM tenants LIMIT 1` →
+  `QUARTERLY`.
+  Esperado: schema presente, zero impacto runtime (rollback = flag OFF).
+- [ ] **F2 — Cálculo de progresso (quando o router 2b/telas 3 subirem)**
+  Configurar uma meta pra uma unit num período (ex.: `2026-Q1`, target
+  R$ 100.000) e conferir que o progresso = soma de `closed_value` das opps
+  **WON** cujo owner está no **subtree ltree** da unit, com
+  `actual_close_date` dentro do trimestre. `progressPct = actual/target ×
+  100`. Meta em unit-pai deve somar as WON das unidades-filhas também
+  (subtree N-nível).
+  Esperado: `actual` bate com a soma manual das WON do período no subtree;
+  `progressPct` coerente. Sem meta configurada → progresso mostra `actual`
+  mas `target`/`progressPct` nulos ("sem meta", não "meta zerada").
+- [ ] **F3 — Isolamento multi-tenant + soft delete**
+  Meta de um tenant nunca aparece pra outro (filtro `tenant_id` explícito
+  em toda query). Excluir uma meta faz soft delete (`deleted_at`), e é
+  possível recriar a meta da MESMA (unit, período) depois — a UNIQUE
+  parcial permite o histórico soft-deleted coexistir com a nova ativa.
+  Esperado: cross-tenant → NOT_FOUND; recriar após excluir → OK (não
+  colide com a soft-deleted).
+
+Automatizado (Chip 1b): `tests/unit/quota-service.test.ts` (25 casos —
+`periodToDateRange`/`isValidPeriod` puros, `computeQuotaProgress` com
+subtree/período/sem-meta/multi-tenant, CRUD base com cross-tenant + soft
+delete + audit) + `tests/unit/migration-0035-sales-quotas.test.ts` (7
+casos estruturais — tabela, UNIQUE parcial, RLS, coluna
+`quota_period_type` + CHECK, mapeamento no schema.prisma).
+
+**Não bloqueia release do Chip 1b** (feature inerte com flag OFF). F2/F3
+viram bloqueadores quando o router 2b + telas Fase 3 subirem.
+
+---
+
 ## 3. Cenários de segurança (bloqueia release se falhar)
 
 Rápidos (~10min total) mas críticos.
@@ -1250,6 +1300,7 @@ Legenda: ✅ obrigatório · 🟡 recomendado · ⬜ opcional · — não aplic�
 | `AI_PLATFORM_MARGIN` | 🟡 | 🟡 | Default `0.20` — margem da Plataforma sobre IA |
 | `MULTI_AI_ENABLED` | 🟡 | 🟡 | **Mesmo valor nos dois** (default `false`; ligar após rollout §2.3) |
 | `RBAC_GRANULAR_ENABLED` | 🟡 | 🟡 | **Mesmo valor nos dois** (default `false`; ligar após backfill + §2.5) |
+| `SALES_QUOTAS_ENABLED` | 🟡 | 🟡 | **Mesmo valor nos dois** (default `false`; Sprint 15H Bloco B — ligar quando router 2b + telas Fase 3 subirem, ver §2.14) |
 | `STRIPE_SECRET_KEY` | ⬜ | — | Só se testar billing |
 | `STRIPE_WEBHOOK_SECRET` | ⬜ | — | Só se testar billing |
 | `STRIPE_PRICE_STARTER/PRO/ENTERPRISE` | ⬜ | — | Só se testar billing |

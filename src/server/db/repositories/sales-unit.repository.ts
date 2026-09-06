@@ -221,6 +221,41 @@ export const SalesUnitRepository = {
   },
 
   /**
+   * Sprint 15H Bloco B (Chip 1b) — IDs de TODOS os users membros do subtree
+   * enraizado em `unitId` (a própria unit + todos os descendentes ltree).
+   *
+   * Diferente de `getSubtreeMemberIds`, que é indexado por um MANAGER e une
+   * as subtrees de TODAS as units que ele gerencia. Aqui a raiz é uma unit
+   * específica — usado por `quota.service.computeQuotaProgress` pra somar as
+   * opps WON dentro da hierarquia de uma meta, independente de quem gerencia.
+   *
+   * Query: `sub_unit.path <@ root_unit.path` (`<@` = descendant_or_equal),
+   * incluindo a própria root. Filtra tenant + `deleted_at IS NULL` nas units.
+   * Se a unit não existe no tenant, retorna `[]` (o chamador decide o
+   * fallback/erro — este método não lança).
+   */
+  async getSubtreeMemberIdsByUnit(
+    unitId: string,
+    tenantId: string,
+  ): Promise<string[]> {
+    const rows = await prisma.$queryRaw<Array<{ user_id: string }>>`
+      SELECT DISTINCT m.user_id::text AS user_id
+      FROM sales_units root_unit
+      JOIN sales_units sub_unit
+        ON sub_unit.tenant_id = root_unit.tenant_id
+       AND sub_unit.deleted_at IS NULL
+       AND sub_unit.path <@ root_unit.path
+      JOIN sales_unit_members m
+        ON m.unit_id = sub_unit.id
+       AND m.tenant_id = ${tenantId}::uuid
+      WHERE root_unit.id = ${unitId}::uuid
+        AND root_unit.tenant_id = ${tenantId}::uuid
+        AND root_unit.deleted_at IS NULL
+    `;
+    return rows.map((r) => r.user_id);
+  },
+
+  /**
    * Sprint 15G.5 (T14) — Managers-alvo válidos de uma transferência disparada
    * por `callerId`. Autoridade 100% estrutural (T13): NUNCA indexa por
    * `users.role`; deriva de `sales_unit_members.role='MANAGER'` + posição ltree

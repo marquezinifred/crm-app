@@ -159,6 +159,13 @@ const envSchema = z.object({
   // não ter consumer). Docs de rollout antigas que dizem "deploy com
   // false" ficam obsoletas.
   RBAC_GRANULAR_ENABLED: envBoolean(true),
+
+  // Sprint 15H Bloco B — Kill-switch das Metas por Unidade. false (default):
+  // migration 0035 cria a tabela vazia sempre, mas nenhum consumer runtime
+  // lê `sales_quotas` (o router do Chip 2b e as telas das Fases 3 respeitam
+  // a flag). true: metas configuráveis + dashboard de progresso disponíveis.
+  // Rollback = flag false (sem redeploy); dados ficam inertes no banco.
+  SALES_QUOTAS_ENABLED: envBoolean(false),
 });
 
 const parsed = envSchema.safeParse(process.env);

@@ -430,6 +430,9 @@ model Tenant {
   trialConversionAt       DateTime?           @map("trial_conversion_at")
   trialCancellationAt     DateTime?           @map("trial_cancellation_at")
   trialCancellationReason String?             @map("trial_cancellation_reason")
+  // Metas por unidade — Sprint 15H Bloco B (Chip 1b). Granularidade padrão
+  // das metas: QUARTERLY|MONTHLY|SEMIANNUAL|ANNUAL (CHECK na migration 0035).
+  quotaPeriodType         String              @default("QUARTERLY") @map("quota_period_type")
   createdAt               DateTime            @default(now()) @map("created_at")
   updatedAt               DateTime            @updatedAt @map("updated_at")
   deletedAt               DateTime?           @map("deleted_at")
@@ -489,6 +492,7 @@ model Tenant {
   salesUnits              SalesUnit[]
   salesUnitMembers        SalesUnitMember[]
   opportunityTransfers    OpportunityTransfer[]
+  salesQuotas             SalesQuota[]
 
   @@map("tenants")
 }
@@ -2079,6 +2083,8 @@ model SalesUnit {
   members           SalesUnitMember[]
   // Sprint 15G.5 — unidade-alvo (auditoria) das transferências (target_unit_id)
   transfersTargeted OpportunityTransfer[]
+  // Sprint 15H Bloco B — metas de faturamento por unit × período
+  salesQuotas       SalesQuota[]
 
   @@unique([tenantId, shortId], map: "sales_units_tenant_short_id_unique")
   @@index([tenantId])
@@ -2113,6 +2119,40 @@ model SalesUnitMember {
   @@index([tenantId])
   @@index([unitId, role])
   @@map("sales_unit_members")
+}
+
+// ---------------------------------------------------------------------
+// SalesQuota — Sprint 15H Bloco B (Chip 1b): meta de faturamento por
+// unit × período. Progresso NÃO é materializado — o quota.service soma
+// as opps WON no subtree ltree da unit em runtime.
+//
+// `period`: "YYYY-QN" | "YYYY-MM" | "YYYY-HN" | "YYYY", governado por
+// tenant.quotaPeriodType.
+//
+// O @@unique abaixo é PARCIAL no banco (`WHERE deleted_at IS NULL`, ver
+// migration 0035 — 1 meta ATIVA por (tenant, unit, period)). Prisma não
+// expressa partial unique; o `map` aponta pro índice parcial e o SQL é a
+// fonte da verdade (mesmo pattern do P-83 e do 0031 is_primary).
+// ---------------------------------------------------------------------
+model SalesQuota {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  unitId      String    @map("unit_id") @db.Uuid
+  period      String
+  targetValue Decimal   @map("target_value") @db.Decimal(15, 2)
+  currency    String    @default("BRL")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  createdBy   String?   @map("created_by") @db.Uuid
+  deletedAt   DateTime? @map("deleted_at")
+
+  tenant Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  unit   SalesUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, unitId, period], map: "sales_quotas_tenant_unit_period_active_key")
+  @@index([tenantId, period])
+  @@index([unitId])
+  @@map("sales_quotas")
 }
 
 // ---------------------------------------------------------------------

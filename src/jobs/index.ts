@@ -27,7 +27,12 @@ import { startInboundLeadCreateWorker } from './inbound-lead-create.worker';
 import {
   startOpportunityTransferTimeoutWorker,
 } from './opportunity-transfer-timeout.worker';
-import type { OpportunityTransferTimeoutJobData } from './queues';
+// Sprint 15H Bloco A — reconcile diário de approvals órfãs (P-77)
+import { startApprovalsReconcileWorker } from './approvals-reconcile.worker';
+import type {
+  OpportunityTransferTimeoutJobData,
+  ApprovalsReconcileJobData,
+} from './queues';
 
 async function main() {
   const scanWorker = startAlertsScanWorker();
@@ -37,6 +42,7 @@ async function main() {
   const healthRollupWorker = startHealthScoreRollupWorker();
   const inboundLeadWorker = startInboundLeadCreateWorker();
   const transferTimeoutWorker = startOpportunityTransferTimeoutWorker();
+  const approvalsReconcileWorker = startApprovalsReconcileWorker();
 
   scanWorker.on('failed', (job, err) =>
     console.error(`[alerts-scan] job ${job?.id} falhou:`, err.message),
@@ -58,6 +64,9 @@ async function main() {
   );
   transferTimeoutWorker.on('failed', (job, err) =>
     console.error(`[transfer-timeout] job ${job?.id} falhou:`, err.message),
+  );
+  approvalsReconcileWorker.on('failed', (job, err) =>
+    console.error(`[approvals-reconcile] job ${job?.id} falhou:`, err.message),
   );
 
   // Agendamentos diários (BRT)
@@ -94,11 +103,22 @@ async function main() {
     removeOnFail: 200,
   });
 
+  // Sprint 15H Bloco A — reconcile de approvals órfãs diário 03:00 BRT.
+  // No-op sob APPROVAL_RECONCILE_ENABLED=false (default).
+  const approvalsReconcileQueue = makeQueue<ApprovalsReconcileJobData>(
+    QUEUE_NAMES.approvalsReconcile,
+  );
+  await approvalsReconcileQueue.add('daily-reconcile', {}, {
+    repeat: { pattern: '0 3 * * *', tz: 'America/Sao_Paulo' },
+    removeOnComplete: 100,
+    removeOnFail: 200,
+  });
+
   console.info(
-    '[workers] alerts-scan + email-send + import-run + ai-usage-rollup + health-score-rollup + inbound-lead-create + opportunity-transfer-timeout rodando',
+    '[workers] alerts-scan + email-send + import-run + ai-usage-rollup + health-score-rollup + inbound-lead-create + opportunity-transfer-timeout + approvals-reconcile rodando',
   );
   console.info(
-    '[workers] crons: scan 07:00 BRT · ai-rollup 00:30 BRT · health-rollup 02:00 BRT · transfer-timeout hourly',
+    '[workers] crons: scan 07:00 BRT · ai-rollup 00:30 BRT · health-rollup 02:00 BRT · transfer-timeout hourly · approvals-reconcile 03:00 BRT',
   );
 
   // Shutdown gracioso
@@ -112,6 +132,7 @@ async function main() {
       healthRollupWorker.close(),
       inboundLeadWorker.close(),
       transferTimeoutWorker.close(),
+      approvalsReconcileWorker.close(),
     ]);
     process.exit(0);
   };

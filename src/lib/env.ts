@@ -134,6 +134,18 @@ const envSchema = z.object({
   // docs/Sprint_15G5_Transferencia_Oportunidade.md §6.
   OPPORTUNITY_TRANSFER_ENABLED: envBoolean(false),
 
+  // Sprint 15H Bloco A (P-77) — Kill-switch do reconcile de approvals órfãs.
+  // false (default): o worker `approvals-reconcile` é inerte (no-op total) —
+  // não varre nem marca nada como ORPHANED. A migration 0034 cria as colunas
+  // + enum vazios/inertes sempre. true: o worker roda diário 03:00 BRT,
+  // detecta approvals cujo approver não satisfaz mais a rule original e as
+  // marca ORPHANED + notifica admin. Só ativar pós smoke test (dry-run
+  // recomendado antes — ver spec §6). Rollback = flag false (sem redeploy);
+  // approvals já marcadas ORPHANED permanecem (reatribuir via UI do chip 2a).
+  // NOTA: a spec §3.6/§6 usa este nome (singular "APPROVAL"). Consumer runtime
+  // único no worker (padrão P-73). Ver docs/Sprint_15H_Metas_e_Approvals.md §3.
+  APPROVAL_RECONCILE_ENABLED: envBoolean(false),
+
   // Sprint 15E — Kill-switch do RBAC granular (permissions individuais).
   // true (default; P-62): `hasPermission` async respeita role default +
   // overrides individuais + cache (Sprint 15E completo).

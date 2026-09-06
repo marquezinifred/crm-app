@@ -12,6 +12,9 @@ const STATUS_COLORS = {
   APPROVED: 'bg-success-bg text-success-text',
   REJECTED: 'bg-red-100 text-red-800',
   CHANGES_REQUESTED: 'bg-info-bg text-info-text',
+  // Sprint 15H — approval sem responsável válido (reconcile P-77). Reatribuir
+  // via /admin/approvals-orphaned (chip 2a).
+  ORPHANED: 'bg-hover text-text-2',
 } as const;
 
 export function ProposalsSection({ opportunityId }: { opportunityId: string }) {

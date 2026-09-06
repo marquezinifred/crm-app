@@ -26,6 +26,8 @@ export const QUEUE_NAMES = {
   inboundLeadCreate: 'inbound-lead-create',
   // Sprint 15G.5 — expira transferências de oportunidade PENDING vencidas
   opportunityTransferTimeout: 'opportunity-transfer-timeout',
+  // Sprint 15H Bloco A — reconcile diário de approvals órfãs (P-77)
+  approvalsReconcile: 'approvals-reconcile',
 } as const;
 
 export function makeQueue<T = unknown>(name: string): Queue<T> {
@@ -113,4 +115,10 @@ export interface InboundLeadCreateJobData {
 export interface OpportunityTransferTimeoutJobData {
   /** ISO string opcional para sobrescrever "agora" em runs ad-hoc/testes. */
   now?: string;
+}
+
+// Sprint 15H Bloco A — reconcile diário de approvals órfãs (cross-tenant)
+export interface ApprovalsReconcileJobData {
+  /** Reservado para runs ad-hoc/dry-run futuros. Vazio no cron diário. */
+  dryRun?: boolean;
 }

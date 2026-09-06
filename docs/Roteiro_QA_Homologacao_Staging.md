@@ -1044,6 +1044,67 @@ o `ForbiddenError` do guard deixou de ser reconhecido pelo `runMapErrors`).
 
 ---
 
+### 2.14. Reconcile de approvals órfãs (~10min — Sprint 15H Bloco A / P-77)
+
+**Pré-requisito:** migration `0034_approvals_reconcile` aplicada (colunas
+`approvals.applicable_rule_id/orphaned_at/orphaned_reason` + valor de enum
+`ORPHANED`). Worker BullMQ no ar (**P-36 — Railway**) para o cron diário
+03:00 BRT. Flag `APPROVAL_RECONCILE_ENABLED`.
+
+Contexto: approvals guardam `approver_id` fixo. Quando role/rule/user muda, a
+approval fica "órfã" — o novo approver correto não a vê. O worker
+`approvals-reconcile` detecta e marca `status='ORPHANED'` + notifica admin.
+A UI de reatribuição (`/admin/approvals-orphaned`) vem no chip 2a — este chip
+entrega só o backend + worker + migration + flag.
+
+- [ ] **R0 — Flag OFF → worker inerte (default)**
+  Com `APPROVAL_RECONCILE_ENABLED=false` (ou ausente), disparar o job ad-hoc
+  do worker (ou aguardar o tick). Esperado no log:
+  `[approvals-reconcile] enabled=false tenants=0 orphaned=0 skipped=0`.
+  **Nada** é marcado ORPHANED; nenhuma approval muda de status.
+- [ ] **R1 — Dry-run recomendado antes do 1º ON (spec §6 passo 3)**
+  Antes de ligar em prod, conferir quantas órfãs existiriam: inspecionar
+  quantas approvals PENDING têm approver cujo role não bate mais com a rule.
+  Se o número for absurdo (ex.: TODAS), **NÃO ligar** — provável bug de
+  snapshot. Esperado: número pequeno/plausível.
+- [ ] **R2 — Flag ON → órfã real vira ORPHANED**
+  Com `APPROVAL_RECONCILE_ENABLED=true`: criar/ter 1 approval PENDING cujo
+  `applicable_rule_id` aponta pra uma rule role-based (ex.: DIRETOR_COMERCIAL)
+  e trocar o role do approver (ou desativá-lo). Rodar o worker.
+  Esperado: a approval vira `status='ORPHANED'` com `orphaned_reason` correto
+  (`approver_role_no_longer_matches_rule` / `approver_inactive` /
+  `rule_deleted` / `rule_disabled`) e `orphaned_at` preenchido.
+  - **Confirmar audit:** `SELECT action, record_id FROM audit_logs WHERE
+    action='approval.orphaned'` — 1 linha por órfã, com `tenant_id` correto.
+- [ ] **R3 — Approval legada (sem snapshot) NÃO é orfanada (fail-safe)**
+  Uma approval PENDING com `applicable_rule_id IS NULL` (approvals anteriores
+  ao 0034) **permanece PENDING** — o reconcile a PULA (não confunde "sem
+  snapshot" com "rule deletada"). Confirmar que o log reporta `skipped>0` e
+  a approval segue PENDING.
+- [ ] **R4 — Idempotência**
+  Rodar o worker 2× seguidas. Esperado: a 2ª execução reporta `orphaned=0`
+  (nenhuma re-marcação) e **não** gera novas linhas em `audit_logs`.
+- [ ] **R5 — Rollback = flag OFF**
+  Setar `APPROVAL_RECONCILE_ENABLED=false` — o worker para. Approvals já
+  marcadas ORPHANED **permanecem** (reatribuir manualmente / via UI do chip
+  2a). Nenhuma migração reversa é necessária.
+
+Automatizado: `tests/unit/approval-reconcile-service.test.ts` (21 casos —
+função pura por motivo + precedência + skip de snapshot NULL; orquestrador
+marca/audita/notifica idempotente + isolamento por tenant; worker no-op sob
+flag OFF + best-effort por tenant) + `tests/unit/migration-0034-approvals-reconcile.test.ts`
+(8 casos estruturais) + `tests/integration/approval-reconcile-worker.test.ts`
+(4 casos contra DB real — gated por `DATABASE_URL_TEST`).
+
+**Bloqueia release se:** R0 marca algo com a flag OFF, ou R3 orfana uma
+approval legada (regressão do fail-safe de snapshot NULL).
+
+**⚠️ Dependência P-36:** sem o worker BullMQ no ar (Railway), o cron 03:00 BRT
+não roda — as órfãs não são detectadas automaticamente. O worker fica
+registrado e inerte até P-36 + flag ON.
+
+---
+
 ## 3. Cenários de segurança (bloqueia release se falhar)
 
 Rápidos (~10min total) mas críticos.
@@ -1250,6 +1311,7 @@ Legenda: ✅ obrigatório · 🟡 recomendado · ⬜ opcional · — não aplic�
 | `AI_PLATFORM_MARGIN` | 🟡 | 🟡 | Default `0.20` — margem da Plataforma sobre IA |
 | `MULTI_AI_ENABLED` | 🟡 | 🟡 | **Mesmo valor nos dois** (default `false`; ligar após rollout §2.3) |
 | `RBAC_GRANULAR_ENABLED` | 🟡 | 🟡 | **Mesmo valor nos dois** (default `false`; ligar após backfill + §2.5) |
+| `APPROVAL_RECONCILE_ENABLED` | 🟡 | 🟡 | **Mesmo valor nos dois** (default `false`; ligar após migration 0034 + dry-run §2.14 R1; exige worker Railway P-36 no ar) |
 | `STRIPE_SECRET_KEY` | ⬜ | — | Só se testar billing |
 | `STRIPE_WEBHOOK_SECRET` | ⬜ | — | Só se testar billing |
 | `STRIPE_PRICE_STARTER/PRO/ENTERPRISE` | ⬜ | — | Só se testar billing |

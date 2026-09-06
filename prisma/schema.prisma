@@ -195,6 +195,7 @@ enum ApprovalStatus {
   APPROVED
   REJECTED
   CHANGES_REQUESTED
+  ORPHANED // Sprint 15H — approver não satisfaz mais a rule/role original (P-77)
 }
 
 enum ContractStatus {
@@ -1123,6 +1124,12 @@ model Approval {
   status            ApprovalStatus @default(PENDING)
   comment           String?        @db.Text
   decidedAt         DateTime?      @map("decided_at")
+  // Sprint 15H (P-77) — snapshot da rule que gerou a approval + rastreio de órfã.
+  // A rule pode ser deletada (SetNull) depois; o reconcile usa applicableRule
+  // pra decidir se o approver ainda satisfaz o critério original.
+  applicableRuleId  String?        @map("applicable_rule_id") @db.Uuid
+  orphanedAt        DateTime?      @map("orphaned_at")
+  orphanedReason    String?        @map("orphaned_reason") @db.Text
   createdAt         DateTime       @default(now()) @map("created_at")
   updatedAt         DateTime       @updatedAt @map("updated_at")
   createdBy         String?        @map("created_by") @db.Uuid
@@ -1132,6 +1139,7 @@ model Approval {
   tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   proposalVersion ProposalVersion @relation(fields: [proposalVersionId], references: [id], onDelete: Cascade)
   approver        User            @relation("ApprovalApprover", fields: [approverId], references: [id])
+  applicableRule  ApprovalRule?   @relation("ApplicableRule", fields: [applicableRuleId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, status])
   @@index([tenantId, approverId, status])
@@ -1478,7 +1486,9 @@ model ApprovalRule {
   updatedBy          String?              @map("updated_by") @db.Uuid
   deletedAt          DateTime?            @map("deleted_at")
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // Sprint 15H — approvals que declaram esta rule como applicableRule (reconcile).
+  approvals  Approval[] @relation("ApplicableRule")
 
   @@index([tenantId, enabled])
   @@map("approval_rules")

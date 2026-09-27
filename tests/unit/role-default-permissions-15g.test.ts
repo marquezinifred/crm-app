@@ -82,9 +82,9 @@ describe('ROLE_DEFAULT_PERMISSIONS — Sprint 15G Fase 1b matriz', () => {
     expect(PERMISSION_KEYS.has('opportunity:read_others' as never)).toBe(false);
   });
 
-  it('contagens totais por role conferem com spec §6 + 15G.5 transfer (ADMIN=64, DIRETOR_C=42, DIRETOR_O=28, DIRETOR_F=19, GESTOR=33, ANALISTA=24, PARCEIRO=5)', () => {
-    expect(ROLE_DEFAULT_PERMISSIONS.ADMIN.size).toBe(64);
-    expect(ROLE_DEFAULT_PERMISSIONS.DIRETOR_COMERCIAL.size).toBe(42);
+  it('contagens totais por role conferem com spec §6 + 15G.5 transfer + 15H approval reconcile (ADMIN=66, DIRETOR_C=44, DIRETOR_O=28, DIRETOR_F=19, GESTOR=33, ANALISTA=24, PARCEIRO=5)', () => {
+    expect(ROLE_DEFAULT_PERMISSIONS.ADMIN.size).toBe(66);
+    expect(ROLE_DEFAULT_PERMISSIONS.DIRETOR_COMERCIAL.size).toBe(44);
     expect(ROLE_DEFAULT_PERMISSIONS.DIRETOR_OPERACOES.size).toBe(28);
     expect(ROLE_DEFAULT_PERMISSIONS.DIRETOR_FINANCEIRO.size).toBe(19);
     expect(ROLE_DEFAULT_PERMISSIONS.GESTOR.size).toBe(33);

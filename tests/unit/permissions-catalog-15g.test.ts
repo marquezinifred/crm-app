@@ -67,9 +67,9 @@ describe('permissions catalog — Sprint 15G Fase 1b', () => {
     expect(isValidPermission('sales_structure:manage')).toBe(true);
   });
 
-  it('total = 65 permissions distintas (61 baseline − 1 removida + 4 adicionadas + 1 transfer 15G.5)', () => {
-    expect(PERMISSIONS_CATALOG.length).toBe(65);
-    expect(PERMISSION_KEYS.size).toBe(65);
+  it('total = 67 permissions distintas (61 baseline − 1 removida + 4 adicionadas + 1 transfer 15G.5 + 2 approval reconcile 15H)', () => {
+    expect(PERMISSIONS_CATALOG.length).toBe(67);
+    expect(PERMISSION_KEYS.size).toBe(67);
   });
 
   it('nova category "commercial" existe em CATEGORY_ORDER + CATEGORY_LABELS com 2 permissions', () => {

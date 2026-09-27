@@ -44,9 +44,11 @@ export { PERMISSIONS_CATALOG, PERMISSION_KEYS, type Permission } from './permiss
  *
  * Contagens (pós Sprint 15G Fase 1b; 15G.5 add opportunity:transfer T12 aos
  * perfis manager-tier — ADMIN/DIRETOR_C/DIRETOR_O/GESTOR +1 cada):
- *   ADMIN=64 (63 + 1), DIRETOR_COMERCIAL=42 (41 + 1),
+ *   ADMIN=66 (64 + 2), DIRETOR_COMERCIAL=44 (42 + 2),
  *   DIRETOR_OPERACOES=28 (27 + 1), DIRETOR_FINANCEIRO=19 (inalterado),
  *   GESTOR=33 (32 + 1), ANALISTA=24 (inalterado), PARCEIRO=5 (inalterado).
+ *   (Sprint 15H Bloco A: +approval:reconcile +approval:reassign em
+ *   ADMIN e DIRETOR_COMERCIAL.)
  *
  * NOTA sobre PARCEIRO: as 5 permissions são potenciais — o service
  * aplica filtro row-level (Sprint 7) restringindo ao escopo dos
@@ -73,8 +75,9 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, ReadonlySet<Permission>>
     'opportunity:read_team', 'opportunity:read_all', 'opportunity:transfer',
     // Commercial (2) — Sprint 15G estrutura organizacional
     'sales_structure:read', 'sales_structure:manage',
-    // Proposals (4)
+    // Proposals (4) + Approvals reconcile (2) — Sprint 15H Bloco A
     'proposal:create', 'proposal:read', 'proposal:update', 'proposal:approve',
+    'approval:reconcile', 'approval:reassign',
     // Contracts (3)
     'contract:create', 'contract:read', 'contract:update',
     // Documents (3)
@@ -96,7 +99,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, ReadonlySet<Permission>>
     'audit:read',
     // Import (2)
     'import:run', 'import:read',
-  ]), // 64
+  ]), // 66
 
   DIRETOR_COMERCIAL: new Set<Permission>([
     'tenant:read',
@@ -109,6 +112,9 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, ReadonlySet<Permission>>
     'opportunity:read_team', 'opportunity:read_all', 'opportunity:transfer',
     'sales_structure:read',
     'proposal:create', 'proposal:read', 'proposal:update', 'proposal:approve',
+    // Sprint 15H Bloco A — DIRETOR_COMERCIAL gerencia o fluxo de aprovação
+    // comercial, então reconcilia + reatribui approvals órfãs.
+    'approval:reconcile', 'approval:reassign',
     'contract:create', 'contract:read', 'contract:update',
     'document:upload', 'document:read',
     'task:create', 'task:update', 'task:delete',
@@ -119,7 +125,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, ReadonlySet<Permission>>
     'alert:receive_admin',
     'audit:read',
     'import:read',
-  ]), // 42
+  ]), // 44
 
   DIRETOR_OPERACOES: new Set<Permission>([
     'tenant:read',

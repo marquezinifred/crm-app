@@ -8,9 +8,9 @@ import {
 } from '@/lib/auth/permissions-catalog';
 
 describe('permissions catalog — Sprint 15E + 15G Fase 1b', () => {
-  it('tem 65 permissions distintas (Sprint 15G: 61 − 1 + 4; 15G.5 +1 transfer)', () => {
-    expect(PERMISSIONS_CATALOG.length).toBe(65);
-    expect(PERMISSION_KEYS.size).toBe(65);
+  it('tem 67 permissions distintas (Sprint 15G: 61 − 1 + 4; 15G.5 +1 transfer; 15H +2 approval reconcile)', () => {
+    expect(PERMISSIONS_CATALOG.length).toBe(67);
+    expect(PERMISSION_KEYS.size).toBe(67);
   });
 
   it('todas as keys seguem formato `resource:action`', () => {
@@ -78,6 +78,10 @@ describe('permissions catalog — Sprint 15E + 15G Fase 1b', () => {
     expect(PERMISSION_KEYS.has('opportunity:read_all')).toBe(true);
     expect(PERMISSION_KEYS.has('sales_structure:read')).toBe(true);
     expect(PERMISSION_KEYS.has('sales_structure:manage')).toBe(true);
+
+    // Sprint 15H Bloco A — reconcile de approvals órfãs
+    expect(PERMISSION_KEYS.has('approval:reconcile')).toBe(true);
+    expect(PERMISSION_KEYS.has('approval:reassign')).toBe(true);
 
     // P-19 documents
     expect(PERMISSION_KEYS.has('document:upload')).toBe(true);

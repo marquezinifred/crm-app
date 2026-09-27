@@ -107,6 +107,27 @@ export function evaluateApprovalOrphan(input: ApprovalOrphanInput): OrphanVerdic
   return { shouldOrphan: false, reason: null };
 }
 
+/**
+ * Sprint 15H Bloco A (chip 2a) — inverso puro de `evaluateApprovalOrphan`.
+ *
+ * Dado um candidato a novo approver (montado como `ApprovalOrphanInput`),
+ * decide se ele SATISFAZ o critério da rule da approval órfã — i.e., se
+ * reatribuir a approval a esse candidato NÃO produziria imediatamente outra
+ * órfã. É a mesma checagem do reconcile, só que negada: reusar a lógica pura
+ * garante que "quem o worker não orfanaria" == "para quem o admin pode
+ * reatribuir", sem duplicar a matriz de regras (role/permission/enabled).
+ *
+ * Observações de contrato herdadas de `evaluateApprovalOrphan`:
+ *  - candidato inativo/deletado → não satisfaz (nunca aprova nada);
+ *  - rule deletada/desabilitada → NINGUÉM satisfaz (o critério não existe
+ *    mais; a recurso é rejeitar, fora do escopo do chip 2a);
+ *  - `applicableRuleId == null` (sem snapshot) → qualquer candidato ativo
+ *    satisfaz (não há critério a violar).
+ */
+export function approverSatisfiesRule(input: ApprovalOrphanInput): boolean {
+  return !evaluateApprovalOrphan(input).shouldOrphan;
+}
+
 export interface ReconcileTenantResult {
   tenantId: string;
   /** Approvals novas marcadas ORPHANED nesta execução. */

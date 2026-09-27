@@ -1150,11 +1150,20 @@ registrado e inerte até P-36 + flag ON.
 
 ### 2.15. Metas por Unidade — progresso (Sprint 15H Bloco B)
 
-**Estado (Chip 1b):** apenas a FUNDAÇÃO está entregue — migration `0035`
-(`sales_quotas` + `tenants.quota_period_type`) + `quota.service` base. O
-**router `quotas` (7 procedures)** vem no Chip 2b e as telas
-(`/admin/sales-quotas` + `/reports/quota-tree`) nas Fases 3. Kill-switch:
-`SALES_QUOTAS_ENABLED` (default `false`).
+**Estado (Chip 2b):** fundação (migration `0035` + `quota.service`, Chip 1b)
++ **router `quotas` (7 procedures)** entregues. As telas
+(`/admin/sales-quotas` + `/reports/quota-tree`) vêm nas Fases 3 — ainda não
+há UI, então F2/F3/F4 são exercidos via API (tRPC caller / dev tools) até as
+telas subirem. Kill-switch: `SALES_QUOTAS_ENABLED` (default `false`).
+
+**Router `quotas` (Chip 2b) — 7 procedures + gating:**
+`listByPeriod` / `getByUnit` / `dashboardTree` (leitura,
+`sales_structure:read`) · `create` / `update` / `delete` (CRUD,
+`sales_structure:manage`) · `updatePeriodType` (config de tenant, adminOnly).
+Todas respeitam `SALES_QUOTAS_ENABLED` — flag OFF → `FORBIDDEN` ("Recurso
+indisponível."). Permissions REUSADAS do Sprint 15G (nenhuma nova no
+catálogo). Cross-tenant → `NOT_FOUND`; audit do CRUD no service, do
+`updatePeriodType` no router — ambos com `tenantIdOverride`.
 
 **Pré-requisito:** migration `0035` aplicada nos dois branches Neon
 (staging + production-live). Estrutura comercial do 15G já criada (§2.7 —
@@ -1185,16 +1194,40 @@ registrado e inerte até P-36 + flag ON.
   parcial permite o histórico soft-deleted coexistir com a nova ativa.
   Esperado: cross-tenant → NOT_FOUND; recriar após excluir → OK (não
   colide com a soft-deleted).
+- [ ] **F4 — Router `quotas` (Chip 2b) via API**
+  Com `SALES_QUOTAS_ENABLED=true`, exercitar as 7 procedures:
+  1. `quotas.create` (unit + `2026-Q1` + target) → cria; repetir mesma
+     (unit, período) ativa → **CONFLICT** (partial UNIQUE); após
+     `quotas.delete` da 1ª, recriar → **OK**.
+  2. `quotas.listByPeriod` (`2026-Q1`) → lista só metas ativas do tenant.
+  3. `quotas.getByUnit` → meta + progresso; unit sem meta → `target`/
+     `progressPct` **null**; unit de outro tenant → **NOT_FOUND**.
+  4. `quotas.dashboardTree` (`2026-Q1`) → árvore ltree com `progress` por
+     nó (insumo do `/reports/quota-tree`).
+  5. `quotas.update` (novo target) e `quotas.updatePeriodType`
+     (`MONTHLY`) → refletem no banco + geram `audit_logs`
+     (`sales_quota.updated`, `sales_quota.period_type_updated`).
+  Com `SALES_QUOTAS_ENABLED=false`: TODAS as 7 → **FORBIDDEN** ("Recurso
+  indisponível."). Sem `sales_structure:read` → leitura **FORBIDDEN**; sem
+  `sales_structure:manage` → CRUD **FORBIDDEN**; role não-ADMIN →
+  `updatePeriodType` **FORBIDDEN**.
+  Esperado: contratos acima; period inválido (ex.: `2026-13`) → BAD_REQUEST
+  (Zod); target negativo → BAD_REQUEST.
 
-Automatizado (Chip 1b): `tests/unit/quota-service.test.ts` (25 casos —
+Automatizado: `tests/unit/quota-service.test.ts` (25 casos —
 `periodToDateRange`/`isValidPeriod` puros, `computeQuotaProgress` com
 subtree/período/sem-meta/multi-tenant, CRUD base com cross-tenant + soft
-delete + audit) + `tests/unit/migration-0035-sales-quotas.test.ts` (7
-casos estruturais — tabela, UNIQUE parcial, RLS, coluna
-`quota_period_type` + CHECK, mapeamento no schema.prisma).
+delete + audit) + `tests/unit/quotas-router.test.ts` (25 casos — as 7
+procedures: delegação, Zod, RBAC `sales_structure:read`/`manage`, adminOnly
+do `updatePeriodType`, kill-switch OFF, cross-tenant NOT_FOUND, CONFLICT/
+recriar, sem-meta null, audit `period_type_updated`) +
+`tests/unit/migration-0035-sales-quotas.test.ts` (7 casos estruturais —
+tabela, UNIQUE parcial, RLS, coluna `quota_period_type` + CHECK, mapeamento
+no schema.prisma).
 
-**Não bloqueia release do Chip 1b** (feature inerte com flag OFF). F2/F3
-viram bloqueadores quando o router 2b + telas Fase 3 subirem.
+**Não bloqueia release do Chip 2b** (feature inerte com flag OFF). F2/F3/F4
+funcionam via API já; viram bloqueadores de UX quando as telas Fase 3
+subirem.
 
 ---
 

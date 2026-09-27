@@ -38,6 +38,7 @@ import { inboundRouter } from './inbound';
 import { permissionsRouter } from './permissions';
 import { salesStructureRouter } from './sales-structure';
 import { opportunityTransfersRouter } from './opportunity-transfers';
+import { quotasRouter } from './quotas';
 
 export const appRouter = router({
   health: publicProcedure.query(() => ({
@@ -107,6 +108,7 @@ export const appRouter = router({
   permissions: permissionsRouter,
   salesStructure: salesStructureRouter,
   opportunityTransfers: opportunityTransfersRouter,
+  quotas: quotasRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -166,6 +166,7 @@ auto-deletar.
 - 15G.5 (spec + débitos §9.1-9.5): [Sprint_15G5_Transferencia_Oportunidade.md](Sprint_15G5_Transferencia_Oportunidade.md)
 - 15H spec: [Sprint_15H_Metas_e_Approvals.md](Sprint_15H_Metas_e_Approvals.md)
 - Rollout 15G.5: [ROLLOUT_Sprint_15G5_Prod.md](ROLLOUT_Sprint_15G5_Prod.md)
+- Arquitetura (visão geral, 4 camadas): [arquitetura/README.md](arquitetura/README.md) — HTML interativo versionado + artefato Claude
 
 ---
 
